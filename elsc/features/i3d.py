@@ -273,6 +273,9 @@ def _temporal_metadata(
     starts: list[int],
     recipe: ExtractionRecipe,
 ) -> dict[str, Any]:
+    # Keep the in-memory value identical to its JSON representation so a second
+    # feature stream can safely verify and reuse the shared temporal sidecar.
+    recipe_json = json.loads(json.dumps(asdict(recipe)))
     return {
         "schema_version": 1,
         "verified": True,
@@ -283,7 +286,7 @@ def _temporal_metadata(
         "source_video_sha256": source_sha256,
         "decoded_frame_count": frame_count,
         "fps": fps,
-        "recipe": asdict(recipe),
+        "recipe": recipe_json,
         "recipe_sha256": recipe.digest,
         "rf_start": starts,
         "rf_end": [min(start + recipe.clip_frames, frame_count) for start in starts],

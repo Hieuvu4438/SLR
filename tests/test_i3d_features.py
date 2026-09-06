@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 import pytest
 
-from elsc.features.i3d import ExtractionRecipe, preprocess_rgb_frame, sliding_window_starts
+from elsc.features.i3d import (
+    ExtractionRecipe,
+    _temporal_metadata,
+    preprocess_rgb_frame,
+    sliding_window_starts,
+)
 
 
 def test_sliding_windows_match_upstream_tail_alignment():
@@ -33,3 +41,16 @@ def test_phoenix_spatial_preprocessing_is_rgb_float_square_resize():
 
 def test_recipe_digest_changes_with_stride():
     assert ExtractionRecipe(stride=1).digest != ExtractionRecipe(stride=2).digest
+
+
+def test_temporal_metadata_is_json_round_trip_idempotent():
+    recipe = ExtractionRecipe()
+    metadata = _temporal_metadata(
+        Path("video.mp4"),
+        "source-sha",
+        17,
+        25.0,
+        [0, 1],
+        recipe,
+    )
+    assert json.loads(json.dumps(metadata)) == metadata
