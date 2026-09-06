@@ -1,5 +1,5 @@
 schema_version: 1
-captured_at: "2026-09-06T23:45:00+07:00"
+captured_at: "2026-09-07T05:53:42+07:00"
 runtime:
   python: 3.13.5
   torch: 2.11.0+cu128
@@ -48,7 +48,8 @@ data_artifacts:
     contains_ph_train: false
     contains_ph_dev: false
   ph_all_split_reextraction:
-    status: scheduled_gpu_available
+    status: running_in_tmux_elsc_ph_i3d
+    started_at: "2026-09-07T05:53:42+07:00"
     video_root: /home/dongvk/datasets/phoenix14T/videos_phoenix/videos
     clip_frames: 16
     stride: 1

@@ -6,8 +6,8 @@ SOTA claim. Last audited: 2026-09-07 (Asia/Ho_Chi_Minh).
 | Acceptance requirement | Current evidence | Status |
 | --- | --- | --- |
 | Pinned upstream and compatibility patch | SLRT commit `38a4f7b00da7a858d59b7fabe5093876a84db8e0`; `patches/cico_compat.patch` passes `git apply --check` | Implemented |
-| Environment and checkpoint provenance | `environment.lock.yaml`; release/I3D hashes; official feature archive SHA and split scope recorded | Implemented; generated all-split features pending |
-| PH dev routing/path/fusion | Official split audit is disjoint and exact; release test features are isolated from locally extracted all-split features | Partially verified; all-split extraction scheduled |
+| Environment and checkpoint provenance | `environment.lock.yaml`; release/I3D hashes; official feature archive SHA and split scope recorded | Implemented; generated all-split features running |
+| PH dev routing/path/fusion | Official split audit is disjoint and exact; release test features are isolated from locally extracted all-split features | Partially verified; all-split extraction running |
 | Bridge/scorer golden parity | Real `ph_sota.pth` component audit has max error `0.0`; official full-gallery metrics reproduce the paper after matching direction-specific tie kernels | Verified for the release artifact |
 | Test isolation | Trainer reads/hashes only train+dev; test requires selected checkpoint, checkpoint SHA, config hash, and dev-manifest hash | Implemented and tested |
 | BPE and one-span replacement | Upstream tokenizer identity, Unicode/HTML/repeated-word/truncation tests | Implemented and tested |
