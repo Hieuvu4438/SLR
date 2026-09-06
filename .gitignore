@@ -1,0 +1,22 @@
+# AutoResearchClaw subfolder
+/AutoResearchClaw/
+
+# Large/local assets are never copied into this repository.
+/data/
+/sign_feature/
+/checkpoints/
+/third_party/SLRT/
+*.pth
+*.pt
+*.ckpt
+*.zip
+*.aria2
+
+# Generated experiment artifacts, logs, manifests, features, and checkpoints.
+/artifacts/
+/runs/
+/exports/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/

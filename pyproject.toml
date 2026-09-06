@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "elsc"
+version = "0.1.0"
+description = "Evidence-Localized Sign Contrast for sentence-level sign-language retrieval"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "ftfy>=6.1",
+  "numpy>=1.24",
+  "PyYAML>=6.0",
+  "regex>=2024.0",
+  "torch>=2.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.8"]
+features = ["opencv-python-headless>=4.8"]
+
+[tool.setuptools.packages.find]
+include = ["elsc*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

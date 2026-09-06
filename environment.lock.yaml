@@ -1,0 +1,60 @@
+schema_version: 1
+captured_at: "2026-09-06T23:45:00+07:00"
+runtime:
+  python: 3.13.5
+  torch: 2.11.0+cu128
+  numpy: 2.2.6
+  pyyaml: 6.0.3
+  ftfy: 6.3.1
+  regex: 2026.4.4
+  pytest: 9.0.3
+  ruff: 0.15.22
+hardware:
+  gpu: NVIDIA RTX 5880 Ada Generation
+  gpu_memory_mib: 49140
+  driver: 570.195.03
+upstream:
+  cico_commit: 38a4f7b00da7a858d59b7fabe5093876a84db8e0
+  text_augmentation:
+    recipe: cico_random_swap_v1
+    behavior: one_word_swap_with_probability_0.5
+    deterministic_key: seed_epoch_pair_id
+    historical_textaugment_version: unpinned_by_upstream
+pretrained:
+  cico_ph_checkpoint:
+    path: artifacts/pretrained/ph_sota.pth
+    sha256: 598b822aafd1b3cd767b290410ea1191f723dc87dd096775c3670e224b6e7b9f
+    source: https://drive.google.com/file/d/1Hpcn5obCcG5JHa3nLvHqX9pfrp7g6wDu/view
+    archive_sha256: f02ea0b2a64123b2c8386ccb467c00143454ee6405ed4c07e074dcc712224c6c
+  domain_agnostic_i3d:
+    path: artifacts/pretrained/bsl5k.pth.tar
+    sha256: 6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f
+    source: https://www.robots.ox.ac.uk/~vgg/research/bslattend/data/bsl5k.pth.tar
+  domain_aware_i3d:
+    path: artifacts/pretrained/domain_aware_I3D_H2S.pth.tar
+    sha256: 99e101d696ff63131b5d44fa6e465201216604ba5d8cc773f3cefa4a96ebd518
+    source: https://drive.google.com/file/d/1TbX3UjaUvXhsXSQX2UAm81nitt8tsgLq/view
+data_artifacts:
+  cico_sign_features_release:
+    source: https://drive.google.com/file/d/1Vb-HFZd-rhjN49sB5WwLRpIbyhiC6xTy/view
+    archive_bytes: 2797376661
+    archive_sha256: 9ba1956cf416df9a31ae3d1a71a3fa9a2d1e2b3724670288b608c8d4eb895c51
+    extracted_scope: phoenix_test_only
+    extracted_root: artifacts/sign_features
+    ph_domain_agnostic_test_files: 642
+    ph_domain_aware_test_files: 642
+    contains_ph_train: false
+    contains_ph_dev: false
+  ph_train_dev_reextraction:
+    status: scheduled_waiting_for_idle_gpu
+    video_root: /home/dongvk/datasets/phoenix14T/videos_phoenix/videos
+    clip_frames: 16
+    stride: 1
+    resize_short_side: 256
+    center_crop: 224
+    output_dtype: float32
+    temporal_metadata_root: artifacts/sign_features/ph_temporal_metadata
+notes:
+  - This is the implementation runtime, not the historical CiCo environment.
+  - The release checkpoint is an initialization/parity artifact, not a dev-selected teacher.
+  - Golden checkpoint parity must be recorded before claiming numerical equivalence.
