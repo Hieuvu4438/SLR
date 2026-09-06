@@ -39,13 +39,35 @@ wait_for_idle_gpu() {
   done
 }
 
+wait_for_gpu_capacity() {
+  local stable=0
+  while (( stable < 3 )); do
+    local free_mib
+    free_mib=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -n 1)
+    free_mib=${free_mib// /}
+    if (( free_mib >= 16384 )); then
+      stable=$((stable + 1))
+    else
+      stable=0
+    fi
+    printf '%s waiting_for_gpu_capacity free_mib=%s stable=%s/3\n' \
+      "$(date --iso-8601=seconds)" "$free_mib" "$stable" >>"$log_path"
+    if (( stable < 3 )); then
+      sleep "$gpu_poll_seconds"
+    fi
+  done
+}
+
 run_extraction() {
   local stream=$1
   local checkpoint=$2
   local checkpoint_sha=$3
   local split=$4
   local output_root=$5
-  wait_for_idle_gpu
+  # Split locks isolate writers and the extractor has its own VRAM floor.
+  # Permit useful GPU overlap when capacity remains; training below still
+  # requires an actually idle device.
+  wait_for_gpu_capacity
   printf '%s start stream=%s split=%s\n' \
     "$(date --iso-8601=seconds)" "$stream" "$split" >>"$log_path"
   PYTHONUNBUFFERED=1 python -m elsc.features.i3d \
