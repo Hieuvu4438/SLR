@@ -440,24 +440,17 @@ def extract(args: argparse.Namespace) -> dict[str, Any]:
     output_root.mkdir(parents=True, exist_ok=True)
     split_label = "_".join(args.splits)
     report_path = output_root / f"extraction_report_{split_label}.json"
-    atomic_json_dump(summary, report_path)
     if args.dry_run:
+        atomic_json_dump(summary, report_path)
         print(json.dumps(summary, indent=2, sort_keys=True))
         return summary
 
     device = torch.device(args.device)
     if device.type != "cuda" or not torch.cuda.is_available():
         raise ValueError("I3D extraction requires an available CUDA device")
-    summary["resources_at_start"] = require_resources(
-        output_root,
-        device,
-        min_disk_gib=args.min_free_disk_gib,
-        min_gpu_gib=args.min_free_gpu_gib,
-        operation=f"{args.stream_name} I3D extraction",
-    )
     # Different dataset splits write to disjoint directories and reports, so
     # they may safely use the large GPU concurrently. Keep exclusion within a
-    # split to prevent duplicate work and sidecar races for the same videos.
+    # split to prevent duplicate work and report/sidecar races for the same videos.
     lock_path = output_root / f".extract-{split_label}.lock"
     with lock_path.open("w", encoding="utf-8") as lock:
         summary["lock_wait_seconds"] = _acquire_extraction_lock(
@@ -465,6 +458,13 @@ def extract(args: argparse.Namespace) -> dict[str, Any]:
             lock_path,
             wait_seconds=args.lock_wait_seconds,
             poll_seconds=args.lock_poll_seconds,
+        )
+        summary["resources_at_start"] = require_resources(
+            output_root,
+            device,
+            min_disk_gib=args.min_free_disk_gib,
+            min_gpu_gib=args.min_free_gpu_gib,
+            operation=f"{args.stream_name} I3D extraction",
         )
         atomic_json_dump(summary, report_path)
         model = load_i3d(checkpoint_path, implementation, device)
