@@ -1,0 +1,9 @@
+extends: ph_min.yaml
+experiment: ph_matched_caption
+method: matched_caption
+loss:
+  lexical_weight: 0.0
+caption:
+  weight: 0.1
+  margin: 0.0
+  temperature: 0.07

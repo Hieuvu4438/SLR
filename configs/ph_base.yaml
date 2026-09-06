@@ -1,0 +1,122 @@
+schema_version: 1
+experiment: ph_corrected_baseline
+method: baseline
+seed: 42
+
+upstream:
+  cico_root: third_party/SLRT/CiCo/CLCL
+  cico_commit: 38a4f7b00da7a858d59b7fabe5093876a84db8e0
+  compatibility_patch: patches/cico_compat.patch
+
+sources:
+  annotation_format: cico_pickle_filtered_by_official_ids
+  train_annotation: /home/haipd/SLRT/CiCo/CLCL/data_ph/train.pkl
+  dev_annotation: /home/haipd/SLRT/CiCo/CLCL/data_ph/dev.pkl
+  test_annotation: /home/haipd/SLRT/CiCo/CLCL/data_ph/test.pkl
+  train_official_annotation: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.train.corpus.csv
+  dev_official_annotation: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.dev.corpus.csv
+  test_official_annotation: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.test.corpus.csv
+  feature_agnostic_root: artifacts/sign_features/ph_domain_agnostic
+  feature_aware_root: artifacts/sign_features/ph_domain_aware
+  temporal_metadata_root: null
+
+data:
+  dataset: ph
+  train_manifest: artifacts/manifests/ph_train.jsonl
+  dev_manifest: artifacts/manifests/ph_dev.jsonl
+  test_manifest: artifacts/manifests/ph_test.jsonl
+  caption_language: en
+  source_caption_language: de
+  translation_provenance: existing_cico_annotation_artifact
+  feature_dim: 1024
+  feature_len: 64
+  max_words: 32
+  combine_type: sum
+  alpha: 0.9
+  feature_path_mode: corrected
+  sampling: upstream_uniform
+  text_augmentation: cico_random_swap_v1
+
+model:
+  init_checkpoint: artifacts/pretrained/ph_sota.pth
+  init_checkpoint_sha256: 598b822aafd1b3cd767b290410ea1191f723dc87dd096775c3670e224b6e7b9f
+  init_checkpoint_source: https://drive.google.com/file/d/1Hpcn5obCcG5JHa3nLvHqX9pfrp7g6wDu/view
+  init_checkpoint_role: release_parity_and_initialization_only
+  teacher_checkpoint: null
+  teacher_selection_provenance: null
+  pretrained_clip_name: ViT-B/32
+  sim_header: Filip
+  dual_mix: 0.5
+  mix_design: balance
+  backbone_frozen: false
+  logit_scale_frozen: false
+  visual_num_hidden_layers: 12
+  adapter:
+    enabled: false
+    radius: 0
+    hidden_dim: 256
+    zero_init_output: true
+  lexical_head:
+    output_dim: infer_from_checkpoint
+    initialization: orthogonal
+
+loss:
+  lexical_weight: 0.0
+  lexical_margin: 0.1
+  lexical_temperature: 0.07
+  lexical_weight_ramp_epochs: 1
+
+evidence:
+  enabled: false
+
+keep:
+  weight: 0.0
+  temperature: 1.0
+
+caption:
+  weight: 0.0
+  margin: 0.0
+  temperature: 0.07
+
+train:
+  epochs: 200
+  per_device_batch: 32
+  accumulation_steps: 1
+  optimizer: adamw
+  optimizer_provenance: pytorch_adamw_with_cico_beta2_epsilon_and_weight_decay
+  beta1: 0.9
+  beta2: 0.98
+  epsilon: 0.000001
+  exclude_bias_and_1d_from_weight_decay: true
+  core_lr: 0.00001
+  adapter_lr: 0.0001
+  head_lr: 0.0001
+  weight_decay: 0.001
+  warmup_ratio: 0.10
+  schedule: cosine
+  grad_clip_norm: 1.0
+  precision: amp_bf16
+  gradient_diagnostic_interval: 100
+  eval_split: dev
+  checkpoint_metric: mean_t2v_v2t_r1
+  num_workers: 8
+  eval_batch: 128
+
+evaluation:
+  scorer: cico_mixed_token_interaction
+  metrics: upstream_cico
+  full_gallery: true
+  filter_by_aux_eligibility: false
+  fine_grained_san: disabled_until_official_artifacts
+  video_block: 128
+  text_block: 128
+
+artifacts:
+  prepare_report: artifacts/manifests/prepare_report.json
+  manifest_meta: artifacts/manifests/manifest_meta.json
+
+resources:
+  min_free_disk_gib: 20
+  min_free_gpu_gib_train: 12
+  min_free_gpu_gib_mining: 8
+  min_free_gpu_gib_evaluation: 4

@@ -1,0 +1,3 @@
+extends: ph_min.yaml
+experiment: ph_local_word_video_contrast
+method: local_word_video

@@ -1,0 +1,5 @@
+extends: ph_full.yaml
+experiment: ph_elsc_full_dep_only
+evidence:
+  dependence_weight: 0.1
+  invariance_weight: 0.0

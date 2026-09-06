@@ -1,0 +1,22 @@
+extends: ph_min.yaml
+experiment: ph_elsc_full
+model:
+  init_checkpoint: required_selected_min_checkpoint
+  require_init_equals_teacher: false
+sources:
+  temporal_metadata_root: artifacts/sign_features/ph_temporal_metadata
+evidence:
+  enabled: true
+  require_verified_rf_metadata: true
+  max_pairs_per_video: 1
+  batch_fraction: 0.25
+  teacher_margin_min: 0.02
+  dependence_margin: 0.02
+  dependence_weight: 0.1
+  invariance_weight: 0.1
+  huber_delta: 0.05
+  mask_fill: zero
+  control_same_token_count: true
+  control_duration_tolerance: 0.10
+cache:
+  path: artifacts/cache/ph_train_elsc_full_v1
