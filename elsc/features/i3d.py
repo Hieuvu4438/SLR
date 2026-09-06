@@ -24,6 +24,10 @@ from elsc.utils import atomic_json_dump, sha256_file, sha256_json
 
 FEATURE_DIM = 1024
 
+# Match the pinned upstream extractor and avoid each concurrent extraction
+# process creating an OpenCV worker pool over all host cores.
+cv2.setNumThreads(0)
+
 
 @dataclass(frozen=True)
 class ExtractionRecipe:
