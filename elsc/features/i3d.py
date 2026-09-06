@@ -212,11 +212,8 @@ def infer_video_features(
     offset = 0
     while offset < len(starts):
         current = starts[offset : offset + active_batch]
-        indices = torch.tensor(
-            [[start + step for step in range(recipe.clip_frames)] for start in current],
-            dtype=torch.long,
-            device=device,
-        )
+        indices = torch.as_tensor(current, dtype=torch.long, device=device)[:, None]
+        indices = indices + torch.arange(recipe.clip_frames, device=device)[None, :]
         clips = frames.index_select(0, indices.flatten()).reshape(
             len(current),
             recipe.clip_frames,
