@@ -19,6 +19,8 @@ sources:
   feature_agnostic_root: artifacts/features_reextracted/ph_domain_agnostic
   feature_aware_root: artifacts/features_reextracted/ph_domain_aware_h2s_transfer
   temporal_metadata_root: artifacts/features_reextracted/ph_temporal_metadata
+  require_feature_sidecars: true
+  require_temporal_metadata: true
 
 data:
   dataset: ph

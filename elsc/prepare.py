@@ -35,9 +35,12 @@ def _feature_shape(path: Path, feature_dim: int) -> tuple[int, int]:
         value = pickle.load(handle)
     if isinstance(value, dict):
         value = value.get("feature")
-    shape = np.asarray(value).shape
+    array = np.asarray(value)
+    shape = array.shape
     if len(shape) != 2:
         raise ValueError(f"feature at {path} is not rank-2: {shape}")
+    if array.dtype != np.float32:
+        raise ValueError(f"feature at {path} must be float32, got {array.dtype}")
     if shape[0] == feature_dim and shape[1] == feature_dim:
         raise ValueError(f"feature orientation is ambiguous at {path}: {shape}")
     if shape[0] == feature_dim:
@@ -45,6 +48,63 @@ def _feature_shape(path: Path, feature_dim: int) -> tuple[int, int]:
     if shape[1] == feature_dim:
         return int(shape[0]), int(shape[1])
     raise ValueError(f"feature at {path} does not contain dim={feature_dim}: {shape}")
+
+
+def _validated_feature_sidecar(path: Path, expected_shape: tuple[int, int]) -> dict[str, Any]:
+    sidecar_path = path.with_suffix(path.suffix + ".meta.json")
+    if not sidecar_path.is_file():
+        raise ValueError(f"feature sidecar is missing: {sidecar_path}")
+    value = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError(f"feature sidecar must be a JSON object: {sidecar_path}")
+    if value.get("schema_version") != 1:
+        raise ValueError(f"unsupported feature sidecar schema: {sidecar_path}")
+    required = (
+        "stream_name",
+        "source_video_sha256",
+        "checkpoint_sha256",
+        "recipe_sha256",
+        "feature_sha256",
+        "feature_dtype",
+    )
+    missing = [key for key in required if not value.get(key)]
+    if missing:
+        raise ValueError(f"feature sidecar lacks {missing}: {sidecar_path}")
+    if value.get("feature_shape") != list(expected_shape):
+        raise ValueError(
+            f"feature sidecar shape mismatch at {sidecar_path}: "
+            f"{value.get('feature_shape')} != {list(expected_shape)}"
+        )
+    if value["feature_dtype"] != "float32":
+        raise ValueError(f"feature sidecar dtype is not float32: {sidecar_path}")
+    actual_hash = sha256_file(path)
+    if value["feature_sha256"] != actual_hash:
+        raise ValueError(f"feature SHA-256 mismatch: {path}")
+    return value
+
+
+def _validate_temporal_sidecar(
+    path: Path,
+    *,
+    dense_length: int,
+    recipe_sha256: str,
+    source_video_sha256: str,
+) -> None:
+    if not path.is_file():
+        raise ValueError(f"temporal metadata is missing: {path}")
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict) or value.get("verified") is not True:
+        raise ValueError(f"temporal metadata is not verified: {path}")
+    if value.get("recipe_sha256") != recipe_sha256:
+        raise ValueError(f"temporal recipe hash mismatch: {path}")
+    if value.get("source_video_sha256") != source_video_sha256:
+        raise ValueError(f"temporal source-video hash mismatch: {path}")
+    starts = value.get("rf_start")
+    ends = value.get("rf_end")
+    if not isinstance(starts, list) or not isinstance(ends, list):
+        raise ValueError(f"temporal metadata lacks RF arrays: {path}")
+    if len(starts) != dense_length or len(ends) != dense_length:
+        raise ValueError(f"temporal metadata length mismatch: {path}")
 
 
 def prepare_split(
@@ -67,6 +127,14 @@ def prepare_split(
     agnostic_root = Path(sources["feature_agnostic_root"]) / split
     records: list[ManifestRecord] = []
     missing_features: list[dict[str, str]] = []
+    invalid_features: list[dict[str, str]] = []
+    require_sidecars = bool(sources.get("require_feature_sidecars", False))
+    provenance_values: dict[str, dict[str, set[str]]] = {
+        "aware": {key: set() for key in ("stream_name", "checkpoint_sha256", "recipe_sha256")},
+        "agnostic": {
+            key: set() for key in ("stream_name", "checkpoint_sha256", "recipe_sha256")
+        },
+    }
     feature_dim = int(data["feature_dim"])
     for identifier in ordered_ids:
         if identifier not in annotations:
@@ -87,9 +155,30 @@ def prepare_split(
                 f"{identifier}: feature streams differ: {aware_shape} != {agnostic_shape}"
             )
         temporal_root = sources.get("temporal_metadata_root")
-        temporal = (
-            str(Path(temporal_root) / split / f"{video_name}.json") if temporal_root else None
-        )
+        temporal_path = Path(temporal_root) / split / f"{video_name}.json" if temporal_root else None
+        if require_sidecars:
+            try:
+                aware_meta = _validated_feature_sidecar(aware, aware_shape)
+                agnostic_meta = _validated_feature_sidecar(agnostic, agnostic_shape)
+                if aware_meta["source_video_sha256"] != agnostic_meta["source_video_sha256"]:
+                    raise ValueError("feature streams have different source-video hashes")
+                if aware_meta["recipe_sha256"] != agnostic_meta["recipe_sha256"]:
+                    raise ValueError("feature streams have different extraction recipes")
+                if sources.get("require_temporal_metadata", False):
+                    if temporal_path is None:
+                        raise ValueError("required temporal metadata root is unset")
+                    _validate_temporal_sidecar(
+                        temporal_path,
+                        dense_length=aware_shape[0],
+                        recipe_sha256=aware_meta["recipe_sha256"],
+                        source_video_sha256=aware_meta["source_video_sha256"],
+                    )
+            except (OSError, ValueError) as error:
+                invalid_features.append({"pair_id": identifier, "error": str(error)})
+                continue
+            for label, metadata in (("aware", aware_meta), ("agnostic", agnostic_meta)):
+                for key in provenance_values[label]:
+                    provenance_values[label][key].add(str(metadata[key]))
         records.append(
             ManifestRecord(
                 schema_version=1,
@@ -105,9 +194,24 @@ def prepare_split(
                 feature_aware=str(aware.resolve()),
                 dense_length=aware_shape[0],
                 feature_dim=aware_shape[1],
-                temporal_metadata=temporal,
+                temporal_metadata=str(temporal_path.resolve()) if temporal_path else None,
             )
         )
+    if require_sidecars:
+        feature_provenance = {
+            label: {key: sorted(values) for key, values in fields.items()}
+            for label, fields in provenance_values.items()
+        }
+        inconsistent_provenance = {
+            label: {key: values for key, values in fields.items() if len(values) != 1}
+            for label, fields in feature_provenance.items()
+        }
+        inconsistent_provenance = {
+            label: fields for label, fields in inconsistent_provenance.items() if fields
+        }
+    else:
+        feature_provenance = {}
+        inconsistent_provenance = {}
     report = {
         "schema_version": 1,
         "split": split,
@@ -124,6 +228,11 @@ def prepare_split(
         "missing_feature_count": len(missing_features),
         "missing_feature_ids": [item["pair_id"] for item in missing_features],
         "missing_features_preview": missing_features[:20],
+        "invalid_feature_count": len(invalid_features),
+        "invalid_feature_ids": [item["pair_id"] for item in invalid_features],
+        "invalid_features_preview": invalid_features[:20],
+        "feature_provenance": feature_provenance,
+        "inconsistent_feature_provenance": inconsistent_provenance,
     }
     return records, report
 
@@ -164,7 +273,12 @@ def main(argv: list[str] | None = None) -> int:
         records, report = prepare_split(config, split)
         records_by_split[split] = records
         reports["splits"][split] = report
-        if report["missing_annotation_ids"] or report["missing_feature_count"]:
+        if (
+            report["missing_annotation_ids"]
+            or report["missing_feature_count"]
+            or report["invalid_feature_count"]
+            or report["inconsistent_feature_provenance"]
+        ):
             failed = True
     overlaps = cross_split_overlaps(records_by_split)
     reports["cross_split_overlaps"] = overlaps
@@ -172,7 +286,12 @@ def main(argv: list[str] | None = None) -> int:
     if not overlaps:
         for split, records in records_by_split.items():
             report = reports["splits"][split]
-            if report["missing_annotation_ids"] or report["missing_feature_count"]:
+            if (
+                report["missing_annotation_ids"]
+                or report["missing_feature_count"]
+                or report["invalid_feature_count"]
+                or report["inconsistent_feature_provenance"]
+            ):
                 continue
             manifest_path = config["data"][f"{split}_manifest"]
             report["manifest"] = write_manifest(records, manifest_path)
