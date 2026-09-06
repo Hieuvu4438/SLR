@@ -87,7 +87,7 @@ def test_block_scoring_matches_unblocked_scoring():
     )
     score = video_tokens[:, 0] @ text_tokens[:, 0].T
     expected = 0.3 * score + 0.7 * (score + 0.25)
-    assert np.allclose(blocked, expected.numpy())
+    assert np.allclose(blocked, expected.numpy(), rtol=1e-6, atol=1e-6)
 
 
 class _GalleryModel:
