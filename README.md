@@ -1,1 +1,98 @@
-# SLR
+# ELSC for sentence-level sign-language retrieval
+
+This repository implements the design in
+[`docs/proposal1/ELSC_End_to_End_Implementation.md`](docs/proposal1/ELSC_End_to_End_Implementation.md):
+a CiCo-compatible retrieval model with a shared pointwise visual adapter and train-only,
+teacher-mined local lexical supervision.
+
+The implementation intentionally separates a measured result from a proposed method. The code,
+contracts, and structural tests are present; a SOTA claim is only valid after the official assets,
+dev-selected baselines, ablations, and locked full-gallery test runs have been completed. Generated
+reports never fill missing metrics with zero.
+
+## Current asset status
+
+Phoenix14T raw videos and official train/dev/test annotations already exist on this server and are
+referenced directly. They are not copied into this repository. The local CiCo annotation artifact
+contains English model captions; its `dev.pkl` contains 7,615 entries (train + official dev), so
+`elsc.prepare` filters it by the 519 official dev IDs and records the extra-count audit.
+
+The official CiCo PH release checkpoint is available locally at
+`artifacts/pretrained/ph_sota.pth` and pinned by SHA-256 in `configs/ph_base.yaml`. It is used only
+for release parity and initialization because its historical selection provenance is unknown.
+After explicit user approval, the official `sign_features.zip` was downloaded and verified as
+SHA-256 `9ba1956cf416df9a31ae3d1a71a3fa9a2d1e2b3724670288b608c8d4eb895c51`. It contains
+Phoenix **test only**: exactly 642 float32 files for each I3D stream. Only those PH files were
+extracted under `artifacts/sign_features`; unrelated CSL/H2S content was skipped. Phoenix train/dev
+features are generated from the already-local videos with pinned official I3D checkpoints, and are
+never described as release train/dev features.
+
+## Reproducible setup
+
+The checked upstream source is CiCo from SLRT commit
+`38a4f7b00da7a858d59b7fabe5093876a84db8e0`. Recreate its small sparse checkout with:
+
+```bash
+bash scripts/setup_upstream.sh
+python -m pip install -e '.[dev]'
+pytest -q
+```
+
+The current runtime is captured in `environment.lock.yaml`. It is a PyTorch 2.x compatibility
+environment, not a claim that the historical PyTorch 1.7 runtime is identical. Upstream source is
+not vendored into the main Git repository; its commit is audited at runtime. CiCo code remains under
+the terms/provenance of the upstream SLRT repository.
+
+## End-to-end commands
+
+Feature extraction is resumable and can wait in the background until the shared GPU is idle:
+
+```bash
+tmux new-session -d -s elsc_ph_i3d 'bash scripts/run_ph_i3d_extraction.sh'
+tail -f artifacts/logs/ph_i3d_extraction.log
+```
+
+After train/dev extraction completes (do not point dev at test):
+
+```bash
+python -m elsc.release_eval --config configs/ph_base.yaml
+python -m elsc.audit --config configs/ph_base.yaml --stage assets
+python -m elsc.audit --config configs/ph_base.yaml --stage checkpoint
+python -m elsc.prepare --config configs/ph_base.yaml --splits train dev test
+python -m elsc.audit --config configs/ph_base.yaml --stage parity
+python -m elsc.train --config configs/ph_base.yaml --run-dir runs/ph_base_s42
+
+# Set model.teacher_checkpoint to the dev-selected baseline and preserve selection provenance.
+python -m elsc.audit --config configs/ph_min.yaml --stage teacher
+python -m elsc.mining.build_cache --config configs/ph_min.yaml --split train
+python -m elsc.train --config configs/ph_min.yaml --run-dir runs/ph_min_s42
+python -m elsc.train --config configs/ablation_caption.yaml --run-dir runs/ph_caption_s42
+python -m elsc.train --config configs/ablation_random_span.yaml --run-dir runs/ph_random_span_s42
+
+# Test is a separate, locked action after dev selection.
+python -m elsc.evaluate --run-dir runs/ph_min_s42 --split test --checkpoint best_dev
+python -m elsc.export --run-dir runs/ph_min_s42 --checkpoint best_dev --output exports/ph_min
+
+# Aggregate only measured, ID-paired runs; bootstrap resamples video groups.
+python -m elsc.report --baseline-runs runs/ph_base_s42 --method-runs runs/ph_min_s42 \
+  --split dev --output artifacts/reports/ph_min_vs_base_dev.json
+```
+
+`ph_full.yaml` additionally requires verified receptive-field metadata and a selected ELSC-Min
+checkpoint. It will fail rather than infer receptive fields from sequence length.
+
+## What is enforced
+
+- canonical `[B,F,1024]` features, dense indices, `True=valid`, and explicit CiCo CLS/padding masks;
+- exact CiCo BPE token identity including its `linspace` long-caption subsampling;
+- teacher frozen in eval mode while student gradients pass through the frozen transformer;
+- train-only cache with teacher/manifest/tokenizer/feature-fusion hashes;
+- exact balanced/depart CLCL losses, lexical log-sum-exp margin, Huber evidence loss, and KL direction;
+- FP32/FP16/BF16 training with GradScaler state, accumulation-aware clipping and exact resume;
+- full `video × text` score orientation, multi-positive ID mappings, exact CiCo tie behavior,
+  per-query ranks, and tie statistics;
+- dev-only checkpoint selection and a hash-locked config/dev/checkpoint contract before test;
+- inference export containing core + adapter, with local head/cache/teacher removed and score parity checked.
+
+See `artifacts/asset_audit.json` for the current machine-readable readiness report.
+See `docs/proposal1/IMPLEMENTATION_STATUS.md` for the requirement-by-requirement completion audit.
