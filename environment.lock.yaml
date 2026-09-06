@@ -34,6 +34,8 @@ pretrained:
     path: artifacts/pretrained/domain_aware_I3D_H2S.pth.tar
     sha256: 99e101d696ff63131b5d44fa6e465201216604ba5d8cc773f3cefa4a96ebd518
     source: https://drive.google.com/file/d/1TbX3UjaUvXhsXSQX2UAm81nitt8tsgLq/view
+    scope: how2sign_target_encoder_used_as_an_explicit_phoenix_transfer_stream
+    phoenix_release_parity_expected: false
 data_artifacts:
   cico_sign_features_release:
     source: https://drive.google.com/file/d/1Vb-HFZd-rhjN49sB5WwLRpIbyhiC6xTy/view
@@ -45,16 +47,22 @@ data_artifacts:
     ph_domain_aware_test_files: 642
     contains_ph_train: false
     contains_ph_dev: false
-  ph_train_dev_reextraction:
-    status: scheduled_waiting_for_idle_gpu
+  ph_all_split_reextraction:
+    status: scheduled_gpu_available
     video_root: /home/dongvk/datasets/phoenix14T/videos_phoenix/videos
     clip_frames: 16
     stride: 1
-    resize_short_side: 256
-    center_crop: 224
+    square_resize: 256
+    resize_interpolation: opencv_lanczos4
+    gpu_center_resample: 224
+    gpu_resample_align_corners: false
     output_dtype: float32
-    temporal_metadata_root: artifacts/sign_features/ph_temporal_metadata
+    domain_agnostic_root: artifacts/features_reextracted/ph_domain_agnostic
+    domain_aware_transfer_root: artifacts/features_reextracted/ph_domain_aware_h2s_transfer
+    temporal_metadata_root: artifacts/features_reextracted/ph_temporal_metadata
 notes:
   - This is the implementation runtime, not the historical CiCo environment.
   - The release checkpoint is an initialization/parity artifact, not a dev-selected teacher.
+  - Official release test features remain isolated from locally extracted all-split features.
+  - The downloadable domain-aware checkpoint targets How2Sign; no PH target checkpoint is claimed.
   - Golden checkpoint parity must be recorded before claiming numerical equivalence.

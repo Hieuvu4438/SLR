@@ -16,9 +16,9 @@ sources:
   train_official_annotation: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.train.corpus.csv
   dev_official_annotation: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.dev.corpus.csv
   test_official_annotation: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.test.corpus.csv
-  feature_agnostic_root: artifacts/sign_features/ph_domain_agnostic
-  feature_aware_root: artifacts/sign_features/ph_domain_aware
-  temporal_metadata_root: null
+  feature_agnostic_root: artifacts/features_reextracted/ph_domain_agnostic
+  feature_aware_root: artifacts/features_reextracted/ph_domain_aware_h2s_transfer
+  temporal_metadata_root: artifacts/features_reextracted/ph_temporal_metadata
 
 data:
   dataset: ph

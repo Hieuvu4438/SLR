@@ -23,9 +23,11 @@ for release parity and initialization because its historical selection provenanc
 After explicit user approval, the official `sign_features.zip` was downloaded and verified as
 SHA-256 `9ba1956cf416df9a31ae3d1a71a3fa9a2d1e2b3724670288b608c8d4eb895c51`. It contains
 Phoenix **test only**: exactly 642 float32 files for each I3D stream. Only those PH files were
-extracted under `artifacts/sign_features`; unrelated CSL/H2S content was skipped. Phoenix train/dev
-features are generated from the already-local videos with pinned official I3D checkpoints, and are
-never described as release train/dev features.
+extracted under `artifacts/sign_features`; unrelated CSL/H2S content was skipped. A separate local
+root is used to generate Phoenix train/dev/test features from the already-local videos. The
+domain-agnostic BSL5K checkpoint reproduces the release extraction closely; the downloadable
+domain-aware checkpoint targets How2Sign and is recorded explicitly as a transfer stream rather
+than misidentified as the unavailable Phoenix target encoder.
 
 ## Reproducible setup
 
@@ -52,10 +54,10 @@ tmux new-session -d -s elsc_ph_i3d 'bash scripts/run_ph_i3d_extraction.sh'
 tail -f artifacts/logs/ph_i3d_extraction.log
 ```
 
-After train/dev extraction completes (do not point dev at test):
+After all-split local extraction completes (do not mix official test features into this run):
 
 ```bash
-python -m elsc.release_eval --config configs/ph_base.yaml
+python -m elsc.release_eval --config configs/ph_release.yaml
 python -m elsc.audit --config configs/ph_base.yaml --stage assets
 python -m elsc.audit --config configs/ph_base.yaml --stage checkpoint
 python -m elsc.prepare --config configs/ph_base.yaml --splits train dev test

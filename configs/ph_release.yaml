@@ -1,0 +1,14 @@
+extends: ph_base.yaml
+experiment: ph_official_release_parity
+
+sources:
+  feature_agnostic_root: artifacts/sign_features/ph_domain_agnostic
+  feature_aware_root: artifacts/sign_features/ph_domain_aware
+  temporal_metadata_root: null
+
+data:
+  test_manifest: artifacts/manifests/ph_release_test.jsonl
+
+artifacts:
+  prepare_report: artifacts/manifests/ph_release_prepare_report.json
+  manifest_meta: artifacts/manifests/ph_release_manifest_meta.json

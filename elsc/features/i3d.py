@@ -16,6 +16,7 @@ from typing import Any, Iterator
 import cv2
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from elsc.resources import require_resources, require_storage_budget
 from elsc.utils import atomic_json_dump, sha256_file, sha256_json
@@ -35,7 +36,7 @@ class ExtractionRecipe:
     input_scale: str = "uint8_to_float32_div_255"
     normalization_mean: tuple[float, float, float] = (0.5, 0.5, 0.5)
     normalization_std: tuple[float, float, float] = (1.0, 1.0, 1.0)
-    spatial_mode: str = "resize_short_side_then_center_crop"
+    spatial_mode: str = "square_lanczos_then_cico_gpu_center_resample"
     temporal_mode: str = "upstream_cico_sliding_window"
     output_dtype: str = "float32"
 
@@ -76,7 +77,14 @@ def sliding_window_starts(frame_count: int, clip_frames: int = 16, stride: int =
 def preprocess_rgb_frame(
     frame: np.ndarray, *, resize_short_side: int = 256, crop_size: int = 224
 ) -> np.ndarray:
-    """Reproduce the deterministic (non-training) CiCo CPU spatial path."""
+    """Prepare one frame for CiCo's default 256-pixel GPU collation path.
+
+    The public PH loader defaults to ``gpu_collation=256`` and its collater then
+    applies the 224-pixel center resampling on the GPU.  The released loader does
+    not define how a non-square PH frame reaches that 256x256 buffer; Lanczos
+    square resizing is the closest reproducible match to the released agnostic
+    features and is therefore pinned explicitly here.
+    """
 
     if frame.ndim != 3 or frame.shape[2] != 3:
         raise ValueError(f"expected HxWx3 RGB frame, got {frame.shape}")
@@ -87,20 +95,12 @@ def preprocess_rgb_frame(
         rgb = rgb / 255.0
     if not np.isfinite(rgb).all() or float(rgb.min()) < 0.0 or float(rgb.max()) > 1.0:
         raise ValueError("RGB values must be finite and in [0,1]")
-    height, width = rgb.shape[:2]
-    if width > height:
-        new_height = resize_short_side
-        new_width = int(resize_short_side * width / height)
-    else:
-        new_height = int(resize_short_side * height / width)
-        new_width = resize_short_side
-    resized = cv2.resize(rgb, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
-    left = int((new_width - crop_size) / 2)
-    top = int((new_height - crop_size) / 2)
-    cropped = resized[top : top + crop_size, left : left + crop_size]
-    if cropped.shape != (crop_size, crop_size, 3):
-        raise ValueError(f"invalid center crop shape: {cropped.shape}")
-    return np.ascontiguousarray(cropped.transpose(2, 0, 1), dtype=np.float32)
+    resized = cv2.resize(
+        rgb,
+        (resize_short_side, resize_short_side),
+        interpolation=cv2.INTER_LANCZOS4,
+    )
+    return np.ascontiguousarray(resized.transpose(2, 0, 1), dtype=np.float32)
 
 
 def _video_frame_count(path: Path) -> int:
@@ -192,8 +192,8 @@ def infer_video_features(
 ) -> tuple[np.ndarray, int]:
     if frames.ndim != 4 or frames.shape[1:] != (
         3,
-        recipe.crop_size,
-        recipe.crop_size,
+        recipe.resize_short_side,
+        recipe.resize_short_side,
     ):
         raise ValueError(f"unexpected preprocessed video shape: {tuple(frames.shape)}")
     if len(frames) < recipe.clip_frames:
@@ -209,9 +209,32 @@ def infer_video_features(
             dtype=torch.long,
         )
         clips = frames.index_select(0, indices.flatten()).reshape(
-            len(current), recipe.clip_frames, 3, recipe.crop_size, recipe.crop_size
+            len(current),
+            recipe.clip_frames,
+            3,
+            recipe.resize_short_side,
+            recipe.resize_short_side,
         )
         clips = clips.permute(0, 2, 1, 3, 4).contiguous().to(device)
+        crop_scale = recipe.crop_size / recipe.resize_short_side
+        ticks = torch.linspace(
+            -crop_scale,
+            crop_scale,
+            steps=recipe.crop_size,
+            device=device,
+            dtype=clips.dtype,
+        )
+        grid_y, grid_x = torch.meshgrid(ticks, ticks, indexing="ij")
+        grid = torch.stack((grid_x, grid_y), dim=2).unsqueeze(0)
+        clips = F.grid_sample(
+            clips.reshape(len(current), 3 * recipe.clip_frames, recipe.resize_short_side, recipe.resize_short_side),
+            grid=grid.expand(len(current), -1, -1, -1),
+            mode="bilinear",
+            align_corners=False,
+            padding_mode="zeros",
+        ).reshape(
+            len(current), 3, recipe.clip_frames, recipe.crop_size, recipe.crop_size
+        )
         clips.sub_(0.5)
         try:
             encoded = model(clips)["embds"].flatten(1)

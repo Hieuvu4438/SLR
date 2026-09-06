@@ -20,15 +20,15 @@ def test_sliding_windows_reject_invalid_counts():
         sliding_window_starts(16, stride=0)
 
 
-def test_phoenix_spatial_preprocessing_is_rgb_float_center_crop():
+def test_phoenix_spatial_preprocessing_is_rgb_float_square_resize():
     height, width = 260, 210
     frame = np.zeros((height, width, 3), dtype=np.uint8)
     frame[:, :, 0] = 255
     result = preprocess_rgb_frame(frame)
-    assert result.shape == (3, 224, 224)
+    assert result.shape == (3, 256, 256)
     assert result.dtype == np.float32
-    assert np.all(result[0] == 1.0)
-    assert np.all(result[1:] == 0.0)
+    assert np.allclose(result[0], 1.0, atol=5e-7)
+    assert np.allclose(result[1:], 0.0, atol=5e-7)
 
 
 def test_recipe_digest_changes_with_stride():

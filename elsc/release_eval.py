@@ -105,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Evaluate the untouched CiCo release checkpoint on official release features"
     )
-    parser.add_argument("--config", default="configs/ph_base.yaml")
+    parser.add_argument("--config", default="configs/ph_release.yaml")
     parser.add_argument("--output", default="artifacts/release_eval/ph_test")
     parser.add_argument("--device", default="cuda:0")
     args = parser.parse_args(argv)
