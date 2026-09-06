@@ -417,7 +417,7 @@ def build_cache(config: dict[str, Any], device: torch.device) -> dict[str, Any]:
                     continue
                 word_id = word_to_id[unit.surface]
                 raw = raw_support_prototype(
-                    h_a[sample, list(support_a.selected_positions)].cpu(),
+                    batch["h"][sample, list(support_a.selected_positions)],
                     torch.tensor(support_a.weights),
                 )
                 prototypes.append(PrototypeOccurrence(word_id, manifest_record.video_id, raw))
