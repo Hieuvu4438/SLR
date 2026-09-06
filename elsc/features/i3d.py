@@ -419,7 +419,10 @@ def extract(args: argparse.Namespace) -> dict[str, Any]:
         min_gpu_gib=args.min_free_gpu_gib,
         operation=f"{args.stream_name} I3D extraction",
     )
-    lock_path = output_root / ".extract.lock"
+    # Different dataset splits write to disjoint directories and reports, so
+    # they may safely use the large GPU concurrently. Keep exclusion within a
+    # split to prevent duplicate work and sidecar races for the same videos.
+    lock_path = output_root / f".extract-{split_label}.lock"
     with lock_path.open("w", encoding="utf-8") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
