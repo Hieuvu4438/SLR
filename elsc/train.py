@@ -24,7 +24,7 @@ from elsc.losses.distillation import bidirectional_kl
 from elsc.losses.lexical import globally_normalized_auxiliary, lexical_loss
 from elsc.mining.build_cache import mining_config_hash
 from elsc.provenance import validate_dev_selection
-from elsc.resources import require_resources
+from elsc.resources import require_resources, require_storage_budget
 from elsc.upstream.cico_bridge import TextEncoding, VideoEncoding
 from elsc.upstream.factory import build_retriever_from_checkpoint, load_cico_tokenizer
 from elsc.utils import (
@@ -332,6 +332,16 @@ def _scheduler(optimizer, steps: int, warmup_ratio: float):
     return torch.optim.lr_scheduler.LambdaLR(optimizer, scale)
 
 
+def _tensor_payload_bytes(value: Any) -> int:
+    if torch.is_tensor(value):
+        return value.numel() * value.element_size()
+    if isinstance(value, dict):
+        return sum(_tensor_payload_bytes(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return sum(_tensor_payload_bytes(item) for item in value)
+    return 0
+
+
 def _save_checkpoint(
     path: Path,
     model,
@@ -347,26 +357,36 @@ def _save_checkpoint(
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
-    torch.save(
-        {
-            "format": "elsc-training-v1",
-            "model": model.state_dict(),
-            "optimizer": optimizer.state_dict(),
-            "scheduler": scheduler.state_dict(),
-            "amp_scaler": scaler.state_dict(),
-            "epoch": epoch,
-            "step": step,
-            "best_dev": best,
-            "rng": capture_rng_state(),
-            "sampler_generator_state": sampler_generator.get_state(),
-            "config_hash": config_hash(config),
-            "trainable_parameter_names": [
-                name for name, value in model.named_parameters() if value.requires_grad
-            ],
-            "provenance": provenance,
-        },
-        temporary,
+    payload = {
+        "format": "elsc-training-v1",
+        "model": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "scheduler": scheduler.state_dict(),
+        "amp_scaler": scaler.state_dict(),
+        "epoch": epoch,
+        "step": step,
+        "best_dev": best,
+        "rng": capture_rng_state(),
+        "sampler_generator_state": sampler_generator.get_state(),
+        "config_hash": config_hash(config),
+        "trainable_parameter_names": [
+            name for name, value in model.named_parameters() if value.requires_grad
+        ],
+        "provenance": provenance,
+    }
+    # During atomic replacement the old checkpoint and the new temporary file
+    # coexist. Guard the full new payload, including conservative serialization
+    # overhead, against the campaign's disk reserve before writing any bytes.
+    tensor_bytes = _tensor_payload_bytes(payload)
+    planned_write_bytes = math.ceil(tensor_bytes * 1.10) + 16 * 1024**2
+    storage_guard = require_storage_budget(
+        path.parent,
+        planned_write_bytes=planned_write_bytes,
+        min_remaining_gib=float(config.get("resources", {}).get("min_free_disk_gib", 20)),
+        operation=f"checkpoint save {path.name}",
     )
+    payload["checkpoint_storage_guard"] = storage_guard
+    torch.save(payload, temporary)
     temporary.replace(path)
 
 
