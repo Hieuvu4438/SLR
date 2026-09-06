@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Iterable, Mapping, Sequence
 
 import numpy as np
+import torch
 
 
 class EvaluationContractError(ValueError):
@@ -79,6 +80,41 @@ def _ranks(
     return ranks, official_tie_ranks, per_query, ties, singleton
 
 
+def _cico_v2t_singleton_ranks(
+    scores: np.ndarray,
+    query_ids: Sequence[str],
+    candidate_ids: Sequence[str],
+    positives: Mapping[str, Iterable[str]],
+) -> tuple[list[int], list[list[int]]]:
+    """Reproduce CiCo's double-``torch.argsort`` V2T tie behavior.
+
+    CiCo intentionally uses a different metric kernel in each direction. Its
+    singleton V2T path converts the NumPy score tensor back to a CPU torch
+    tensor, applies argsort twice, and reads the diagonal ranks. Keeping that
+    operation is necessary because exact score ties are common in the release
+    checkpoint and ``compute_metrics`` expands ties instead.
+    """
+    candidate_index = {identifier: index for index, identifier in enumerate(candidate_ids)}
+    tensor = torch.as_tensor(np.asarray(scores))
+    order = torch.argsort(tensor, dim=-1, descending=True)
+    positions = torch.argsort(order, dim=-1, descending=False)
+    ranks: list[int] = []
+    orders: list[list[int]] = []
+    for row_index, query_id in enumerate(query_ids):
+        positive_ids = list(positives.get(query_id, ()))
+        if len(positive_ids) != 1:
+            raise EvaluationContractError("CiCo V2T tie kernel requires singleton positives")
+        try:
+            positive_index = candidate_index[positive_ids[0]]
+        except KeyError as error:
+            raise EvaluationContractError(
+                f"positive candidate absent from gallery: {error.args[0]}"
+            ) from error
+        ranks.append(int(positions[row_index, positive_index]))
+        orders.append([int(value) for value in order[row_index].tolist()])
+    return ranks, orders
+
+
 def evaluate_score_matrix(
     scores: np.ndarray,
     *,
@@ -101,15 +137,25 @@ def evaluate_score_matrix(
         matrix.T, text_ids, video_ids, text_to_video
     )
     singleton_protocol = v2t_singleton and t2v_singleton
-    primary_v2t = v2t_official if singleton_protocol else v2t_ranks
-    primary_t2v = t2v_official if singleton_protocol else t2v_ranks
+    if singleton_protocol:
+        primary_v2t, v2t_orders = _cico_v2t_singleton_ranks(
+            matrix, video_ids, text_ids, video_to_text
+        )
+        for record, rank, order in zip(v2t_queries, primary_v2t, v2t_orders, strict=True):
+            record["rank"] = rank
+            record["ranked_candidate_ids"] = [text_ids[index] for index in order]
+            record["rank_policy"] = "cico_double_torch_argsort"
+        primary_t2v = t2v_official
+    else:
+        primary_v2t = v2t_ranks
+        primary_t2v = t2v_ranks
     return {
         "schema_version": 1,
         "score_orientation": "video_x_text",
         "units": "percent",
         "gallery": {"videos": len(video_ids), "texts": len(text_ids)},
         "metric_kernel": (
-            "cico_compute_metrics_exact_tie_behavior"
+            "cico_direction_specific_singleton_tie_behavior"
             if singleton_protocol
             else "id_multi_positive_best_rank"
         ),

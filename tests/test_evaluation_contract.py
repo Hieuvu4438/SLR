@@ -38,7 +38,7 @@ def test_gallery_shape_and_positive_mapping_are_enforced():
         )
 
 
-def test_singleton_ties_match_cico_duplicate_rank_behavior():
+def test_singleton_ties_match_cico_direction_specific_behavior():
     scores = np.ones((2, 2), dtype=np.float32)
     videos = ["v0", "v1"]
     texts = ["t0", "t1"]
@@ -46,11 +46,15 @@ def test_singleton_ties_match_cico_duplicate_rank_behavior():
     result = evaluate_score_matrix(
         scores, video_ids=videos, text_ids=texts, video_to_text=v2t, text_to_video=t2v
     )
-    # CiCo emits both rank positions for each tied positive: [0,1,0,1].
+    # V2T uses CiCo's double torch.argsort and has one rank per query.
     assert result["V2T"]["R1"] == 50.0
-    assert result["V2T"]["cols"] == [0, 1, 0, 1]
+    assert result["V2T"]["cols"] == [0, 1]
+    assert [record["rank"] for record in result["per_query"]["V2T"]] == [0, 1]
+    # T2V uses compute_metrics, which expands tied positions: [0,1,0,1].
+    assert result["T2V"]["cols"] == [0, 1, 0, 1]
     assert result["diagnostic_best_positive"]["V2T"]["R1"] == 100.0
     assert result["tie_stats"]["V2T_queries_with_positive_tie"] == 2
+    assert result["metric_kernel"] == "cico_direction_specific_singleton_tie_behavior"
 
 
 class _BlockBridge:

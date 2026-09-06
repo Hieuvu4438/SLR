@@ -201,10 +201,11 @@ def compare_runs(
             "samples": bootstrap_samples,
             "seed": bootstrap_seed,
             "resampling_unit": "video_group_with_seed_hierarchy",
-            "rank_policy": "best_positive_per_query_diagnostic",
+            "rank_policy": "evaluator_scalar_per_query_rank",
             "note": (
-                "Primary aggregate metrics retain the evaluator's CiCo tie policy; "
-                "paired confidence intervals use one best-positive rank per query."
+                "Primary aggregates retain CiCo's direction-specific tie policies; "
+                "paired confidence intervals require one scalar rank per query and therefore "
+                "cannot reproduce T2V's duplicate-rank tie expansion."
             ),
             "delta_percentage_points": _bootstrap_deltas(
                 zip(baseline, method, strict=True),
