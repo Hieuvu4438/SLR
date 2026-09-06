@@ -351,6 +351,36 @@ def _collect_plan(video_root: Path, splits: list[str], recipe: ExtractionRecipe)
     return plan
 
 
+def _acquire_extraction_lock(
+    lock: Any,
+    lock_path: Path,
+    *,
+    wait_seconds: float,
+    poll_seconds: float,
+) -> float:
+    """Acquire a split lock, waiting for an intentional peer extractor if needed."""
+    started = time.monotonic()
+    deadline = started + wait_seconds
+    while True:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return time.monotonic() - started
+        except BlockingIOError as error:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise RuntimeError(
+                    f"timed out after {wait_seconds:.0f}s waiting for extractor lock "
+                    f"{lock_path}"
+                ) from error
+            sleep_seconds = min(poll_seconds, remaining)
+            print(
+                f"waiting_for_extractor_lock path={lock_path} "
+                f"remaining_seconds={remaining:.0f}",
+                flush=True,
+            )
+            time.sleep(sleep_seconds)
+
+
 def extract(args: argparse.Namespace) -> dict[str, Any]:
     recipe = ExtractionRecipe(stride=args.stride)
     recipe.validate()
@@ -430,10 +460,13 @@ def extract(args: argparse.Namespace) -> dict[str, Any]:
     # split to prevent duplicate work and sidecar races for the same videos.
     lock_path = output_root / f".extract-{split_label}.lock"
     with lock_path.open("w", encoding="utf-8") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as error:
-            raise RuntimeError(f"another extractor owns {lock_path}") from error
+        summary["lock_wait_seconds"] = _acquire_extraction_lock(
+            lock,
+            lock_path,
+            wait_seconds=args.lock_wait_seconds,
+            poll_seconds=args.lock_poll_seconds,
+        )
+        atomic_json_dump(summary, report_path)
         model = load_i3d(checkpoint_path, implementation, device)
         active_batch = args.batch_size
         started = time.monotonic()
@@ -535,6 +568,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-free-disk-gib", type=float, default=20.0)
     parser.add_argument("--min-free-gpu-gib", type=float, default=12.0)
     parser.add_argument("--report-interval", type=int, default=25)
+    parser.add_argument("--lock-wait-seconds", type=float, default=86_400.0)
+    parser.add_argument("--lock-poll-seconds", type=float, default=30.0)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--upstream-i3d",
@@ -549,6 +584,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.batch_size < 1 or args.report_interval < 1:
         raise ValueError("batch-size and report-interval must be positive")
+    if args.lock_wait_seconds < 0 or args.lock_poll_seconds <= 0:
+        raise ValueError("lock-wait-seconds must be nonnegative and lock-poll-seconds positive")
     extract(args)
     return 0
 

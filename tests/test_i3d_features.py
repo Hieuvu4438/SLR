@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import fcntl
 from pathlib import Path
 
 import numpy as np
@@ -8,6 +9,7 @@ import pytest
 
 from elsc.features.i3d import (
     ExtractionRecipe,
+    _acquire_extraction_lock,
     _temporal_metadata,
     preprocess_rgb_frame,
     sliding_window_starts,
@@ -54,3 +56,29 @@ def test_temporal_metadata_is_json_round_trip_idempotent():
         recipe,
     )
     assert json.loads(json.dumps(metadata)) == metadata
+
+
+def test_extraction_lock_times_out_when_same_split_is_owned(tmp_path):
+    lock_path = tmp_path / ".extract-train.lock"
+    with lock_path.open("w", encoding="utf-8") as owner:
+        fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with lock_path.open("w", encoding="utf-8") as contender:
+            with pytest.raises(RuntimeError, match="timed out"):
+                _acquire_extraction_lock(
+                    contender,
+                    lock_path,
+                    wait_seconds=0,
+                    poll_seconds=0.01,
+                )
+
+
+def test_extraction_lock_acquires_unowned_split(tmp_path):
+    lock_path = tmp_path / ".extract-test.lock"
+    with lock_path.open("w", encoding="utf-8") as lock:
+        waited = _acquire_extraction_lock(
+            lock,
+            lock_path,
+            wait_seconds=0,
+            poll_seconds=0.01,
+        )
+        assert waited >= 0
