@@ -203,6 +203,10 @@ def infer_video_features(
     if len(frames) < recipe.clip_frames:
         padding = frames[-1:].expand(recipe.clip_frames - len(frames), -1, -1, -1)
         frames = torch.cat((frames, padding), dim=0)
+    # Transfer each decoded video only once. Constructing highly overlapping
+    # windows on the host would repeatedly copy the same 256x256 frames into
+    # every batch and leave the GPU starved on long PH clips.
+    frames = frames.to(device)
     outputs: list[torch.Tensor] = []
     active_batch = batch_size
     offset = 0
@@ -211,6 +215,7 @@ def infer_video_features(
         indices = torch.tensor(
             [[start + step for step in range(recipe.clip_frames)] for start in current],
             dtype=torch.long,
+            device=device,
         )
         clips = frames.index_select(0, indices.flatten()).reshape(
             len(current),
@@ -219,7 +224,7 @@ def infer_video_features(
             recipe.resize_short_side,
             recipe.resize_short_side,
         )
-        clips = clips.permute(0, 2, 1, 3, 4).contiguous().to(device)
+        clips = clips.permute(0, 2, 1, 3, 4).contiguous()
         crop_scale = recipe.crop_size / recipe.resize_short_side
         ticks = torch.linspace(
             -crop_scale,
