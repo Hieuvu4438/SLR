@@ -1,0 +1,3 @@
+extends: ph_base.yaml
+experiment: ph_corrected_baseline_s2026
+seed: 2026
