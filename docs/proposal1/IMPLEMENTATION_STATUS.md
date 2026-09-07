@@ -1,7 +1,7 @@
 # ELSC implementation status
 
 This file distinguishes implemented contracts from experiment results. It must not be used as a
-SOTA claim. Last audited: 2026-09-07 11:37 (Asia/Ho_Chi_Minh).
+SOTA claim. Last audited: 2026-09-07 13:28 (Asia/Ho_Chi_Minh).
 
 | Acceptance requirement | Current evidence | Status |
 | --- | --- | --- |
@@ -14,13 +14,13 @@ SOTA claim. Last audited: 2026-09-07 11:37 (Asia/Ho_Chi_Minh).
 | Frozen teacher and train-only cache | Dev-selection provenance and all cache hashes are fail-fast; cache CLI accepts only `train` | Implemented and tested |
 | Raw local branch | Pointwise zero-init adapter and pre-Transformer local head; padding/locality tests | Implemented and tested |
 | Auxiliary gradient flow | Two-step zero-init test and periodic lexical-only adapter/head gradient diagnostics | Implemented and tested |
-| ELSC-Min and matched controls | Batch-32 Baseline/Min pilot completed, with Min mean dev R@1 lower by 0.771 pp; measured batch-512 Baseline is running and the validated Min follow-up is queued | Pilot measured; canonical Gate G/M pending |
+| ELSC-Min and matched controls | Canonical batch-512 seed-42 A0/A1/A2/A3/A4 runs are hash-validated. Min reaches mean dev R@1 75.530 versus baseline 75.241 (+0.289 pp), matched-caption 75.241, and random-support 75.434. True support wins both controls at seed 42, but the registered multi-seed requirement is not yet satisfied | Seed-42 mechanism signal measured; Gate G `no_go`, Gate M `insufficient_seeds` |
 | ELSC-Full | RF closure/control matching and per-video cap exist; deterministic extractor emits verified input-frame RF for generated train/dev features | Implemented gate; experiment not run |
 | DDP/AMP math | Global-count DDP auxiliary normalization test; FP16/BF16 scaler/resume code; BF16 real-checkpoint GPU backward smoke | Implemented for single-GPU MVP; multi-GPU run not claimed |
 | Full-gallery evaluation | Blockwise CiCo score, direction-specific singleton tie behavior, multi-positive IDs, explicit per-query artifact | Implemented and tested |
 | SAN fine-grained protocol | Missing official artifact returns `official_artifact_missing`, never a fabricated zero | Implemented gate |
 | Inference export | Core+adapter export excludes training-only head/cache/teacher and reload parity is enforced | Implemented; real run export pending |
-| Results integrity/statistics | `elsc.report` requires config/dev-manifest/selection/checkpoint hashes, paired seeds/gallery IDs, and video-group hierarchical bootstrap | Implemented; one explicitly noncanonical batch-32 comparison measured |
+| Results integrity/statistics | `elsc.report` requires config/dev-manifest/selection/checkpoint hashes, paired seeds/gallery IDs, and video-group hierarchical bootstrap; Gate G and Gate M are executable dev-only contracts | Implemented; canonical seed-42 reports measured |
 
 Current execution gate: the approved official archive contains only Phoenix test features (642 per
 stream). The release checkpoint reproduces the published T2V/V2T metrics. The public PH loader's
@@ -29,7 +29,10 @@ downloadable domain-aware encoder is explicitly a How2Sign target checkpoint, no
 Phoenix target encoder, so its release comparison is diagnostic rather than a parity claim. Local
 train/dev/test features are complete and consistently use those same two encoders; official test
 features remain isolated. A real batch-512 BF16 optimizer-step preflight passed with 44.73 GB peak
-reserved and 5.70 GB free. The canonical seed-42 Baseline is now running under that measured budget;
-ELSC-Min mining/training follows only after its dev-selected checkpoint validates. Full, controls,
-multi-seed expansion, locked test evaluation, and any SOTA claim remain pending their registered
-gates.
+reserved and 5.70 GB free. The canonical seed-42 Baseline completed 200 epochs and selected epoch 0
+at mean dev R@1 75.241. Its train-only cache contains 9,778 final auxiliary records with verified
+artifact hashes. ELSC-Min completed 20 epochs and selected epoch 18 at 75.530; the +0.289 pp mean
+gain misses the registered +0.5 pp Gate G threshold, while its +0.096 pp over duration-matched
+random support and +0.289 pp over matched-caption provide a one-seed mechanism signal. Seeds 1337
+and 2026 are the only registered expansion. Full, locked test evaluation, dataset/backbone transfer,
+and any SOTA claim remain pending their gates.
