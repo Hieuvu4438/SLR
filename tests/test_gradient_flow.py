@@ -5,6 +5,7 @@ import torch
 from elsc.data.cache_dataset import lexical_tensors_from_batch
 from elsc.losses.lexical import lexical_loss
 from elsc.models.adapter import LocalHead, LocalResidualAdapter
+from elsc.train import _auxiliary_gradient_diagnostic
 
 
 def test_zero_init_gradient_reaches_up_then_down_after_update():
@@ -54,3 +55,22 @@ def test_empty_cache_batch_keeps_zero_gradient_graph_for_head_only_control():
     assert count.item() == 0
     assert head.proj.weight.grad is not None
     assert head.proj.weight.grad.norm() == 0
+
+
+def test_auxiliary_gradient_diagnostic_accepts_frozen_adapter_control():
+    adapter = LocalResidualAdapter(8, 4).requires_grad_(False)
+    head = LocalHead(8, 4)
+    h = torch.randn(2, 3, 8)
+    valid = torch.ones(2, 3, dtype=torch.bool)
+    loss = head(adapter(h, valid)).sum()
+    diagnostics = _auxiliary_gradient_diagnostic(
+        loss,
+        [
+            ("adapter_up", adapter.up.weight),
+            ("adapter_down", adapter.down.weight),
+            ("local_head", head.proj.weight),
+        ],
+    )
+    assert diagnostics["adapter_up"] == 0.0
+    assert diagnostics["adapter_down"] == 0.0
+    assert diagnostics["local_head"] > 0.0

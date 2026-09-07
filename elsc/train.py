@@ -332,6 +332,23 @@ def _scheduler(optimizer, steps: int, warmup_ratio: float):
     return torch.optim.lr_scheduler.LambdaLR(optimizer, scale)
 
 
+def _auxiliary_gradient_diagnostic(
+    loss: torch.Tensor, named_parameters: list[tuple[str, torch.nn.Parameter]]
+) -> dict[str, float]:
+    active = [(name, parameter) for name, parameter in named_parameters if parameter.requires_grad]
+    gradients = torch.autograd.grad(
+        loss,
+        [parameter for _, parameter in active],
+        retain_graph=True,
+        allow_unused=True,
+    )
+    result = {name: 0.0 for name, _ in named_parameters}
+    for (name, _), gradient in zip(active, gradients, strict=True):
+        if gradient is not None:
+            result[name] = float(gradient.detach().float().norm())
+    return result
+
+
 def _tensor_payload_bytes(value: Any) -> int:
     if torch.is_tensor(value):
         return value.numel() * value.element_size()
@@ -636,29 +653,14 @@ def train(
                         config["train"].get("gradient_diagnostic_interval", 100)
                     )
                     if int(lexical_count) > 0 and batch_index % diagnostic_interval == 0:
-                        diagnostic_parameters = (
-                            model.adapter.up.weight,
-                            model.adapter.down.weight,
-                            model.local_head.proj.weight,
-                        )
-                        diagnostic_gradients = torch.autograd.grad(
+                        lexical_gradient_diagnostic = _auxiliary_gradient_diagnostic(
                             lexical,
-                            diagnostic_parameters,
-                            retain_graph=True,
-                            allow_unused=True,
+                            [
+                                ("adapter_up", model.adapter.up.weight),
+                                ("adapter_down", model.adapter.down.weight),
+                                ("local_head", model.local_head.proj.weight),
+                            ],
                         )
-                        lexical_gradient_diagnostic = {
-                            name: (
-                                float(gradient.detach().float().norm())
-                                if gradient is not None
-                                else 0.0
-                            )
-                            for name, gradient in zip(
-                                ("adapter_up", "adapter_down", "local_head"),
-                                diagnostic_gradients,
-                                strict=True,
-                            )
-                        }
                 elif config.get("method") == "matched_caption":
                     with torch.autocast(
                         device_type=device.type, dtype=amp_dtype, enabled=amp_enabled
