@@ -1,0 +1,61 @@
+extends: ph_base.yaml
+experiment: csl_daily_corrected_baseline
+method: baseline
+seed: 42
+
+sources:
+  annotation_format: normalized_csl_video_records_with_caption_groups
+  prepared_splits: [train, dev]
+  official_annotation_delimiter: ","
+  train_annotation: artifacts/transfer/csl_daily_annotations/train.pkl
+  dev_annotation: artifacts/transfer/csl_daily_annotations/dev.pkl
+  test_annotation: null
+  train_official_annotation: /home/dongvk/datasets/CSL_Daily_Sentence_Crop/train_data_with_num_frames.csv
+  dev_official_annotation: /home/dongvk/datasets/CSL_Daily_Sentence_Crop/dev_data_with_num_frames.csv
+  test_official_annotation: null
+  feature_agnostic_root: artifacts/features_reextracted/csl_domain_agnostic
+  feature_aware_root: artifacts/features_reextracted/csl_domain_aware_h2s_transfer
+  feature_agnostic_stream_name: domain_agnostic
+  feature_aware_stream_name: domain_aware_h2s_transfer
+  feature_agnostic_checkpoint_sha256: 6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f
+  feature_aware_checkpoint_sha256: 99e101d696ff63131b5d44fa6e465201216604ba5d8cc773f3cefa4a96ebd518
+  feature_recipe_sha256: 50045403867d7bdbee644de13e94389b5567c67b0f7f87e7218952dcde49a571
+  temporal_metadata_root: artifacts/features_reextracted/csl_temporal_metadata
+  require_feature_sidecars: true
+  require_temporal_metadata: true
+
+data:
+  dataset: csl_daily
+  train_manifest: artifacts/manifests/csl_train.jsonl
+  dev_manifest: artifacts/manifests/csl_dev.jsonl
+  test_manifest: artifacts/manifests/csl_test_locked_until_selection.jsonl
+  caption_language: en
+  source_caption_language: zh-CN
+  translation_provenance: pinned_upstream_train_and_opus_mt_zh_en_dev_only
+  feature_dim: 1024
+  feature_len: 64
+  max_words: 32
+  combine_type: sum
+  alpha: 0.8
+  feature_path_mode: local_transfer_reextraction
+  sampling: upstream_uniform
+  text_augmentation: cico_random_swap_v1
+
+model:
+  init_checkpoint: artifacts/pretrained/csl_sota.pth
+  init_checkpoint_sha256: bdf32b5083db7039f0b5678812154ee39e03541d1eea0f614571cedeb174886f
+  init_checkpoint_source: https://drive.google.com/file/d/1Hpcn5obCcG5JHa3nLvHqX9pfrp7g6wDu/view
+  init_checkpoint_role: csl_release_initialization_pending_local_dev_parity
+  teacher_checkpoint: null
+  teacher_selection_provenance: null
+
+train:
+  one_video_per_caption_group: true
+  per_device_batch: 512
+  accumulation_steps: 1
+  eval_batch: 128
+  epochs: 200
+
+artifacts:
+  prepare_report: artifacts/manifests/csl_prepare_report.json
+  manifest_meta: artifacts/manifests/csl_manifest_meta.json
