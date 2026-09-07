@@ -5,12 +5,14 @@ from pathlib import Path
 from elsc.config import load_config
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_csl_full_and_continued_min_templates_are_step_matched():
-    full = load_config(ROOT / "configs/csl_full.yaml", validate=False)
-    continued = load_config(ROOT / "configs/csl_continued_min.yaml", validate=False)
+    full = load_config(ROOT / "methods/elsc/configs/csl_full.yaml", validate=False)
+    continued = load_config(
+        ROOT / "methods/elsc/configs/csl_continued_min.yaml", validate=False
+    )
 
     assert full["data"]["dataset"] == "csl_daily"
     assert full["sources"]["prepared_splits"] == ["train", "dev"]
@@ -41,7 +43,7 @@ def test_csl_full_and_continued_min_templates_are_step_matched():
 
 
 def test_csl_full_template_enforces_rf_matched_evidence_controls():
-    full = load_config(ROOT / "configs/csl_full.yaml", validate=False)
+    full = load_config(ROOT / "methods/elsc/configs/csl_full.yaml", validate=False)
     evidence = full["evidence"]
 
     assert evidence["enabled"] is True

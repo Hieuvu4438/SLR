@@ -10,6 +10,17 @@ contracts, and structural tests are present; a SOTA claim is only valid after th
 dev-selected baselines, ablations, and locked full-gallery test runs have been completed. Generated
 reports never fill missing metrics with zero.
 
+## Repository layout
+
+- `methods/elsc/` is the canonical home of proposal 1: method package, configs, campaign scripts,
+  and method-specific tests.
+- `shared/slr_common/` contains reusable data, feature, CiCo bridge, evaluation, transfer, resource,
+  and hashing infrastructure for future peer methods under `methods/`.
+- `third_party/` contains pinned external source and is never mixed into method-owned code.
+- Root `elsc`, method YAMLs under `configs/`, and method runners under `scripts/` are thin
+  compatibility shims for historical commands and active experiment provenance; new code uses
+  canonical paths.
+
 ## Current asset status
 
 Phoenix14T raw videos and official train/dev/test annotations already exist on this server and are
@@ -69,14 +80,14 @@ python -m elsc.training_preflight --config configs/ph_base.yaml \
 python -m elsc.train --config configs/ph_base.yaml --run-dir runs/ph_base_s42
 
 # Bind Min to the dev-selected baseline teacher/student initialization.
-python -m elsc.configure_stage --template configs/ph_min.yaml \
+python -m elsc.configure_stage --template methods/elsc/configs/ph_min.yaml \
   --teacher-run runs/ph_base_s42 --cache-path artifacts/cache/ph_min_s42_v1 \
   --output artifacts/campaign/ph_min_s42.yaml
 python -m elsc.audit --config artifacts/campaign/ph_min_s42.yaml --stage teacher
 python -m elsc.mining.build_cache --config artifacts/campaign/ph_min_s42.yaml --split train
 python -m elsc.train --config artifacts/campaign/ph_min_s42.yaml --run-dir runs/ph_min_s42
-python -m elsc.train --config configs/ablation_caption.yaml --run-dir runs/ph_caption_s42
-python -m elsc.train --config configs/ablation_random_span.yaml --run-dir runs/ph_random_span_s42
+python -m elsc.train --config methods/elsc/configs/ablation_caption.yaml --run-dir runs/ph_caption_s42
+python -m elsc.train --config methods/elsc/configs/ablation_random_span.yaml --run-dir runs/ph_random_span_s42
 
 # Test is a separate, locked action after dev selection.
 python -m elsc.evaluate --run-dir runs/ph_min_s42 --split test --checkpoint best_dev
@@ -94,7 +105,7 @@ optimizer-step preflight on the RTX 5880 Ada measured 44.73 GB peak reserved
 memory and 5.70 GB free memory after the step. Do not run another GPU workload
 alongside this training configuration.
 
-After starting the baseline, `scripts/run_ph_b512_followup.sh` can wait for its
+After starting the baseline, `methods/elsc/scripts/run_ph_b512_followup.sh` can wait for its
 validated dev-selected checkpoint, build a run-isolated train-only cache, train
 ELSC-Min, and emit the paired dev report. It times out instead of retrying a
 failed experiment and never accesses the test split.
@@ -104,16 +115,16 @@ The registered post-screen runners are deliberately conditional and dev-only:
 ```bash
 # A5/A6/A7 plus the generic local word-video diagnostic after terminal G/M artifacts.
 timeout --signal=TERM --kill-after=60s 8h \
-  bash scripts/run_ph_b512_diagnostics.sh
+  bash methods/elsc/scripts/run_ph_b512_diagnostics.sh
 
 # Lower-LR and keep controls when the original three-seed Gate G is no_go.
 timeout --signal=TERM --kill-after=60s 8h \
-  bash scripts/run_ph_b512_corrective.sh
+  bash methods/elsc/scripts/run_ph_b512_corrective.sh
 
 # Expand the fixed lower-LR recipe to seeds 1337/2026. Matched lower-LR caption/random-support
 # controls run only if its three-seed Gate G passes.
 timeout --signal=TERM --kill-after=60s 8h \
-  bash scripts/run_ph_b512_lower_lr_multiseed.sh
+  bash methods/elsc/scripts/run_ph_b512_lower_lr_multiseed.sh
 ```
 
 Each runner refuses invalid existing terminal runs, enforces a 20 GiB disk reserve, validates
@@ -124,7 +135,7 @@ checkpoint. Resolve it with the baseline kept as teacher and Min used only for s
 initialization:
 
 ```bash
-python -m elsc.configure_stage --template configs/ph_full.yaml \
+python -m elsc.configure_stage --template methods/elsc/configs/ph_full.yaml \
   --teacher-run runs/ph_base_s42 --student-run runs/ph_min_s42 \
   --cache-path artifacts/cache/ph_full_s42_v1 \
   --output artifacts/campaign/ph_full_s42.yaml
@@ -138,14 +149,14 @@ Transfer datasets can be audited without downloading data, extracting features, 
 content into a tuning decision:
 
 ```bash
-python -m elsc.transfer_audit \
+python -m slr_common.transfer_audit \
   --dataset how2sign \
   --root /home/shared_data/sign_language/How2Sign \
   --auxiliary-label-root /home/dongvk/datasets/How2Sign/from_uni_sign_source \
   --subset-root /home/shared_data/sign_language/How2Sign/train/subset_2000 \
   --output artifacts/transfer/how2sign_asset_audit.json
 
-python -m elsc.transfer_audit \
+python -m slr_common.transfer_audit \
   --dataset csl_daily \
   --root /home/dongvk/datasets/CSL_Daily_Sentence_Crop \
   --video-list-root artifacts/transfer/csl_daily_video_lists \
@@ -158,14 +169,14 @@ Chinese-to-English translation artifact. The converter has no test input, preser
 IDs, and assigns the shared sentence ID as `caption_id` for multi-positive retrieval:
 
 ```bash
-python -m elsc.csl_transfer translate-dev \
+python -m slr_common.csl_transfer translate-dev \
   --csl-root /home/dongvk/datasets/CSL_Daily_Sentence_Crop \
   --model-root artifacts/pretrained/opus-mt-zh-en \
   --model-id Helsinki-NLP/opus-mt-zh-en \
   --model-revision cf109095479db38d6df799875e34039d4938aaa6 \
   --device cuda:0 --batch-size 64 \
   --output artifacts/transfer/csl_daily_dev_en_opus_mt.json
-python -m elsc.csl_transfer build-annotations \
+python -m slr_common.csl_transfer build-annotations \
   --csl-root /home/dongvk/datasets/CSL_Daily_Sentence_Crop \
   --upstream-train third_party/SLRT/CiCo/CLCL/data_csl/train.pkl \
   --dev-translations artifacts/transfer/csl_daily_dev_en_opus_mt.json \
@@ -174,17 +185,18 @@ python -m elsc.csl_transfer build-annotations \
 ```
 
 `scripts/run_csl_i3d_train_dev.sh` extracts only the measured train+dev plan and enforces a
-32 GiB remaining-disk reserve across both streams. `scripts/run_csl_gate_x.sh` waits for both
-hash-validated extraction reports, then prepares manifests and runs the seed-42 baseline/ELSC-Min
-dev screen. The CSL training sampler deterministically selects one signer video per caption group
-per epoch, matching the upstream loader's group-balanced training semantics.
+32 GiB remaining-disk reserve across both streams.
+`methods/elsc/scripts/run_csl_gate_x.sh` waits for both hash-validated extraction reports, then
+prepares manifests and runs the seed-42 baseline/ELSC-Min dev screen. The CSL training sampler
+deterministically selects one signer video per caption group per epoch, matching the upstream
+loader's group-balanced training semantics.
 
-`scripts/run_csl_multiseed.sh` expands the screen only when seed 42 passes Gate G. The conditional
-`scripts/run_csl_full_pilot.sh` then requires the scoped three-seed Gate X artifact plus passing G
-and M gates before it builds the independently bound Full cache. It validates Gate F's receptive-
-field contract, GPU memory, matched optimization budget, and a 28 GiB launch-disk reserve before
-running the seed-42 Full versus continued-Min pilot. No CSL test annotation is available to any of
-these queues.
+`methods/elsc/scripts/run_csl_multiseed.sh` expands the screen only when seed 42 passes Gate G. The
+conditional `methods/elsc/scripts/run_csl_full_pilot.sh` then requires the scoped three-seed Gate X
+artifact plus passing G and M gates before it builds the independently bound Full cache. It
+validates Gate F's receptive-field contract, GPU memory, matched optimization budget, and a 28 GiB
+launch-disk reserve before running the seed-42 Full versus continued-Min pilot. No CSL test
+annotation is available to any of these queues.
 
 The current local audit marks CSL-Daily ready for feature extraction. How2Sign remains blocked:
 its annotations reference 118 train, 2 validation, and 6 test clips absent from both the extracted

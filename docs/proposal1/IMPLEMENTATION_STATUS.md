@@ -72,3 +72,9 @@ queue is defined for the CSL Full pilot: it requires the completed three-seed Ga
 passing G and M gates, the train-only RF/cache Gate F contract, a real batch-512 GPU preflight, and
 a 28 GiB launch-disk reserve. The Full row is compared with a ten-epoch continued-Min row from the
 same selected Min initialization; all reports remain dev-only and explicitly record no test access.
+
+The source tree now supports multiple proposal methods without cross-contamination. ELSC-owned
+Python, configs, campaign scripts, and tests live under `methods/elsc/`. Reusable feature/data/
+evaluation/CiCo/transfer/resource utilities live under `shared/slr_common/`, while `third_party/`
+remains external. Import-boundary tests reject dependencies from shared code back into a method;
+thin root compatibility shims preserve historical commands and active run provenance.

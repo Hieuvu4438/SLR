@@ -120,41 +120,47 @@ Tất cả file trong `elsc/`, `configs/`, `tests/` dưới đây là `NEW`.
 elsc-project/
   third_party/SLRT/
   third_party/SAN/                   # optional reference/import
-  elsc/
+  shared/slr_common/
     upstream/cico_bridge.py
     data/manifest.py
     data/cico_dataset.py
     data/word_offsets.py
     data/views.py
-    data/cache_dataset.py
-    config.py
-    mining/teacher_align.py
-    mining/negative_graph.py
-    mining/build_cache.py
-    models/adapter.py
-    models/local_head.py
-    models/retriever.py
-    losses/coarse.py
-    losses/lexical.py
-    losses/evidence.py
-    losses/distillation.py
+    features/i3d.py
     evaluation/cico_eval.py
     evaluation/san_eval.py
-    train.py
-    evaluate.py
-    prepare.py
-    audit.py
-    export.py
+    resources.py
+    utils.py
+  methods/elsc/
+    elsc/
+      data/cache_dataset.py
+      config.py
+      mining/teacher_align.py
+      mining/negative_graph.py
+      mining/build_cache.py
+      models/adapter.py
+      models/local_head.py
+      models/retriever.py
+      losses/coarse.py
+      losses/lexical.py
+      losses/evidence.py
+      losses/distillation.py
+      train.py
+      evaluate.py
+      prepare.py
+      audit.py
+      export.py
+    configs/ph_min.yaml
+    configs/ph_full.yaml
+    configs/ablation_*.yaml
+    scripts/
+    tests/
   configs/ph_base.yaml
-  configs/ph_min.yaml
-  configs/ph_full.yaml
-  configs/ablation_*.yaml
-  tests/test_bridge_parity.py
+  tests/test_package_boundaries.py
   tests/test_word_offsets.py
   tests/test_support_mapping.py
-  tests/test_losses.py
-  tests/test_gradient_flow.py
   tests/test_evaluation_contract.py
+  elsc/                              # legacy import compatibility only
   patches/cico_compat.patch
   artifacts/manifests/
   artifacts/cache/
@@ -774,7 +780,7 @@ Gradient diagnostic để phát hiện head hấp thụ loss: đo norm từ riê
 Các path dưới đây phải thay bằng artifact thật. `required` có nghĩa script phải fail-fast nếu chưa được cung cấp, không tự tải dữ liệu khác.
 
 ```yaml
-# NEW: configs/ph_min.yaml — proposed defaults, chưa được train/tune
+# NEW: methods/elsc/configs/ph_min.yaml — proposed defaults, chưa được train/tune
 schema_version: 1
 experiment: ph_elsc_min
 seed: 42
@@ -907,7 +913,7 @@ Tạo `ph_base.yaml` từ cùng resolved data/scorer configuration, đặt `adap
 Các YAML dẫn xuất cần viết, ví dụ:
 
 ```yaml
-# NEW: configs/ph_full.yaml
+# NEW: methods/elsc/configs/ph_full.yaml
 extends: ph_min.yaml
 experiment: ph_elsc_full
 model:
@@ -940,10 +946,10 @@ python -m elsc.audit --config configs/ph_base.yaml --stage parity
 python -m elsc.train --config configs/ph_base.yaml --run-dir runs/ph_base_s42
 
 # 5. Khóa teacher từ checkpoint có provenance; cập nhật YAML path/hash.
-python -m elsc.audit --config configs/ph_min.yaml --stage teacher
+python -m elsc.audit --config methods/elsc/configs/ph_min.yaml --stage teacher
 
 # 6. Tạo support cache, lexical bank và negative graph chỉ trên TRAIN.
-python -m elsc.mining.build_cache --config configs/ph_min.yaml --split train
+python -m elsc.mining.build_cache --config methods/elsc/configs/ph_min.yaml --split train
 
 # 7. Structural, gradient và score correctness checks.
 python -m pytest tests/test_word_offsets.py tests/test_support_mapping.py
@@ -951,12 +957,12 @@ python -m pytest tests/test_losses.py tests/test_gradient_flow.py
 python -m pytest tests/test_bridge_parity.py tests/test_evaluation_contract.py
 
 # 8. Pilot ELSC-Min và matched controls.
-python -m elsc.train --config configs/ph_min.yaml --run-dir runs/ph_min_s42
-python -m elsc.train --config configs/ablation_caption.yaml --run-dir runs/ph_caption_s42
-python -m elsc.train --config configs/ablation_random_span.yaml --run-dir runs/ph_random_span_s42
+python -m elsc.train --config methods/elsc/configs/ph_min.yaml --run-dir runs/ph_min_s42
+python -m elsc.train --config methods/elsc/configs/ablation_caption.yaml --run-dir runs/ph_caption_s42
+python -m elsc.train --config methods/elsc/configs/ablation_random_span.yaml --run-dir runs/ph_random_span_s42
 
 # 9. Full chỉ sau gate cơ chế và RF metadata.
-python -m elsc.train --config configs/ph_full.yaml --run-dir runs/ph_full_s42
+python -m elsc.train --config methods/elsc/configs/ph_full.yaml --run-dir runs/ph_full_s42
 
 # 10. Chọn checkpoint theo dev; đánh giá test bằng lệnh tách biệt.
 python -m elsc.evaluate --run-dir runs/ph_min_s42 --split test --checkpoint best_dev

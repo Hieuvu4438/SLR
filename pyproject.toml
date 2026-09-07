@@ -30,7 +30,7 @@ where = ["methods/elsc", "shared"]
 include = ["elsc*", "slr_common*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "methods/elsc/tests"]
 addopts = "-ra"
 
 [tool.ruff]

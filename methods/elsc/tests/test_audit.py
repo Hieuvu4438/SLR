@@ -36,7 +36,7 @@ def test_asset_audit_can_lock_test_out_of_transfer_preparation(tmp_path):
         sources[f"feature_{stream}_root"] = str(root)
     checkpoint = tmp_path / "checkpoint.pt"
     checkpoint.write_bytes(b"checkpoint")
-    project = Path(__file__).resolve().parents[1]
+    project = Path(__file__).resolve().parents[3]
     commit = subprocess.run(
         ["git", "-C", str(project), "rev-parse", "HEAD"],
         check=True,
