@@ -114,6 +114,29 @@ python -m elsc.train --config artifacts/campaign/ph_full_s42.yaml \
 
 Full fails rather than inferring receptive fields from sequence length.
 
+Transfer datasets can be audited without downloading data, extracting features, or reading test
+content into a tuning decision:
+
+```bash
+python -m elsc.transfer_audit \
+  --dataset how2sign \
+  --root /home/shared_data/sign_language/How2Sign \
+  --auxiliary-label-root /home/dongvk/datasets/How2Sign/from_uni_sign_source \
+  --subset-root /home/shared_data/sign_language/How2Sign/train/subset_2000 \
+  --output artifacts/transfer/how2sign_asset_audit.json
+
+python -m elsc.transfer_audit \
+  --dataset csl_daily \
+  --root /home/dongvk/datasets/CSL_Daily_Sentence_Crop \
+  --output artifacts/transfer/csl_daily_asset_audit.json
+```
+
+The current local audit marks CSL-Daily ready for feature extraction. How2Sign remains blocked:
+its annotations reference 118 train, 2 validation, and 6 test clips absent from both the extracted
+directories and the local train/test ZIP inventories. The directory named `subset_2000` contains an
+internally consistent 100-clip train-only engineering subset; it is never labeled as Gate X or an
+official benchmark evaluation.
+
 ## What is enforced
 
 - canonical `[B,F,1024]` features, dense indices, `True=valid`, and explicit CiCo CLS/padding masks;

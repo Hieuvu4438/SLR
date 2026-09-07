@@ -1,7 +1,7 @@
 # ELSC implementation status
 
 This file distinguishes implemented contracts from experiment results. It must not be used as a
-SOTA claim. Last audited: 2026-09-07 13:31 (Asia/Ho_Chi_Minh).
+SOTA claim. Last audited: 2026-09-07 17:28 (Asia/Ho_Chi_Minh).
 
 | Acceptance requirement | Current evidence | Status |
 | --- | --- | --- |
@@ -21,6 +21,7 @@ SOTA claim. Last audited: 2026-09-07 13:31 (Asia/Ho_Chi_Minh).
 | SAN fine-grained protocol | Missing official artifact returns `official_artifact_missing`, never a fabricated zero | Implemented gate |
 | Inference export | The selected seed-42 Min checkpoint has a real 352.5 MB core+adapter export; local head/teacher/cache are absent and reload score parity has max absolute error 0.0 | Implemented and verified |
 | Results integrity/statistics | `elsc.report` requires config/dev-manifest/selection/checkpoint hashes, paired seeds/gallery IDs, and video-group hierarchical bootstrap; Gate G and Gate M are executable dev-only contracts | Implemented; canonical seed-42 reports measured |
+| Dataset-transfer asset gate | `elsc.transfer_audit` hashes ordered IDs and annotations, checks video/text coverage and split overlap without extracting features or using test feedback. Local CSL-Daily is exact at 18,401/1,077/1,176 annotations and 20,654 referenced videos. Local How2Sign annotations reference 118/2/6 unavailable train/dev/test clips; its engineering subset is exactly 100 train clips and is explicitly non-benchmark | CSL-Daily ready for feature extraction; How2Sign Gate X blocked on a protocol decision for missing release clips |
 
 Current execution gate: the approved official archive contains only Phoenix test features (642 per
 stream). The release checkpoint reproduces the published T2V/V2T metrics. The public PH loader's
@@ -36,3 +37,12 @@ gain misses the registered +0.5 pp Gate G threshold, while its +0.096 pp over du
 random support and +0.289 pp over matched-caption provide a one-seed mechanism signal. Seeds 1337
 and 2026 are the only registered expansion. Full, locked test evaluation, dataset/backbone transfer,
 and any SOTA claim remain pending their gates.
+
+Transfer audits are stored locally under `artifacts/transfer/`. They do not download data, hash
+large video contents, extract features, or expose test captions in their output. The How2Sign
+train/test ZIP inventories contain the same absence as the extracted clip directories, so selective
+re-extraction cannot recover the 124 missing train/test references. The official project distributes
+clips and English annotations separately and documents that manually re-aligned clips require
+re-segmentation from full videos; no silent intersection/filtering is accepted as an official Gate X
+protocol. CSL-Daily has no missing/extra video references or cross-split pair-ID overlap and is the
+only full transfer dataset currently ready for a disk-budgeted feature extraction plan.
