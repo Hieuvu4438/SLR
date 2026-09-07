@@ -7,8 +7,10 @@ gain_gate=artifacts/campaign/ph_min_vs_base_b512_dev_3seed_gate_g.json
 mechanism_gate=artifacts/campaign/ph_min_controls_b512_dev_3seed_gate_m.json
 baseline_run=runs/ph_base_b512_s42
 baseline_config=configs/ph_base.yaml
-min_run=runs/ph_min_b512_s42
-min_config=artifacts/campaign/ph_min_b512_s42.yaml
+legacy_min_run=runs/ph_min_b512_s42
+legacy_min_config=artifacts/campaign/ph_min_b512_s42.yaml
+matched_min_run=runs/ph_min_matched_source_b512_s42
+matched_min_config=artifacts/campaign/ph_min_matched_source_b512_s42.yaml
 min_cache=artifacts/cache/ph_min_b512_s42_v1
 random_cache=artifacts/cache/ph_random_neighbors_b512_s42_v1
 log_path=artifacts/logs/ph_b512_diagnostics_s42.log
@@ -124,7 +126,7 @@ evaluate_and_report() {
     budget_args+=(--require-matched-training-budget)
   fi
   python -m elsc.report \
-    --baseline-runs "$run_dir" --method-runs "$min_run" --split dev \
+    --baseline-runs "$run_dir" --method-runs "$matched_min_run" --split dev \
     --output "artifacts/campaign/ph_min_vs_${name}_b512_dev_s42.json" \
     "${budget_args[@]}" >>"$log_path" 2>&1
 }
@@ -134,7 +136,23 @@ require_terminal_gate "$gain_gate" G
 require_terminal_gate "$mechanism_gate" M
 python -m elsc.provenance --run-dir "$baseline_run" --config "$baseline_config" \
   >>"$log_path" 2>&1
-python -m elsc.provenance --run-dir "$min_run" --config "$min_config" \
+python -m elsc.provenance --run-dir "$legacy_min_run" --config "$legacy_min_config" \
+  >>"$log_path" 2>&1
+
+# The registered Min run predates the Full/KEEP source refactor. Although those
+# branches are disabled for Min, the fail-closed report contract correctly
+# rejects comparisons across different implementation fingerprints. Reproduce
+# Min under the current source tree instead of weakening the contract or
+# overwriting the registered run.
+configure_control configs/ph_min.yaml "$min_cache" "$matched_min_config"
+run_training "$matched_min_config" "$matched_min_run" min_matched_source
+check_disk
+python -m elsc.evaluate \
+  --run-dir "$matched_min_run" --split dev --checkpoint best_dev --device cuda:0 \
+  >>"$log_path" 2>&1
+python -m elsc.report \
+  --baseline-runs "$legacy_min_run" --method-runs "$matched_min_run" --split dev \
+  --output artifacts/campaign/ph_min_matched_source_vs_legacy_b512_dev_s42.json \
   >>"$log_path" 2>&1
 
 for name in shuffled_lexical head_only local_word_video; do
