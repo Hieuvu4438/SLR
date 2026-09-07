@@ -9,6 +9,7 @@ from typing import Any, Iterable
 import numpy as np
 
 from elsc.config import config_hash, load_config
+from elsc.provenance import ProvenanceError, validate_test_lock
 from elsc.utils import atomic_json_dump, sha256_file
 
 
@@ -23,12 +24,34 @@ class ReportContractError(ValueError):
 def _load_run(run_dir: Path, split: str) -> dict[str, Any]:
     metrics_path = run_dir / "evaluation" / split / "metrics.json"
     config_path = run_dir / "resolved_config.yaml"
-    if not metrics_path.is_file() or not config_path.is_file():
-        raise ReportContractError(f"run lacks resolved config or {split} metrics: {run_dir}")
+    selection_path = run_dir / "selection.json"
+    if not metrics_path.is_file() or not config_path.is_file() or not selection_path.is_file():
+        raise ReportContractError(
+            f"run lacks resolved config, dev selection, or {split} metrics: {run_dir}"
+        )
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
     config = load_config(config_path, validate=False)
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    relative_checkpoint = selection.get("checkpoint")
+    if not isinstance(relative_checkpoint, str):
+        raise ReportContractError(f"selection lacks checkpoint path: {selection_path}")
+    checkpoint = run_dir / relative_checkpoint
+    try:
+        validate_test_lock(selection_path, checkpoint, run_dir=run_dir, config=config)
+    except (ProvenanceError, OSError, ValueError) as error:
+        raise ReportContractError(f"invalid frozen run selection: {run_dir}: {error}") from error
     if metrics.get("score_orientation") != "video_x_text" or metrics.get("units") != "percent":
         raise ReportContractError(f"invalid evaluation contract: {metrics_path}")
+    if metrics.get("split") != split:
+        raise ReportContractError(f"metrics split does not match requested split: {metrics_path}")
+    metric_checkpoint = metrics.get("checkpoint")
+    if (
+        not isinstance(metric_checkpoint, dict)
+        or metric_checkpoint.get("sha256") != selection.get("checkpoint_sha256")
+    ):
+        raise ReportContractError(
+            f"metrics were not produced from the dev-selected checkpoint: {metrics_path}"
+        )
     if split == "test" and "selection_lock" not in metrics:
         raise ReportContractError(
             f"test result has no validated dev-selection lock: {metrics_path}"
@@ -40,6 +63,8 @@ def _load_run(run_dir: Path, split: str) -> dict[str, Any]:
         "config_hash": config_hash(config),
         "metrics_path": str(metrics_path),
         "metrics_sha256": sha256_file(metrics_path),
+        "selection_sha256": sha256_file(selection_path),
+        "checkpoint_sha256": selection["checkpoint_sha256"],
         "metrics": metrics,
     }
 
