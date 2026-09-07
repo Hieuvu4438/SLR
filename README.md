@@ -68,10 +68,12 @@ python -m elsc.training_preflight --config configs/ph_base.yaml \
   --output artifacts/preflight/ph_base_b512.json
 python -m elsc.train --config configs/ph_base.yaml --run-dir runs/ph_base_s42
 
-# Set model.teacher_checkpoint to the dev-selected baseline and preserve selection provenance.
-python -m elsc.audit --config configs/ph_min.yaml --stage teacher
-python -m elsc.mining.build_cache --config configs/ph_min.yaml --split train
-python -m elsc.train --config configs/ph_min.yaml --run-dir runs/ph_min_s42
+# Bind Min to the dev-selected baseline teacher/student initialization.
+python -m elsc.configure_stage --template configs/ph_min.yaml \
+  --teacher-run runs/ph_base_s42 --output artifacts/campaign/ph_min_s42.yaml
+python -m elsc.audit --config artifacts/campaign/ph_min_s42.yaml --stage teacher
+python -m elsc.mining.build_cache --config artifacts/campaign/ph_min_s42.yaml --split train
+python -m elsc.train --config artifacts/campaign/ph_min_s42.yaml --run-dir runs/ph_min_s42
 python -m elsc.train --config configs/ablation_caption.yaml --run-dir runs/ph_caption_s42
 python -m elsc.train --config configs/ablation_random_span.yaml --run-dir runs/ph_random_span_s42
 
@@ -85,7 +87,18 @@ python -m elsc.report --baseline-runs runs/ph_base_s42 --method-runs runs/ph_min
 ```
 
 `ph_full.yaml` additionally requires verified receptive-field metadata and a selected ELSC-Min
-checkpoint. It will fail rather than infer receptive fields from sequence length.
+checkpoint. Resolve it with the baseline kept as teacher and Min used only for student
+initialization:
+
+```bash
+python -m elsc.configure_stage --template configs/ph_full.yaml \
+  --teacher-run runs/ph_base_s42 --student-run runs/ph_min_s42 \
+  --output artifacts/campaign/ph_full_s42.yaml
+python -m elsc.train --config artifacts/campaign/ph_full_s42.yaml \
+  --run-dir runs/ph_full_s42
+```
+
+Full fails rather than inferring receptive fields from sequence length.
 
 ## What is enforced
 
