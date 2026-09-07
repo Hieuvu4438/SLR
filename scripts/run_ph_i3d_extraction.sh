@@ -141,10 +141,12 @@ run_training() {
   fi
   wait_for_idle_gpu
   if [[ -f "$run_dir/checkpoints/last.pt" ]]; then
-    python -m elsc.train --config "$config" --run-dir "$run_dir" \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+      python -m elsc.train --config "$config" --run-dir "$run_dir" \
       --resume "$run_dir/checkpoints/last.pt" --device cuda:0 >>"$log_path" 2>&1
   else
-    python -m elsc.train --config "$config" --run-dir "$run_dir" \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+      python -m elsc.train --config "$config" --run-dir "$run_dir" \
       --device cuda:0 >>"$log_path" 2>&1
   fi
 }

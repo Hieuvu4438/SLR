@@ -151,11 +151,23 @@ def main(argv: list[str] | None = None) -> int:
             min_free_after_gib=args.min_free_after_gib,
         )
     except torch.cuda.OutOfMemoryError as error:
+        device = torch.device(args.device)
+        peak_allocated = torch.cuda.max_memory_allocated(device)
+        peak_reserved = torch.cuda.max_memory_reserved(device)
+        torch.cuda.empty_cache()
+        free_after_cleanup, total = torch.cuda.mem_get_info(device)
         result = {
             "schema_version": 1,
             "status": "failed_cuda_oom",
             "config": str(Path(args.config).resolve()),
+            "config_hash": config_hash(config),
+            "batch_size": int(config["train"]["per_device_batch"]),
+            "precision": config["train"].get("precision", "fp32"),
             "error": repr(error),
+            "peak_allocated_bytes": peak_allocated,
+            "peak_reserved_bytes": peak_reserved,
+            "gpu_free_after_cleanup_bytes": int(free_after_cleanup),
+            "gpu_total_bytes": int(total),
             "checkpoint_written": False,
             "data_scope": "train_only_first_deterministic_batch",
         }
