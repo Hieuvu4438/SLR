@@ -92,6 +92,11 @@ optimizer-step preflight on the RTX 5880 Ada measured 44.73 GB peak reserved
 memory and 5.70 GB free memory after the step. Do not run another GPU workload
 alongside this training configuration.
 
+After starting the baseline, `scripts/run_ph_b512_followup.sh` can wait for its
+validated dev-selected checkpoint, build a run-isolated train-only cache, train
+ELSC-Min, and emit the paired dev report. It times out instead of retrying a
+failed experiment and never accesses the test split.
+
 `ph_full.yaml` additionally requires verified receptive-field metadata and a selected ELSC-Min
 checkpoint. Resolve it with the baseline kept as teacher and Min used only for student
 initialization:
