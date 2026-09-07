@@ -1,0 +1,3 @@
+extends: csl_base.yaml
+experiment: csl_daily_corrected_baseline_s2026
+seed: 2026
