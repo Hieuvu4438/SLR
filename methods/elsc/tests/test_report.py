@@ -9,12 +9,13 @@ import pytest
 
 from elsc.config import config_hash, load_config
 from elsc.report import (
+    LEGACY_TRAINING_SOURCE_PATHS,
     TRAINING_SOURCE_PATHS,
     ReportContractError,
     _implementation_source_contract,
     compare_runs,
 )
-from elsc.utils import ordered_hash, sha256_file
+from elsc.utils import git_worktree_state, ordered_hash, sha256_file
 
 
 def _write_run(
@@ -248,11 +249,51 @@ def test_training_source_contract_uses_recorded_commit_blobs(monkeypatch, tmp_pa
     }
     result = _implementation_source_contract(provenance, tmp_path / "run")
     assert len(result["git_blob_ids"]) == len(TRAINING_SOURCE_PATHS)
+    assert result["source_layout"] == "method_shared_v2"
     assert len(result["source_hash"]) == 64
 
     provenance["implementation"]["tracked_worktree_dirty"] = True
     with pytest.raises(ReportContractError, match="dirty tracked sources"):
         _implementation_source_contract(provenance, tmp_path / "run")
+
+
+def test_training_source_contract_accepts_legacy_layout(monkeypatch, tmp_path: Path):
+    output = "\n".join(
+        f"100644 blob {index:040x}\t{path}"
+        for index, path in enumerate(LEGACY_TRAINING_SOURCE_PATHS, 1)
+    )
+    monkeypatch.setattr(
+        "elsc.report.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(stdout=output),
+    )
+    provenance = {
+        "implementation": {
+            "status": "ready",
+            "tracked_worktree_dirty": False,
+            "root": str(tmp_path),
+            "commit": "legacy-commit",
+        }
+    }
+
+    result = _implementation_source_contract(provenance, tmp_path / "legacy-run")
+
+    assert result["source_layout"] == "legacy_elsc_v1"
+    assert result["source_paths"] == list(LEGACY_TRAINING_SOURCE_PATHS)
+
+
+def test_training_source_contract_resolves_current_git_layout():
+    implementation = git_worktree_state(Path(__file__))
+    assert implementation["status"] == "ready"
+    # The test may run while this exact change is not committed yet; ls-tree is
+    # intentionally evaluated against the recorded HEAD, not the worktree.
+    implementation["tracked_worktree_dirty"] = False
+
+    result = _implementation_source_contract(
+        {"implementation": implementation}, Path(__file__).parent
+    )
+
+    assert result["source_layout"] == "method_shared_v2"
+    assert set(result["source_paths"]) == set(TRAINING_SOURCE_PATHS)
 
 
 def test_report_can_require_matched_optimization_budget(tmp_path: Path):

@@ -22,7 +22,7 @@ class ReportContractError(ValueError):
     pass
 
 
-TRAINING_SOURCE_PATHS = (
+LEGACY_TRAINING_SOURCE_PATHS = (
     "elsc/config.py",
     "elsc/data/cache_dataset.py",
     "elsc/data/cico_dataset.py",
@@ -52,6 +52,43 @@ TRAINING_SOURCE_PATHS = (
     "elsc/utils.py",
 )
 
+TRAINING_SOURCE_PATHS = (
+    "methods/elsc/elsc/config.py",
+    "methods/elsc/elsc/data/cache_dataset.py",
+    "shared/slr_common/data/cico_dataset.py",
+    "shared/slr_common/data/group_sampler.py",
+    "shared/slr_common/data/manifest.py",
+    "shared/slr_common/data/tokenize.py",
+    "shared/slr_common/data/views.py",
+    "shared/slr_common/data/word_offsets.py",
+    "methods/elsc/elsc/evaluate.py",
+    "shared/slr_common/evaluation/cico_eval.py",
+    "shared/slr_common/evaluation/runtime.py",
+    "methods/elsc/elsc/losses/caption.py",
+    "methods/elsc/elsc/losses/coarse.py",
+    "methods/elsc/elsc/losses/distillation.py",
+    "methods/elsc/elsc/losses/evidence.py",
+    "methods/elsc/elsc/losses/lexical.py",
+    "methods/elsc/elsc/mining/build_cache.py",
+    "methods/elsc/elsc/mining/negative_graph.py",
+    "methods/elsc/elsc/mining/teacher_align.py",
+    "methods/elsc/elsc/models/adapter.py",
+    "methods/elsc/elsc/models/local_head.py",
+    "methods/elsc/elsc/models/retriever.py",
+    "methods/elsc/elsc/provenance.py",
+    "shared/slr_common/resources.py",
+    "methods/elsc/elsc/train.py",
+    "shared/slr_common/upstream/cico_bridge.py",
+    "shared/slr_common/upstream/factory.py",
+    "methods/elsc/elsc/upstream/factory.py",
+    "shared/slr_common/utils.py",
+)
+
+TRAINING_SOURCE_LAYOUTS = (
+    ("method_shared_v2", TRAINING_SOURCE_PATHS),
+    ("legacy_elsc_v1", LEGACY_TRAINING_SOURCE_PATHS),
+)
+
 
 def _implementation_source_contract(provenance: dict[str, Any], run_dir: Path) -> dict[str, Any]:
     implementation = provenance.get("implementation")
@@ -66,6 +103,7 @@ def _implementation_source_contract(provenance: dict[str, Any], run_dir: Path) -
     commit = implementation.get("commit")
     if not isinstance(root_value, str) or not isinstance(commit, str):
         raise ReportContractError(f"run implementation provenance is incomplete: {run_dir}")
+    all_paths = tuple(dict.fromkeys(path for _, paths in TRAINING_SOURCE_LAYOUTS for path in paths))
     try:
         output = subprocess.run(
             [
@@ -77,7 +115,7 @@ def _implementation_source_contract(provenance: dict[str, Any], run_dir: Path) -
                 "--full-tree",
                 commit,
                 "--",
-                *TRAINING_SOURCE_PATHS,
+                *all_paths,
             ],
             check=True,
             capture_output=True,
@@ -97,16 +135,25 @@ def _implementation_source_contract(provenance: dict[str, Any], run_dir: Path) -
         if object_type != "blob":
             raise ReportContractError(f"non-file training source at {path}: {run_dir}")
         blobs[path] = object_id
-    missing = sorted(set(TRAINING_SOURCE_PATHS) - set(blobs))
-    if missing:
+    complete_layouts = [
+        (name, paths) for name, paths in TRAINING_SOURCE_LAYOUTS if set(paths).issubset(blobs)
+    ]
+    if not complete_layouts:
+        missing_by_layout = {
+            name: sorted(set(paths) - set(blobs)) for name, paths in TRAINING_SOURCE_LAYOUTS
+        }
         raise ReportContractError(
-            f"recorded commit lacks training source paths for {run_dir}: " + ", ".join(missing)
+            f"recorded commit lacks a complete training source layout for {run_dir}: "
+            + json.dumps(missing_by_layout, sort_keys=True)
         )
+    layout, source_paths = complete_layouts[0]
+    selected_blobs = {path: blobs[path] for path in source_paths}
     return {
         "schema_version": 1,
-        "source_paths": list(TRAINING_SOURCE_PATHS),
-        "git_blob_ids": blobs,
-        "source_hash": sha256_json(blobs),
+        "source_layout": layout,
+        "source_paths": list(source_paths),
+        "git_blob_ids": selected_blobs,
+        "source_hash": sha256_json(selected_blobs),
     }
 
 
