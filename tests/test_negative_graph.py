@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import pytest
 import torch
 
 from elsc.mining.negative_graph import (
     PrototypeOccurrence,
+    _batched_pair_scores,
+    _pair_score,
     build_frequency_matched_random_graph,
     build_visual_neighbor_graph,
     filter_occurrence_negatives,
@@ -39,3 +42,28 @@ def test_random_control_is_seeded_and_frequency_matched():
     assert first == second
     assert {neighbor for neighbor, _ in first[0]} == {1}
     assert {neighbor for neighbor, _ in first[2]} == {3}
+
+
+def test_batched_pair_scores_match_scalar_greedy_reference():
+    generator = torch.Generator().manual_seed(7)
+    by_word = {}
+    for word_id in range(5):
+        values = []
+        for index in range(3 + word_id):
+            prototype = torch.nn.functional.normalize(
+                torch.randn(8, generator=generator), dim=0
+            )
+            # Shared IDs exercise the cross-word exclusion; IDs remain unique
+            # within a word, as guaranteed by the capped mining input.
+            values.append(PrototypeOccurrence(word_id, f"video-{index}", prototype))
+        by_word[word_id] = values
+    expected = {}
+    for left in range(5):
+        for right in range(left + 1, 5):
+            expected[left, right] = _pair_score(by_word[left], by_word[right])
+    actual = _batched_pair_scores(
+        by_word, device=torch.device("cpu"), pair_batch_size=3
+    )
+    assert set(actual) == set(expected)
+    for pair, score in actual.items():
+        assert score == pytest.approx(expected[pair], abs=1e-7)

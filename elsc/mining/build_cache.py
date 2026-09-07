@@ -475,6 +475,7 @@ def build_cache(config: dict[str, Any], device: torch.device) -> dict[str, Any]:
             cosine_min=float(mining["visual_cosine_min"]),
             top_k=int(mining["graph_top_k"]),
             mutual=bool(mining["mutual_neighbors"]),
+            device=device,
         )
     elif negative_source == "train_random_frequency_matched_v1":
         graph = build_frequency_matched_random_graph(

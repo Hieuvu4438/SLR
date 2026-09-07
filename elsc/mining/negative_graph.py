@@ -49,12 +49,107 @@ def _pair_score(left: list[PrototypeOccurrence], right: list[PrototypeOccurrence
     return sum(chosen) / 3.0 if len(chosen) == 3 else None
 
 
+@torch.no_grad()
+def _batched_pair_scores(
+    by_word: dict[int, list[PrototypeOccurrence]],
+    *,
+    device: torch.device,
+    pair_batch_size: int,
+) -> dict[tuple[int, int], float]:
+    """Compute the exact greedy three-pair score in padded GPU/CPU batches."""
+    if pair_batch_size < 1:
+        raise ValueError("pair_batch_size must be positive")
+    words = sorted(by_word)
+    if not words:
+        return {}
+    ordered = {
+        word: sorted(by_word[word], key=lambda item: item.video_id) for word in words
+    }
+    dimensions = {
+        int(item.prototype.numel()) for values in ordered.values() for item in values
+    }
+    if len(dimensions) != 1:
+        raise ValueError("all occurrence prototypes must have one shared dimension")
+    dimension = dimensions.pop()
+    maximum = max(len(values) for values in ordered.values())
+    if maximum == 0:
+        return {}
+    all_video_ids = sorted(
+        {item.video_id for values in ordered.values() for item in values}
+    )
+    video_to_id = {video_id: index for index, video_id in enumerate(all_video_ids)}
+    prototypes = torch.zeros(len(words), maximum, dimension, dtype=torch.float32)
+    video_ids = torch.full((len(words), maximum), -1, dtype=torch.long)
+    valid = torch.zeros(len(words), maximum, dtype=torch.bool)
+    for word_index, word in enumerate(words):
+        values = ordered[word]
+        if not values:
+            continue
+        prototypes[word_index, : len(values)] = torch.stack(
+            [item.prototype.float() for item in values]
+        )
+        video_ids[word_index, : len(values)] = torch.tensor(
+            [video_to_id[item.video_id] for item in values]
+        )
+        valid[word_index, : len(values)] = True
+    prototypes = prototypes.to(device)
+    video_ids = video_ids.to(device)
+    valid = valid.to(device)
+    eligible = [index for index, word in enumerate(words) if len(ordered[word]) >= 3]
+    if len(eligible) < 2:
+        return {}
+    pair_indexes = torch.triu_indices(len(eligible), len(eligible), offset=1)
+    eligible_tensor = torch.tensor(eligible, dtype=torch.long)
+    left_all = eligible_tensor.index_select(0, pair_indexes[0])
+    right_all = eligible_tensor.index_select(0, pair_indexes[1])
+    result: dict[tuple[int, int], float] = {}
+    for offset in range(0, len(left_all), pair_batch_size):
+        left_index_cpu = left_all[offset : offset + pair_batch_size]
+        right_index_cpu = right_all[offset : offset + pair_batch_size]
+        left_index = left_index_cpu.to(device)
+        right_index = right_index_cpu.to(device)
+        left_prototypes = prototypes.index_select(0, left_index)
+        right_prototypes = prototypes.index_select(0, right_index)
+        scores = torch.bmm(left_prototypes, right_prototypes.transpose(1, 2))
+        left_videos = video_ids.index_select(0, left_index)
+        right_videos = video_ids.index_select(0, right_index)
+        pair_valid = (
+            valid.index_select(0, left_index).unsqueeze(2)
+            & valid.index_select(0, right_index).unsqueeze(1)
+            & (left_videos.unsqueeze(2) != right_videos.unsqueeze(1))
+        )
+        scores.masked_fill_(~pair_valid, float("-inf"))
+        selected = torch.zeros(len(left_index), dtype=torch.float32, device=device)
+        complete = torch.ones(len(left_index), dtype=torch.bool, device=device)
+        for _ in range(3):
+            best, flat_index = scores.flatten(1).max(dim=1)
+            finite = torch.isfinite(best)
+            complete &= finite
+            selected += torch.where(finite, best, torch.zeros_like(best))
+            row = torch.div(flat_index, maximum, rounding_mode="floor")
+            column = flat_index.remainder(maximum)
+            selected_left_video = left_videos.gather(1, row[:, None])
+            selected_right_video = right_videos.gather(1, column[:, None])
+            used_left = left_videos.unsqueeze(2) == selected_left_video.unsqueeze(2)
+            used_right = right_videos.unsqueeze(1) == selected_right_video.unsqueeze(1)
+            scores.masked_fill_(used_left | used_right, float("-inf"))
+        means = (selected / 3.0).cpu()
+        complete_cpu = complete.cpu()
+        for local_index in complete_cpu.nonzero(as_tuple=False).flatten().tolist():
+            left_word = words[int(left_index_cpu[local_index])]
+            right_word = words[int(right_index_cpu[local_index])]
+            result[left_word, right_word] = float(means[local_index])
+    return result
+
+
 def build_visual_neighbor_graph(
     occurrences: Iterable[PrototypeOccurrence],
     *,
     cosine_min: float = 0.70,
     top_k: int = 10,
     mutual: bool = True,
+    device: str | torch.device = "cpu",
+    pair_batch_size: int = 512,
 ) -> dict[int, list[tuple[int, float]]]:
     by_word: dict[int, list[PrototypeOccurrence]] = defaultdict(list)
     for occurrence in occurrences:
@@ -62,13 +157,14 @@ def build_visual_neighbor_graph(
             raise ValueError("each prototype must be a vector")
         by_word[occurrence.word_id].append(occurrence)
     words = sorted(by_word)
+    pair_scores = _batched_pair_scores(
+        by_word, device=torch.device(device), pair_batch_size=pair_batch_size
+    )
     scores: dict[tuple[int, int], float] = {}
-    for offset, left_word in enumerate(words):
-        for right_word in words[offset + 1 :]:
-            score = _pair_score(by_word[left_word], by_word[right_word])
-            if score is not None and score >= cosine_min:
-                scores[left_word, right_word] = score
-                scores[right_word, left_word] = score
+    for (left_word, right_word), score in pair_scores.items():
+        if score >= cosine_min:
+            scores[left_word, right_word] = score
+            scores[right_word, left_word] = score
     directed: dict[int, list[tuple[int, float]]] = {}
     for word in words:
         neighbors = [(other, score) for (source, other), score in scores.items() if source == word]
