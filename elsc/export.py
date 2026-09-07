@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import shutil
 from pathlib import Path
 
@@ -11,7 +12,8 @@ from torch.utils.data import DataLoader
 from elsc.config import dump_resolved, load_config
 from elsc.data.cico_dataset import CiCoFeatureDataset
 from elsc.data.tokenize import CiCoCollator
-from elsc.resources import require_resources
+from elsc.provenance import validate_test_lock
+from elsc.resources import require_resources, require_storage_budget
 from elsc.upstream.factory import build_retriever_from_checkpoint, load_cico_tokenizer
 from elsc.utils import atomic_json_dump, sha256_file
 
@@ -20,6 +22,17 @@ def _resolve_checkpoint(run_dir: Path, value: str) -> Path:
     return (
         run_dir / "checkpoints" / ({"best_dev": "best_dev.pt", "last": "last.pt"}.get(value, value))
     )
+
+
+def _validated_checkpoint(run_dir: Path, value: str, config: dict) -> Path:
+    checkpoint = _resolve_checkpoint(run_dir, value)
+    validate_test_lock(
+        run_dir / "selection.json",
+        checkpoint,
+        run_dir=run_dir,
+        config=config,
+    )
+    return checkpoint
 
 
 @torch.no_grad()
@@ -40,9 +53,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     run_dir = Path(args.run_dir)
     output = Path(args.output)
-    output.mkdir(parents=True, exist_ok=True)
     config = load_config(run_dir / "resolved_config.yaml", stage="export")
-    checkpoint = _resolve_checkpoint(run_dir, args.checkpoint)
+    checkpoint = _validated_checkpoint(run_dir, args.checkpoint, config)
     device = torch.device(args.device)
     resources = config.get("resources", {})
     require_resources(
@@ -52,11 +64,24 @@ def main(argv: list[str] | None = None) -> int:
         min_gpu_gib=float(resources.get("min_free_gpu_gib_evaluation", 4)),
         operation="inference export",
     )
+    output.mkdir(parents=True, exist_ok=True)
     model, _ = build_retriever_from_checkpoint(config, checkpoint, device=device)
     inference_state = {
         key: value for key, value in model.state_dict().items() if not key.startswith("local_head.")
     }
     export_path = output / "model.pt"
+    tensor_bytes = sum(
+        value.numel() * value.element_size()
+        for value in inference_state.values()
+        if torch.is_tensor(value)
+    )
+    require_storage_budget(
+        output,
+        planned_write_bytes=math.ceil(tensor_bytes * 1.10) + 16 * 1024**2,
+        min_remaining_gib=float(resources.get("min_free_disk_gib", 20)),
+        operation="inference export model save",
+    )
+    temporary_export = export_path.with_suffix(".tmp")
     torch.save(
         {
             "format": "elsc-inference-v1",
@@ -64,8 +89,9 @@ def main(argv: list[str] | None = None) -> int:
             "source_checkpoint_sha256": sha256_file(checkpoint),
             "adapter_enabled": model.adapter_enabled,
         },
-        export_path,
+        temporary_export,
     )
+    temporary_export.replace(export_path)
     dump_resolved(config, output / "resolved_config.yaml")
     bpe_source = Path(config["upstream"]["cico_root"]) / "modules" / "bpe_simple_vocab_16e6.txt.gz"
     shutil.copy2(bpe_source, output / bpe_source.name)
