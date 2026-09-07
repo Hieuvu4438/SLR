@@ -1,7 +1,7 @@
 # ELSC implementation status
 
 This file distinguishes implemented contracts from experiment results. It must not be used as a
-SOTA claim. Last audited: 2026-09-07 17:52 (Asia/Ho_Chi_Minh).
+SOTA claim. Last audited: 2026-09-07 19:42 (Asia/Ho_Chi_Minh).
 
 | Acceptance requirement | Current evidence | Status |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ SOTA claim. Last audited: 2026-09-07 17:52 (Asia/Ho_Chi_Minh).
 | Frozen teacher and train-only cache | Dev-selection provenance and all cache hashes are fail-fast; cache CLI accepts only `train` | Implemented and tested |
 | Raw local branch | Pointwise zero-init adapter and pre-Transformer local head; padding/locality tests | Implemented and tested |
 | Auxiliary gradient flow | Two-step zero-init test and periodic lexical-only adapter/head gradient diagnostics | Implemented and tested |
-| ELSC-Min and matched controls | Canonical batch-512 A0/A1/A2/A3/A4 runs for seeds 42/1337/2026 are hash-validated. Across seeds, Min reaches mean dev R@1 75.080 versus baseline 74.984 (+0.096 pp), adapter-only 75.048 (+0.032 pp), matched-caption 74.984 (+0.096 pp), and random-support 75.112 (-0.032 pp). True support wins both matched controls only for seed 42 | Three-seed screen complete; Gate G `no_go`, Gate M `no_go` |
+| ELSC-Min and matched controls | Canonical batch-512 A0/A1/A2/A3/A4 runs for seeds 42/1337/2026 are hash-validated. Across seeds, Min reaches mean dev R@1 75.080 versus baseline 74.984 (+0.096 pp), adapter-only 75.048 (+0.032 pp), matched-caption 74.984 (+0.096 pp), and random-support 75.112 (-0.032 pp). A5/A6/A7 diagnostics are complete at seed 42. Lower-LR and generic local word-video three-seed screens reach +0.257 pp and +0.225 pp over baseline respectively | Registered Gate G `no_go`, Gate M `no_go`; both corrective Gate G screens `no_go` |
 | ELSC-Full | RF closure/control matching and per-video cap exist; deterministic extractor emits verified input-frame RF for generated train/dev features | Implemented gate; experiment not run |
 | DDP/AMP math | Global-count DDP auxiliary normalization test; FP16/BF16 scaler/resume code; BF16 real-checkpoint GPU backward smoke | Implemented for single-GPU MVP; multi-GPU run not claimed |
 | Full-gallery evaluation | Blockwise CiCo score, direction-specific singleton tie behavior, multi-positive IDs, explicit per-query artifact | Implemented and tested |
@@ -36,10 +36,14 @@ artifact hashes. ELSC-Min selected epoch 18 at 75.530 for seed 42 but retained t
 checkpoint for seeds 1337 and 2026. Across all three registered seeds, Min improves mean dev R@1
 from 74.984 to 75.080 (+0.096 pp; hierarchical-bootstrap 95% CI [-0.353, 0.706]), with T2V
 +0.321 pp and V2T -0.128 pp. It beats the matched-caption mean by +0.096 pp but trails
-duration-matched random support by 0.032 pp, so both Gate G and Gate M are `no_go`. The registered
-seed-42 lower-LR/keep corrective screen is running; post-screen diagnostics are queued and will only
-start after a clean corrective exit. Full and locked test evaluation remain blocked by their gates;
-dataset/backbone transfer and any SOTA claim also remain pending.
+duration-matched random support by 0.032 pp, so both Gate G and Gate M are `no_go`. The seed-42
+post-screen diagnostics are complete: shuffled lexical and head-only retain initialization at
+75.241, random lexical neighbors reach 75.626, and generic local word-video contrast reaches
+75.915. A source-matched Min reproduction exactly matches the registered seed-42 Min metrics. The
+registered lower-LR three-seed screen improves mean dev R@1 by 0.257 pp and the local word-video
+screen by 0.225 pp; both fail the 0.5 pp Gate G threshold. KEEP reaches 75.723 at seed 42 but was not
+expanded after lower-LR failed Gate G. Full and locked test evaluation remain blocked by their
+gates; dataset/backbone transfer and any SOTA claim also remain pending.
 
 Transfer audits are stored locally under `artifacts/transfer/`. They do not download data, hash
 large video contents, extract features, or expose test captions in their output. The How2Sign
