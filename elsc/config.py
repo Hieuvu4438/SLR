@@ -159,6 +159,9 @@ def validate_config(config: Mapping[str, Any], *, stage: str | None = None) -> N
     if method != "baseline" and not adapter.get("enabled", False):
         raise ConfigError("auxiliary methods require an enabled adapter")
     cache = config.get("cache", {})
+    random_span_tolerance = float(cache.get("random_span_duration_tolerance", 0.10))
+    if not 0.0 <= random_span_tolerance <= 1.0:
+        raise ConfigError("cache.random_span_duration_tolerance must be in [0,1]")
     negative_language = cache.get("negative_language")
     caption_language = data.get("caption_language")
     if negative_language and negative_language != caption_language:

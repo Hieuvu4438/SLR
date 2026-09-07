@@ -86,6 +86,7 @@ def lexical_tensors_from_batch(
     *,
     support_mode: str = "teacher",
     seed: int = 42,
+    random_span_duration_tolerance: float = 0.10,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Flatten ragged cache records into occurrence tensors without position assumptions."""
     occurrences: list[tuple[torch.Tensor, torch.Tensor, int, list[int], float]] = []
@@ -105,14 +106,34 @@ def lexical_tensors_from_batch(
             if len(weights) != len(positions):
                 raise CacheMismatchError("support index/weight lengths differ")
             if support_mode == "random_matched":
-                valid_positions = [position for position, value in enumerate(dense_index[sample_index].tolist()) if value >= 0]
+                if not 0.0 <= random_span_duration_tolerance <= 1.0:
+                    raise ValueError("random span duration tolerance must be in [0,1]")
+                dense_values = dense_index[sample_index].tolist()
+                valid_positions = [
+                    position for position, value in enumerate(dense_values) if value >= 0
+                ]
                 generator = torch.Generator(device="cpu")
                 generator.manual_seed(stable_seed(seed, record["pair_id"], record["word_id"], "random_matched"))
                 width = len(positions)
+                teacher_positions = set(positions)
+                support_duration = (
+                    int(dense_values[positions[-1]]) - int(dense_values[positions[0]]) + 1
+                )
                 candidates = [
                     valid_positions[start : start + width]
                     for start in range(len(valid_positions) - width + 1)
-                    if valid_positions[start : start + width] != positions
+                    if not teacher_positions.intersection(
+                        valid_positions[start : start + width]
+                    )
+                    and abs(
+                        (
+                            int(dense_values[valid_positions[start + width - 1]])
+                            - int(dense_values[valid_positions[start]])
+                            + 1
+                        )
+                        - support_duration
+                    )
+                    <= random_span_duration_tolerance * support_duration
                 ]
                 if not candidates:
                     continue

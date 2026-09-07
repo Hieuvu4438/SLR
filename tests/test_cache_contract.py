@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import pytest
+import torch
 
-from elsc.data.cache_dataset import CacheMismatchError, validate_cache_meta
+from elsc.data.cache_dataset import (
+    CacheMismatchError,
+    lexical_tensors_from_batch,
+    validate_cache_meta,
+)
 
 
 def _meta():
@@ -30,3 +35,54 @@ def test_train_only_and_exact_hash_match():
         validate_cache_meta(invalid, {})
     with pytest.raises(CacheMismatchError, match="teacher_hash"):
         validate_cache_meta(_meta(), {"teacher_hash": "different"})
+
+
+def test_random_support_matches_duration_and_does_not_overlap_teacher():
+    z = torch.tensor(
+        [[[0.0, 1.0], [1.0, 1.0], [2.0, 1.0], [3.0, 1.0], [4.0, 1.0], [5.0, 1.0]]]
+    )
+    dense = torch.tensor([[0, 2, 4, 6, 8, 10]])
+    record = {
+        "pair_id": "pair-1",
+        "word_id": 0,
+        "support_dense_indices": [2, 4],
+        "support_weights": [0.4, 0.6],
+        "negative_word_ids": [1],
+        "rho": 0.8,
+    }
+    support_z, weights, *_ = lexical_tensors_from_batch(
+        z,
+        dense,
+        [[record]],
+        torch.eye(2),
+        support_mode="random_matched",
+        seed=42,
+        random_span_duration_tolerance=0.10,
+    )
+    selected_positions = support_z[0, :, 0].long().tolist()
+    assert not set(selected_positions) & {1, 2}
+    selected_duration = int(dense[0, selected_positions[-1]] - dense[0, selected_positions[0]] + 1)
+    assert selected_duration == 3
+    assert weights[0].tolist() == pytest.approx([0.4, 0.6])
+
+
+def test_random_support_abstains_without_duration_matched_disjoint_span():
+    z = torch.randn(1, 5, 2)
+    dense = torch.tensor([[0, 1, 10, 20, 40]])
+    record = {
+        "pair_id": "pair-2",
+        "word_id": 0,
+        "support_dense_indices": [0, 1],
+        "support_weights": [0.5, 0.5],
+        "negative_word_ids": [1],
+        "rho": 0.8,
+    }
+    support_z, *_ = lexical_tensors_from_batch(
+        z,
+        dense,
+        [[record]],
+        torch.eye(2),
+        support_mode="random_matched",
+        random_span_duration_tolerance=0.10,
+    )
+    assert len(support_z) == 0

@@ -21,6 +21,7 @@ cache:
   negatives_source: train_visual_neighbors_v1
   max_targets_per_video: 2
   max_negatives_per_target: 5
+  random_span_duration_tolerance: 0.10
 
 mining:
   tau_word: 0.07

@@ -606,6 +606,9 @@ def train(
                         lexical_bank,
                         support_mode=config.get("aux_support_mode", "teacher"),
                         seed=int(config["seed"]),
+                        random_span_duration_tolerance=float(
+                            config["cache"].get("random_span_duration_tolerance", 0.10)
+                        ),
                     )
                     support_z, support_weights, positive_e, negative_e, negative_valid, rho = (
                         tensors

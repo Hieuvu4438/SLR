@@ -95,3 +95,16 @@ def test_required_feature_sidecars_must_pin_expected_provenance(tmp_path: Path):
     )
     with pytest.raises(ConfigError, match="expected feature provenance"):
         load_config(path)
+
+
+def test_random_span_duration_tolerance_is_bounded(tmp_path: Path):
+    path = tmp_path / "bad_random_span.yaml"
+    path.write_text(
+        "schema_version: 1\nmethod: baseline\n"
+        "train: {eval_split: dev}\n"
+        "model: {backbone_frozen: false}\n"
+        "cache: {random_span_duration_tolerance: 1.1}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="random_span_duration_tolerance"):
+        load_config(path)
