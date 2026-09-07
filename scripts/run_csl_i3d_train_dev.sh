@@ -17,7 +17,7 @@ aware_sha=99e101d696ff63131b5d44fa6e465201216604ba5d8cc773f3cefa4a96ebd518
 log_root=artifacts/logs
 launcher_log=$log_root/csl_i3d_train_dev_launcher.log
 reserve_gib=32
-timeout_seconds=43200
+timeout_seconds=86400
 
 mkdir -p "$log_root"
 if ! git diff --quiet || ! git diff --cached --quiet; then
@@ -74,7 +74,7 @@ common_args=(
   --splits train dev
   --split-video-list "train=$train_list"
   --split-video-list "dev=$dev_list"
-  --batch-size 32
+  --batch-size 128
   --device cuda:0
   --min-free-disk-gib "$reserve_gib"
   --min-free-gpu-gib 8
