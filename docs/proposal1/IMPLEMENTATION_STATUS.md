@@ -1,7 +1,7 @@
 # ELSC implementation status
 
 This file distinguishes implemented contracts from experiment results. It must not be used as a
-SOTA claim. Last audited: 2026-09-07 13:28 (Asia/Ho_Chi_Minh).
+SOTA claim. Last audited: 2026-09-07 13:31 (Asia/Ho_Chi_Minh).
 
 | Acceptance requirement | Current evidence | Status |
 | --- | --- | --- |
@@ -19,7 +19,7 @@ SOTA claim. Last audited: 2026-09-07 13:28 (Asia/Ho_Chi_Minh).
 | DDP/AMP math | Global-count DDP auxiliary normalization test; FP16/BF16 scaler/resume code; BF16 real-checkpoint GPU backward smoke | Implemented for single-GPU MVP; multi-GPU run not claimed |
 | Full-gallery evaluation | Blockwise CiCo score, direction-specific singleton tie behavior, multi-positive IDs, explicit per-query artifact | Implemented and tested |
 | SAN fine-grained protocol | Missing official artifact returns `official_artifact_missing`, never a fabricated zero | Implemented gate |
-| Inference export | Core+adapter export excludes training-only head/cache/teacher and reload parity is enforced | Implemented; real run export pending |
+| Inference export | The selected seed-42 Min checkpoint has a real 352.5 MB core+adapter export; local head/teacher/cache are absent and reload score parity has max absolute error 0.0 | Implemented and verified |
 | Results integrity/statistics | `elsc.report` requires config/dev-manifest/selection/checkpoint hashes, paired seeds/gallery IDs, and video-group hierarchical bootstrap; Gate G and Gate M are executable dev-only contracts | Implemented; canonical seed-42 reports measured |
 
 Current execution gate: the approved official archive contains only Phoenix test features (642 per
