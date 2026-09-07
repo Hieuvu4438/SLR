@@ -134,10 +134,16 @@ python -m elsc.audit --config configs/ph_base.yaml --stage parity \
 run_training() {
   local config=$1
   local run_dir=$2
-  if [[ -f "$run_dir/selection.json" ]]; then
-    printf '%s training_already_complete run_dir=%s\n' \
+  if python -m elsc.provenance --run-dir "$run_dir" --config "$config" \
+    >>"$log_path" 2>&1; then
+    printf '%s training_already_complete_and_validated run_dir=%s\n' \
       "$(date --iso-8601=seconds)" "$run_dir" >>"$log_path"
     return 0
+  fi
+  if [[ -f "$run_dir/selection.json" || -f "$run_dir/run_summary.json" ]]; then
+    printf '%s invalid_existing_run_refusing_overwrite run_dir=%s\n' \
+      "$(date --iso-8601=seconds)" "$run_dir" >>"$log_path"
+    return 1
   fi
   wait_for_idle_gpu
   if [[ -f "$run_dir/checkpoints/last.pt" ]]; then
@@ -151,32 +157,40 @@ run_training() {
   fi
 }
 
-run_training configs/ph_base.yaml runs/ph_base_s42
+baseline_run=runs/ph_base_b512_s42
+min_run=runs/ph_min_b512_s42
+min_config=artifacts/campaign/ph_min_b512_s42.yaml
+min_cache=artifacts/cache/ph_min_b512_s42_v1
+comparison_report=artifacts/campaign/ph_min_vs_base_b512_dev_s42.json
+
+run_training configs/ph_base.yaml "$baseline_run"
 wait_for_idle_gpu
-python -m elsc.evaluate --run-dir runs/ph_base_s42 --split dev --checkpoint best_dev \
+python -m elsc.evaluate --run-dir "$baseline_run" --split dev --checkpoint best_dev \
   --device cuda:0 >>"$log_path" 2>&1
 
 mkdir -p artifacts/campaign
 python -m elsc.configure_stage \
   --template configs/ph_min.yaml \
-  --teacher-run runs/ph_base_s42 \
-  --output artifacts/campaign/ph_min_s42.yaml >>"$log_path" 2>&1
+  --teacher-run "$baseline_run" \
+  --cache-path "$min_cache" \
+  --output "$min_config" >>"$log_path" 2>&1
 
-if [[ ! -f artifacts/cache/ph_train_elsc_v1/cache_meta.json ]]; then
-  wait_for_idle_gpu
-  python -m elsc.mining.build_cache \
-    --config artifacts/campaign/ph_min_s42.yaml --split train --device cuda:0 \
-    >>"$log_path" 2>&1
-fi
-
-run_training artifacts/campaign/ph_min_s42.yaml runs/ph_min_s42
 wait_for_idle_gpu
-python -m elsc.evaluate --run-dir runs/ph_min_s42 --split dev --checkpoint best_dev \
+python -m elsc.mining.build_cache \
+  --config "$min_config" --split train --device cuda:0 >>"$log_path" 2>&1
+
+run_training "$min_config" "$min_run"
+wait_for_idle_gpu
+python -m elsc.evaluate --run-dir "$min_run" --split dev --checkpoint best_dev \
   --device cuda:0 >>"$log_path" 2>&1
 python -m elsc.report \
-  --baseline-runs runs/ph_base_s42 \
-  --method-runs runs/ph_min_s42 \
+  --baseline-runs "$baseline_run" \
+  --method-runs "$min_run" \
   --split dev \
-  --output artifacts/campaign/ph_min_vs_base_dev_s42.json >>"$log_path" 2>&1
+  --output "$comparison_report" >>"$log_path" 2>&1
+python -m elsc.gate \
+  --report "$comparison_report" \
+  --output artifacts/campaign/ph_min_vs_base_b512_dev_s42_gate_g.json \
+  >>"$log_path" 2>&1
 
 printf '%s seed42_dev_screen_complete\n' "$(date --iso-8601=seconds)" >>"$log_path"
