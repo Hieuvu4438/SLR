@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from elsc.gate import GateContractError, evaluate_gain_gate, evaluate_mechanism_gate
+from elsc.config import config_hash
+from elsc.gate import (
+    GateContractError,
+    evaluate_full_gate,
+    evaluate_gain_gate,
+    evaluate_mechanism_gate,
+)
 
 
 def _report(t2v: float, v2t: float, *, split: str = "dev"):
@@ -99,3 +105,88 @@ def test_mechanism_gate_reports_insufficient_seeds_and_checks_pairing():
     mismatched = _control_report([1337], [0.2], [0.4])
     with pytest.raises(GateContractError, match="identical paired seeds"):
         evaluate_mechanism_gate(versus_random, mismatched)
+
+
+def _passing_full_gate_inputs():
+    gain = evaluate_gain_gate(_report(0.6, 0.8))
+    random = _control_report([42, 1337], [0.4, 0.2], [0.2, 0.4])
+    caption = _control_report([42, 1337], [0.2, 0.6], [0.4, 0.2])
+    mechanism = evaluate_mechanism_gate(random, caption)
+    config = {
+        "model": {"teacher_checkpoint_sha256": "teacher"},
+        "evidence": {
+            "enabled": True,
+            "require_verified_rf_metadata": True,
+            "control_same_token_count": True,
+            "control_duration_tolerance": 0.1,
+            "teacher_margin_min": 0.02,
+            "max_pairs_per_video": 1,
+        },
+    }
+    records = [
+        {
+            "evidence_eligible": True,
+            "video_id": "video-1",
+            "evidence_remove_dense_indices": [1, 2],
+            "control_remove_dense_indices": [5, 6],
+            "intervention_coordinate_system": "input_frame",
+            "teacher_clean_margin": 0.03,
+            "evidence_interval": [10.0, 20.0],
+            "control_interval": [30.0, 40.5],
+        }
+    ]
+    cache = {
+        "schema_version": 1,
+        "split": "train",
+        "config_hash": config_hash(config),
+        "teacher_hash": "teacher",
+        "manifest_hash": "manifest",
+        "gates": {"evidence_eligible": 1},
+    }
+    return gain, mechanism, config, cache, records
+
+
+def test_full_gate_requires_passed_dev_gates_and_valid_interventions():
+    gain, mechanism, config, cache, records = _passing_full_gate_inputs()
+    result = evaluate_full_gate(
+        gain,
+        mechanism,
+        config,
+        cache,
+        records,
+        cache_artifacts_match=True,
+        train_manifest_sha256="manifest",
+    )
+    assert result["status"] == "passed"
+    assert result["observed"]["eligible_evidence_records"] == 1
+
+    gain["status"] = "no_go"
+    result = evaluate_full_gate(
+        gain,
+        mechanism,
+        config,
+        cache,
+        records,
+        cache_artifacts_match=True,
+        train_manifest_sha256="manifest",
+    )
+    assert result["status"] == "no_go"
+    assert result["criteria"]["gain_gate_pass"] is False
+
+
+def test_full_gate_rejects_dense_coordinates_and_overlapping_controls():
+    gain, mechanism, config, cache, records = _passing_full_gate_inputs()
+    records[0]["intervention_coordinate_system"] = "dense_index"
+    records[0]["control_remove_dense_indices"] = [2, 6]
+    result = evaluate_full_gate(
+        gain,
+        mechanism,
+        config,
+        cache,
+        records,
+        cache_artifacts_match=True,
+        train_manifest_sha256="manifest",
+    )
+    assert result["status"] == "no_go"
+    assert result["criteria"]["input_frame_coordinate_pass"] is False
+    assert result["criteria"]["intervention_structure_pass"] is False

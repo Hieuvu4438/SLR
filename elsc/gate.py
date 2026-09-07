@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from elsc.config import config_hash, load_config
 from elsc.utils import atomic_json_dump, sha256_file
 
 
@@ -168,11 +169,130 @@ def evaluate_mechanism_gate(
     }
 
 
+def _require_completed_gate(value: dict[str, Any], name: str) -> bool:
+    if value.get("schema_version") != 1 or value.get("gate") != name:
+        raise GateContractError(f"Gate F requires a schema-v1 Gate {name} artifact")
+    if value.get("split") != "dev" or value.get("test_used_for_gate") is not False:
+        raise GateContractError(f"Gate {name} artifact violates dev-only isolation")
+    status = value.get("status")
+    if status not in {"passed", "no_go", "insufficient_seeds"}:
+        raise GateContractError(f"Gate {name} artifact has an unknown status")
+    return status == "passed"
+
+
+def evaluate_full_gate(
+    gain_gate: dict[str, Any],
+    mechanism_gate: dict[str, Any],
+    config: dict[str, Any],
+    cache_meta: dict[str, Any],
+    records: list[dict[str, Any]],
+    *,
+    cache_artifacts_match: bool,
+    train_manifest_sha256: str,
+) -> dict[str, Any]:
+    gain_pass = _require_completed_gate(gain_gate, "G")
+    mechanism_pass = _require_completed_gate(mechanism_gate, "M")
+    evidence = config.get("evidence", {})
+    if not evidence.get("enabled"):
+        raise GateContractError("Gate F requires evidence.enabled=true")
+    if not evidence.get("require_verified_rf_metadata"):
+        raise GateContractError("Gate F requires verified RF metadata")
+    if not evidence.get("control_same_token_count"):
+        raise GateContractError("Gate F requires token-count-matched controls")
+    if cache_meta.get("schema_version") != 1 or cache_meta.get("split") != "train":
+        raise GateContractError("Gate F requires a schema-v1 train-only cache")
+
+    config_match = cache_meta.get("config_hash") == config_hash(config)
+    teacher_match = cache_meta.get("teacher_hash") == config.get("model", {}).get(
+        "teacher_checkpoint_sha256"
+    )
+    manifest_match = cache_meta.get("manifest_hash") == train_manifest_sha256
+
+    eligible = [record for record in records if record.get("evidence_eligible") is True]
+    per_video: dict[str, int] = {}
+    structure_pass = True
+    coordinate_pass = True
+    margin_pass = True
+    duration_pass = True
+    tolerance = float(evidence["control_duration_tolerance"])
+    threshold = float(evidence["teacher_margin_min"])
+    for record in eligible:
+        evidence_ids = record.get("evidence_remove_dense_indices")
+        control_ids = record.get("control_remove_dense_indices")
+        invalid_ids = (
+            not isinstance(evidence_ids, list)
+            or not evidence_ids
+            or not isinstance(control_ids, list)
+            or not all(isinstance(value, int) for value in evidence_ids)
+            or not all(isinstance(value, int) for value in control_ids)
+        )
+        if invalid_ids or len(control_ids) != len(evidence_ids):
+            structure_pass = False
+        elif set(evidence_ids) & set(control_ids):
+            structure_pass = False
+        if record.get("intervention_coordinate_system") != "input_frame":
+            coordinate_pass = False
+        try:
+            margin_pass &= float(record["teacher_clean_margin"]) >= threshold
+            evidence_interval = [float(value) for value in record["evidence_interval"]]
+            control_interval = [float(value) for value in record["control_interval"]]
+            if len(evidence_interval) != 2 or len(control_interval) != 2:
+                raise ValueError("intervention intervals must contain start/end")
+            evidence_duration = evidence_interval[1] - evidence_interval[0]
+            control_duration = control_interval[1] - control_interval[0]
+            duration_pass &= (
+                evidence_duration > 0
+                and control_duration > 0
+                and abs(control_duration - evidence_duration) / evidence_duration <= tolerance
+            )
+        except (KeyError, TypeError, ValueError, IndexError):
+            structure_pass = False
+            duration_pass = False
+            margin_pass = False
+        video_id = str(record.get("video_id"))
+        per_video[video_id] = per_video.get(video_id, 0) + 1
+
+    declared_eligible = int(cache_meta.get("gates", {}).get("evidence_eligible", -1))
+    eligible_count_pass = bool(eligible) and declared_eligible == len(eligible)
+    video_cap = int(evidence.get("max_pairs_per_video", 1))
+    per_video_cap_pass = all(count <= video_cap for count in per_video.values())
+    criteria = {
+        "gain_gate_pass": gain_pass,
+        "mechanism_gate_pass": mechanism_pass,
+        "cache_config_hash_match": config_match,
+        "cache_teacher_hash_match": teacher_match,
+        "cache_manifest_hash_match": manifest_match,
+        "cache_artifact_hashes_match": cache_artifacts_match,
+        "evidence_count_matches_cache_gate": eligible_count_pass,
+        "intervention_structure_pass": structure_pass,
+        "input_frame_coordinate_pass": coordinate_pass,
+        "teacher_margin_pass": margin_pass,
+        "duration_matched_control_pass": duration_pass,
+        "per_video_cap_pass": per_video_cap_pass,
+    }
+    passed = all(criteria.values())
+    return {
+        "schema_version": 1,
+        "gate": "F",
+        "status": "passed" if passed else "no_go",
+        "split": "dev",
+        "criteria": criteria,
+        "observed": {
+            "eligible_evidence_records": len(eligible),
+            "declared_eligible_evidence_records": declared_eligible,
+            "maximum_evidence_records_per_video": max(per_video.values(), default=0),
+            "teacher_margin_min": threshold,
+            "control_duration_tolerance": tolerance,
+        },
+        "test_used_for_gate": False,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Evaluate registered ELSC dev-only experiment gates"
     )
-    parser.add_argument("--gate", choices=("G", "M"), default="G")
+    parser.add_argument("--gate", choices=("G", "M", "F"), default="G")
     parser.add_argument("--report")
     parser.add_argument("--true-vs-random-report")
     parser.add_argument("--true-vs-caption-report")
@@ -181,6 +301,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-direction-r1-drop", type=float, default=0.5)
     parser.add_argument("--minimum-winning-seeds", type=int, default=2)
     parser.add_argument("--minimum-control-gain", type=float, default=0.0)
+    parser.add_argument("--gain-gate")
+    parser.add_argument("--mechanism-gate")
+    parser.add_argument("--config")
+    parser.add_argument("--cache")
     args = parser.parse_args(argv)
     if args.gate == "G":
         if args.report is None:
@@ -196,7 +320,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         result["comparison_report"] = str(report_path.resolve())
         result["comparison_report_sha256"] = sha256_file(report_path)
-    else:
+    elif args.gate == "M":
         if args.true_vs_random_report is None or args.true_vs_caption_report is None:
             parser.error(
                 "Gate M requires --true-vs-random-report and --true-vs-caption-report"
@@ -214,6 +338,58 @@ def main(argv: list[str] | None = None) -> int:
             "true_vs_random_sha256": sha256_file(random_path),
             "true_vs_caption": str(caption_path.resolve()),
             "true_vs_caption_sha256": sha256_file(caption_path),
+        }
+    else:
+        required = {
+            "--gain-gate": args.gain_gate,
+            "--mechanism-gate": args.mechanism_gate,
+            "--config": args.config,
+            "--cache": args.cache,
+        }
+        missing = [name for name, value in required.items() if value is None]
+        if missing:
+            parser.error("Gate F requires " + ", ".join(missing))
+        gain_path = Path(args.gain_gate)
+        mechanism_path = Path(args.mechanism_gate)
+        config_path = Path(args.config)
+        cache_path = Path(args.cache)
+        meta_path = cache_path / "cache_meta.json"
+        records_path = cache_path / "records.jsonl"
+        cache_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        records = [
+            json.loads(line)
+            for line in records_path.read_text(encoding="utf-8").splitlines()
+        ]
+        config = load_config(config_path, stage="train")
+        train_manifest_sha256 = sha256_file(config["data"]["train_manifest"])
+        artifact_paths = {
+            "records_sha256": records_path,
+            "negative_table_hash": cache_path / "negative_graph.json",
+            "lexical_bank_hash": cache_path / "lexical_bank.npy",
+        }
+        artifact_integrity = {
+            key: path.is_file() and cache_meta.get(key) == sha256_file(path)
+            for key, path in artifact_paths.items()
+        }
+        result = evaluate_full_gate(
+            json.loads(gain_path.read_text(encoding="utf-8")),
+            json.loads(mechanism_path.read_text(encoding="utf-8")),
+            config,
+            cache_meta,
+            records,
+            cache_artifacts_match=all(artifact_integrity.values()),
+            train_manifest_sha256=train_manifest_sha256,
+        )
+        result["inputs"] = {
+            "gain_gate": str(gain_path.resolve()),
+            "gain_gate_sha256": sha256_file(gain_path),
+            "mechanism_gate": str(mechanism_path.resolve()),
+            "mechanism_gate_sha256": sha256_file(mechanism_path),
+            "config": str(config_path.resolve()),
+            "config_sha256": sha256_file(config_path),
+            "cache_meta": str(meta_path.resolve()),
+            "cache_meta_sha256": sha256_file(meta_path),
+            "cache_artifact_integrity": artifact_integrity,
         }
     atomic_json_dump(result, args.output)
     print(json.dumps(result, indent=2, sort_keys=True))
