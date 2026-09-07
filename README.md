@@ -148,8 +148,36 @@ python -m elsc.transfer_audit \
 python -m elsc.transfer_audit \
   --dataset csl_daily \
   --root /home/dongvk/datasets/CSL_Daily_Sentence_Crop \
+  --video-list-root artifacts/transfer/csl_daily_video_lists \
+  --video-list-splits train dev \
   --output artifacts/transfer/csl_daily_asset_audit.json
 ```
+
+CSL-Daily uses its pinned upstream English train captions and a separately hashed, dev-only
+Chinese-to-English translation artifact. The converter has no test input, preserves native video
+IDs, and assigns the shared sentence ID as `caption_id` for multi-positive retrieval:
+
+```bash
+python -m elsc.csl_transfer translate-dev \
+  --csl-root /home/dongvk/datasets/CSL_Daily_Sentence_Crop \
+  --model-root artifacts/pretrained/opus-mt-zh-en \
+  --model-id Helsinki-NLP/opus-mt-zh-en \
+  --model-revision cf109095479db38d6df799875e34039d4938aaa6 \
+  --device cuda:0 --batch-size 64 \
+  --output artifacts/transfer/csl_daily_dev_en_opus_mt.json
+python -m elsc.csl_transfer build-annotations \
+  --csl-root /home/dongvk/datasets/CSL_Daily_Sentence_Crop \
+  --upstream-train third_party/SLRT/CiCo/CLCL/data_csl/train.pkl \
+  --dev-translations artifacts/transfer/csl_daily_dev_en_opus_mt.json \
+  --output-root artifacts/transfer/csl_daily_annotations \
+  --report artifacts/transfer/csl_daily_annotation_report.json
+```
+
+`scripts/run_csl_i3d_train_dev.sh` extracts only the measured train+dev plan and enforces a
+32 GiB remaining-disk reserve across both streams. `scripts/run_csl_gate_x.sh` waits for both
+hash-validated extraction reports, then prepares manifests and runs the seed-42 baseline/ELSC-Min
+dev screen. The CSL training sampler deterministically selects one signer video per caption group
+per epoch, matching the upstream loader's group-balanced training semantics.
 
 The current local audit marks CSL-Daily ready for feature extraction. How2Sign remains blocked:
 its annotations reference 118 train, 2 validation, and 6 test clips absent from both the extracted

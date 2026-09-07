@@ -1,7 +1,7 @@
 # ELSC implementation status
 
 This file distinguishes implemented contracts from experiment results. It must not be used as a
-SOTA claim. Last audited: 2026-09-07 20:09 (Asia/Ho_Chi_Minh).
+SOTA claim. Last audited: 2026-09-07 20:53 (Asia/Ho_Chi_Minh).
 
 | Acceptance requirement | Current evidence | Status |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ SOTA claim. Last audited: 2026-09-07 20:09 (Asia/Ho_Chi_Minh).
 | SAN fine-grained protocol | Missing official artifact returns `official_artifact_missing`, never a fabricated zero | Implemented gate |
 | Inference export | The selected seed-42 Min checkpoint has a real 352.5 MB core+adapter export; local head/teacher/cache are absent and reload score parity has max absolute error 0.0 | Implemented and verified |
 | Results integrity/statistics | `elsc.report` rederives metric summaries from full-gallery per-query ranks and requires matching evaluation/training-source contracts, config/dev-manifest/selection/checkpoint hashes, paired seeds/gallery IDs, and video-group hierarchical bootstrap; Gate G and Gate M are executable dev-only contracts | Implemented; canonical three-seed reports measured and revalidated |
-| Dataset-transfer asset gate | `elsc.transfer_audit` hashes ordered IDs and annotations, checks video/text coverage and split overlap without extracting features or using test feedback. Local CSL-Daily is exact at 18,401/1,077/1,176 annotations and 20,654 referenced videos. Local How2Sign annotations reference 118/2/6 unavailable train/dev/test clips; its engineering subset is exactly 100 train clips and is explicitly non-benchmark | CSL-Daily ready for feature extraction; How2Sign Gate X blocked on a protocol decision for missing release clips |
+| Dataset-transfer asset gate | `elsc.transfer_audit` hashes ordered IDs and annotations, checks video/text coverage and split overlap without using test feedback. Local CSL-Daily is exact at 18,401/1,077/1,176 annotations and 20,654 referenced videos. Its train/dev extraction plan, English-caption provenance, grouped sampler, baseline/Min configs, and queued Gate X runner are implemented. Local How2Sign annotations reference 118/2/6 unavailable train/dev/test clips; its engineering subset is exactly 100 train clips and is explicitly non-benchmark | CSL-Daily train+dev feature extraction running; How2Sign Gate X blocked on a protocol decision for missing release clips |
 
 Current execution gate: the approved official archive contains only Phoenix test features (642 per
 stream). The release checkpoint reproduces the published T2V/V2T metrics. The public PH loader's
@@ -55,4 +55,15 @@ re-extraction cannot recover the 124 missing train/test references. The official
 clips and English annotations separately and documents that manually re-aligned clips require
 re-segmentation from full videos; no silent intersection/filtering is accepted as an official Gate X
 protocol. CSL-Daily has no missing/extra video references or cross-split pair-ID overlap and is the
-only full transfer dataset currently ready for a disk-budgeted feature extraction plan.
+only full transfer dataset currently ready for a disk-budgeted feature extraction plan. The exact
+CSL train+dev plan contains 19,478 videos and 2,883,145 temporal windows per stream. Its two-stream
+write bound is 23.103 GiB; the launch projected 41.969 GiB free after extraction and enforces a
+32 GiB reserve. The official `csl_sota.pth` is pinned at SHA-256
+`bdf32b5083db7039f0b5678812154ee39e03541d1eea0f614571cedeb174886f`. English train captions
+come only from pinned upstream `data_csl/train.pkl`; 797 official dev sentence groups were
+translated from the local Chinese dev CSV with `Helsinki-NLP/opus-mt-zh-en` revision
+`cf109095479db38d6df799875e34039d4938aaa6`. The translation/build artifacts record
+`test_annotation_accessed=false`. No CSL test feature was extracted or evaluated. Two batch-128
+I3D processes were launched under tmux with 24-hour hard timeouts, and a separate process-alive
+queue will automatically run manifest validation and the seed-42 baseline/ELSC-Min dev screen once
+both streams complete.
