@@ -14,9 +14,9 @@ from elsc.data.manifest import ManifestRecord, write_manifest
 from elsc.utils import atomic_json_dump, ordered_hash, sha256_file
 
 
-def _annotation_ids(path: str | Path) -> list[str]:
+def _annotation_ids(path: str | Path, *, delimiter: str = "|") -> list[str]:
     with Path(path).open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter="|")
+        reader = csv.DictReader(handle, delimiter=delimiter)
         if "name" not in (reader.fieldnames or []):
             raise ValueError(f"official annotation lacks name column: {path}")
         return [str(row["name"]) for row in reader]
@@ -145,7 +145,10 @@ def prepare_split(
     annotations = _load_pickle(source_path)
     official_path = sources.get(f"{split}_official_annotation")
     if official_path:
-        ordered_ids = _annotation_ids(official_path)
+        ordered_ids = _annotation_ids(
+            official_path,
+            delimiter=str(sources.get("official_annotation_delimiter", "|")),
+        )
     else:
         ordered_ids = list(annotations)
     missing_annotation_ids = [
@@ -215,7 +218,7 @@ def prepare_split(
                 split=split,
                 pair_id=identifier,
                 video_id=video_name,
-                caption_id=identifier,
+                caption_id=str(item.get("caption_id", identifier)),
                 caption_original=str(item.get("ori_text", item["text"])),
                 caption_model=str(item["text"]),
                 caption_language=str(data["caption_language"]),

@@ -52,6 +52,42 @@ def test_official_ids_filter_merged_dev_annotation(tmp_path: Path):
     assert report["missing_feature_count"] == 0
 
 
+def test_comma_official_ids_and_explicit_caption_group(tmp_path: Path):
+    annotation = {
+        "video-id": {
+            "video_name": "video-id",
+            "caption_id": "sentence-id",
+            "ori_text": "原文",
+            "text": "model text",
+        }
+    }
+    annotation_path = tmp_path / "dev.pkl"
+    with annotation_path.open("wb") as handle:
+        pickle.dump(annotation, handle)
+    official = tmp_path / "dev.csv"
+    official.write_text("name,text\nvideo-id,原文\n", encoding="utf-8")
+    for stream in ("aware", "agnostic"):
+        directory = tmp_path / stream / "dev"
+        directory.mkdir(parents=True)
+        with (directory / "video-id.pkl").open("wb") as handle:
+            pickle.dump({"feature": np.zeros((4, 3), dtype=np.float32)}, handle)
+    config = {
+        "sources": {
+            "dev_annotation": str(annotation_path),
+            "dev_official_annotation": str(official),
+            "official_annotation_delimiter": ",",
+            "feature_aware_root": str(tmp_path / "aware"),
+            "feature_agnostic_root": str(tmp_path / "agnostic"),
+            "temporal_metadata_root": None,
+        },
+        "data": {"dataset": "csl_daily", "feature_dim": 4, "caption_language": "en"},
+    }
+    records, report = prepare_split(config, "dev")
+    assert report["official_count"] == 1
+    assert records[0].pair_id == "video-id"
+    assert records[0].caption_id == "sentence-id"
+
+
 def test_cross_split_overlap_detects_video_leakage():
     def record(split: str, pair: str, video: str) -> ManifestRecord:
         return ManifestRecord(
