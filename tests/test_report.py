@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from statistics import median
 
 import pytest
 
 from elsc.config import config_hash, load_config
-from elsc.report import ReportContractError, compare_runs
+from elsc.report import (
+    TRAINING_SOURCE_PATHS,
+    ReportContractError,
+    _implementation_source_contract,
+    compare_runs,
+)
 from elsc.utils import ordered_hash, sha256_file
 
 
@@ -222,3 +228,28 @@ def test_paired_report_rejects_different_controlled_evaluation_config(tmp_path: 
 
     with pytest.raises(ReportContractError, match="evaluation contracts differ"):
         compare_runs([baseline], [method], split="dev", bootstrap_samples=100)
+
+
+def test_training_source_contract_uses_recorded_commit_blobs(monkeypatch, tmp_path: Path):
+    output = "\n".join(
+        f"100644 blob {index:040x}\t{path}" for index, path in enumerate(TRAINING_SOURCE_PATHS, 1)
+    )
+    monkeypatch.setattr(
+        "elsc.report.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(stdout=output),
+    )
+    provenance = {
+        "implementation": {
+            "status": "ready",
+            "tracked_worktree_dirty": False,
+            "root": str(tmp_path),
+            "commit": "recorded-commit",
+        }
+    }
+    result = _implementation_source_contract(provenance, tmp_path / "run")
+    assert len(result["git_blob_ids"]) == len(TRAINING_SOURCE_PATHS)
+    assert len(result["source_hash"]) == 64
+
+    provenance["implementation"]["tracked_worktree_dirty"] = True
+    with pytest.raises(ReportContractError, match="dirty tracked sources"):
+        _implementation_source_contract(provenance, tmp_path / "run")

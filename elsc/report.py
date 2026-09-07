@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -19,6 +20,94 @@ SUMMARY_METRICS = ("R1", "R5", "R10", "MedianR", "MeanR")
 
 class ReportContractError(ValueError):
     pass
+
+
+TRAINING_SOURCE_PATHS = (
+    "elsc/config.py",
+    "elsc/data/cache_dataset.py",
+    "elsc/data/cico_dataset.py",
+    "elsc/data/manifest.py",
+    "elsc/data/tokenize.py",
+    "elsc/data/views.py",
+    "elsc/data/word_offsets.py",
+    "elsc/evaluate.py",
+    "elsc/evaluation/cico_eval.py",
+    "elsc/evaluation/runtime.py",
+    "elsc/losses/caption.py",
+    "elsc/losses/coarse.py",
+    "elsc/losses/distillation.py",
+    "elsc/losses/evidence.py",
+    "elsc/losses/lexical.py",
+    "elsc/mining/build_cache.py",
+    "elsc/mining/negative_graph.py",
+    "elsc/mining/teacher_align.py",
+    "elsc/models/adapter.py",
+    "elsc/models/local_head.py",
+    "elsc/models/retriever.py",
+    "elsc/provenance.py",
+    "elsc/resources.py",
+    "elsc/train.py",
+    "elsc/upstream/cico_bridge.py",
+    "elsc/upstream/factory.py",
+    "elsc/utils.py",
+)
+
+
+def _implementation_source_contract(provenance: dict[str, Any], run_dir: Path) -> dict[str, Any]:
+    implementation = provenance.get("implementation")
+    if not isinstance(implementation, dict):
+        raise ReportContractError(f"run lacks implementation provenance: {run_dir}")
+    if (
+        implementation.get("status") != "ready"
+        or implementation.get("tracked_worktree_dirty") is not False
+    ):
+        raise ReportContractError(f"run used unavailable or dirty tracked sources: {run_dir}")
+    root_value = implementation.get("root")
+    commit = implementation.get("commit")
+    if not isinstance(root_value, str) or not isinstance(commit, str):
+        raise ReportContractError(f"run implementation provenance is incomplete: {run_dir}")
+    try:
+        output = subprocess.run(
+            [
+                "git",
+                "-C",
+                root_value,
+                "ls-tree",
+                "-r",
+                "--full-tree",
+                commit,
+                "--",
+                *TRAINING_SOURCE_PATHS,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ReportContractError(
+            f"cannot resolve recorded implementation commit for {run_dir}"
+        ) from error
+    blobs: dict[str, str] = {}
+    for line in output.splitlines():
+        try:
+            metadata, path = line.split("\t", 1)
+            _, object_type, object_id = metadata.split()
+        except ValueError as error:
+            raise ReportContractError(f"invalid git source record for {run_dir}") from error
+        if object_type != "blob":
+            raise ReportContractError(f"non-file training source at {path}: {run_dir}")
+        blobs[path] = object_id
+    missing = sorted(set(TRAINING_SOURCE_PATHS) - set(blobs))
+    if missing:
+        raise ReportContractError(
+            f"recorded commit lacks training source paths for {run_dir}: " + ", ".join(missing)
+        )
+    return {
+        "schema_version": 1,
+        "source_paths": list(TRAINING_SOURCE_PATHS),
+        "git_blob_ids": blobs,
+        "source_hash": sha256_json(blobs),
+    }
 
 
 def _evaluation_contract(config: dict[str, Any], dev_manifest_sha256: str) -> dict[str, Any]:
@@ -109,7 +198,9 @@ def _training_control_contract(
     method = str(config.get("method"))
     teacher_sha256 = None
     cache_meta_sha256 = None
+    implementation_contract = None
     if method != "baseline":
+        implementation_contract = _implementation_source_contract(provenance, run_dir)
         teacher_sha256 = config.get("model", {}).get("teacher_checkpoint_sha256")
         teacher = provenance.get("teacher")
         if (
@@ -130,6 +221,9 @@ def _training_control_contract(
         "train_manifest_sha256": sha256_file(train_manifest),
         "teacher_checkpoint_sha256": teacher_sha256,
         "cache_meta_sha256": cache_meta_sha256,
+        "implementation_source_hash": (
+            implementation_contract["source_hash"] if implementation_contract is not None else None
+        ),
         "fields": required,
     }
 
