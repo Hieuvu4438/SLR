@@ -17,6 +17,7 @@ from torch.utils.checkpoint import checkpoint
 from elsc.config import config_hash, dump_resolved, load_config
 from elsc.data.cache_dataset import AuxiliaryCache, lexical_tensors_from_batch
 from elsc.data.cico_dataset import CiCoFeatureDataset
+from elsc.data.group_sampler import CaptionGroupSampler
 from elsc.data.tokenize import TEXT_AUGMENTATION_RECIPE, CiCoCollator, encode_cico_text
 from elsc.evaluate import evaluate_model
 from elsc.losses.caption import matched_caption_loss
@@ -585,10 +586,16 @@ def train(
         augment=config["data"].get("text_augmentation") == TEXT_AUGMENTATION_RECIPE,
         seed=int(config["seed"]),
     )
+    grouped_sampler = (
+        CaptionGroupSampler(dataset.records, seed=int(config["seed"]))
+        if bool(config["train"].get("one_video_per_caption_group", False))
+        else None
+    )
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=grouped_sampler is None,
+        sampler=grouped_sampler,
         generator=generator,
         drop_last=True,
         num_workers=int(config["train"].get("num_workers", 4)),
@@ -654,6 +661,13 @@ def train(
             "recipe": config["data"].get("text_augmentation"),
             "decision_seed": "sha256(seed,epoch,pair_id,recipe)",
             "historical_rng_trace_claimed": False,
+        },
+        "train_sampling": {
+            "one_video_per_caption_group": grouped_sampler is not None,
+            "manifest_records": len(dataset),
+            "samples_per_epoch": len(grouped_sampler) if grouped_sampler is not None else len(dataset),
+            "selection_seed": "sha256(seed,epoch,caption_id,caption_group_member)",
+            "order_seed": "sha256(seed,epoch,caption_group_order)",
         },
         "initial_resources": initial_resources,
     }
@@ -758,6 +772,8 @@ def train(
             run_dir / "best_dev_metrics.json",
         )
     for epoch in range(start_epoch, int(config["train"]["epochs"])):
+        if grouped_sampler is not None:
+            grouped_sampler.set_epoch(epoch)
         collator.set_epoch(epoch)
         model.train()
         optimizer.zero_grad(set_to_none=True)
