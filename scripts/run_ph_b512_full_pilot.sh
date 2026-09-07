@@ -105,9 +105,10 @@ report_pair() {
   local baseline=$1
   local method=$2
   local output=$3
+  shift 3
   python -m elsc.report \
     --baseline-runs "$baseline" --method-runs "$method" --split dev \
-    --output "$output" >>"$log_path" 2>&1
+    --output "$output" "$@" >>"$log_path" 2>&1
 }
 
 check_disk
@@ -124,6 +125,26 @@ python -m elsc.configure_stage \
   --student-run "$min_run" \
   --cache-path "$full_cache" \
   --output "$full_config" >>"$log_path" 2>&1
+python -m elsc.configure_stage \
+  --template configs/ablation_continued_min.yaml \
+  --teacher-run "$baseline_run" \
+  --student-run "$min_run" \
+  --cache-path "$min_cache" \
+  --output "$continued_config" >>"$log_path" 2>&1
+python - "$continued_config" "$full_config" >>"$log_path" 2>&1 <<'PY'
+import json
+import sys
+
+from elsc.config import load_config
+from elsc.report import configured_optimization_budget
+from elsc.utils import sha256_json
+
+reference = configured_optimization_budget(load_config(sys.argv[1], stage="train"))
+candidate = configured_optimization_budget(load_config(sys.argv[2], stage="train"))
+if reference != candidate:
+    raise ValueError("Full and continued-Min optimization budgets differ")
+print(json.dumps({"optimization_budget": "matched", "sha256": sha256_json(reference)}))
+PY
 check_disk
 python -m elsc.mining.build_cache \
   --config "$full_config" --split train --device cuda:0 >>"$log_path" 2>&1
@@ -144,13 +165,6 @@ python -m elsc.training_preflight \
   --output "$preflight" \
   --device cuda:0 >>"$log_path" 2>&1
 
-python -m elsc.configure_stage \
-  --template configs/ablation_continued_min.yaml \
-  --teacher-run "$baseline_run" \
-  --student-run "$min_run" \
-  --cache-path "$min_cache" \
-  --output "$continued_config" >>"$log_path" 2>&1
-
 run_training "$continued_config" "$continued_run" continued_min_step_matched_s42
 evaluate_dev "$continued_run"
 run_training "$full_config" "$full_run" full_s42
@@ -158,7 +172,8 @@ evaluate_dev "$full_run"
 
 report_pair \
   "$continued_run" "$full_run" \
-  artifacts/campaign/ph_full_vs_continued_min_b512_dev_s42.json
+  artifacts/campaign/ph_full_vs_continued_min_b512_dev_s42.json \
+  --require-matched-training-budget
 report_pair \
   "$min_run" "$full_run" \
   artifacts/campaign/ph_full_vs_min_b512_dev_s42.json

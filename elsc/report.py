@@ -148,12 +148,10 @@ def _evaluation_contract(config: dict[str, Any], dev_manifest_sha256: str) -> di
     }
 
 
-def _training_control_contract(
-    config: dict[str, Any], run_dir: Path, provenance: dict[str, Any]
-) -> dict[str, Any]:
+def configured_optimization_budget(config: dict[str, Any]) -> dict[str, Any]:
     train_manifest = config.get("data", {}).get("train_manifest")
     if not isinstance(train_manifest, str) or not Path(train_manifest).is_file():
-        raise ReportContractError(f"run config has no readable train manifest: {run_dir}")
+        raise ReportContractError("run config has no readable train manifest")
     adapter = config.get("model", {}).get("adapter", {})
     train = config.get("train", {})
     required = {
@@ -189,6 +187,18 @@ def _training_control_contract(
     missing = [name for name, value in required.items() if value is None]
     if missing:
         raise ReportContractError("run config lacks matched-training fields: " + ", ".join(missing))
+    return {
+        "schema_version": 1,
+        "train_manifest_sha256": sha256_file(train_manifest),
+        "fields": required,
+    }
+
+
+def _training_control_contract(
+    config: dict[str, Any], run_dir: Path, provenance: dict[str, Any]
+) -> dict[str, Any]:
+    configured_budget = configured_optimization_budget(config)
+    required = configured_budget["fields"]
     initialization = provenance.get("initialization")
     if (
         not isinstance(initialization, dict)
@@ -216,15 +226,19 @@ def _training_control_contract(
         cache_meta_sha256 = sha256_file(cache_meta)
         if provenance.get("cache_meta_sha256") != cache_meta_sha256:
             raise ReportContractError(f"run cache provenance is stale: {run_dir}")
-    return {
-        "schema_version": 1,
-        "train_manifest_sha256": sha256_file(train_manifest),
-        "teacher_checkpoint_sha256": teacher_sha256,
-        "cache_meta_sha256": cache_meta_sha256,
+    budget = {
+        **configured_budget,
         "implementation_source_hash": (
             implementation_contract["source_hash"] if implementation_contract is not None else None
         ),
         "fields": required,
+    }
+    return {
+        **budget,
+        "teacher_checkpoint_sha256": teacher_sha256,
+        "cache_meta_sha256": cache_meta_sha256,
+        "optimization_budget": budget,
+        "optimization_budget_hash": sha256_json(budget),
     }
 
 
@@ -418,6 +432,8 @@ def _load_run(run_dir: Path, split: str) -> dict[str, Any]:
         "evaluation_contract_hash": sha256_json(contract),
         "training_control_contract": training_contract,
         "training_control_contract_hash": sha256_json(training_contract),
+        "optimization_budget_contract": training_contract["optimization_budget"],
+        "optimization_budget_contract_hash": training_contract["optimization_budget_hash"],
         "metrics": metrics,
     }
 
@@ -537,6 +553,7 @@ def compare_runs(
     split: str,
     bootstrap_samples: int = 10_000,
     bootstrap_seed: int = 20260907,
+    require_matched_training_budget: bool = False,
 ) -> dict[str, Any]:
     baseline = [_load_run(Path(path), split) for path in baseline_dirs]
     method = [_load_run(Path(path), split) for path in method_dirs]
@@ -547,6 +564,12 @@ def compare_runs(
     for left, right in zip(baseline, method, strict=True):
         if left["evaluation_contract_hash"] != right["evaluation_contract_hash"]:
             raise ReportContractError("baseline and method controlled evaluation contracts differ")
+        if (
+            require_matched_training_budget
+            and left["optimization_budget_contract_hash"]
+            != right["optimization_budget_contract_hash"]
+        ):
+            raise ReportContractError("baseline and method optimization budget contracts differ")
         _aligned_group_differences(left["metrics"], right["metrics"])
     baseline_aggregate = _aggregate(baseline)
     method_aggregate = _aggregate(method)
@@ -572,6 +595,7 @@ def compare_runs(
         "split": split,
         "units": "percentage_points",
         "paired_seeds": [run["seed"] for run in baseline],
+        "matched_training_budget_required": require_matched_training_budget,
         "baseline_runs": [{key: run[key] for key in run if key != "metrics"} for run in baseline],
         "method_runs": [{key: run[key] for key in run if key != "metrics"} for run in method],
         "baseline": baseline_aggregate,
@@ -606,6 +630,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--split", choices=("dev", "test"), required=True)
     parser.add_argument("--bootstrap-samples", type=int, default=10_000)
     parser.add_argument("--bootstrap-seed", type=int, default=20260907)
+    parser.add_argument(
+        "--require-matched-training-budget",
+        action="store_true",
+        help="Refuse comparisons with different initialization/optimizer/step/source budgets",
+    )
     parser.add_argument("--output", required=True)
     args = parser.parse_args(argv)
     result = compare_runs(
@@ -614,6 +643,7 @@ def main(argv: list[str] | None = None) -> int:
         split=args.split,
         bootstrap_samples=args.bootstrap_samples,
         bootstrap_seed=args.bootstrap_seed,
+        require_matched_training_budget=args.require_matched_training_budget,
     )
     atomic_json_dump(result, args.output)
     print(json.dumps(result, indent=2, sort_keys=True))

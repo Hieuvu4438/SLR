@@ -253,3 +253,28 @@ def test_training_source_contract_uses_recorded_commit_blobs(monkeypatch, tmp_pa
     provenance["implementation"]["tracked_worktree_dirty"] = True
     with pytest.raises(ReportContractError, match="dirty tracked sources"):
         _implementation_source_contract(provenance, tmp_path / "run")
+
+
+def test_report_can_require_matched_optimization_budget(tmp_path: Path):
+    baseline = _write_run(tmp_path / "base", 42, ([0, 0, 0], [0, 0, 0]))
+    method = _write_run(tmp_path / "method", 42, ([0, 0, 0], [0, 0, 0]))
+    config_path = method / "resolved_config.yaml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace("epochs: 20", "epochs: 10"),
+        encoding="utf-8",
+    )
+    config = load_config(config_path, validate=False)
+    selection_path = method / "selection.json"
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    selection["config_hash"] = config_hash(config)
+    selection_path.write_text(json.dumps(selection), encoding="utf-8")
+
+    compare_runs([baseline], [method], split="dev", bootstrap_samples=100)
+    with pytest.raises(ReportContractError, match="optimization budget contracts differ"):
+        compare_runs(
+            [baseline],
+            [method],
+            split="dev",
+            bootstrap_samples=100,
+            require_matched_training_budget=True,
+        )
