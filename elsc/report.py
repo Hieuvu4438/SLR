@@ -59,6 +59,81 @@ def _evaluation_contract(config: dict[str, Any], dev_manifest_sha256: str) -> di
     }
 
 
+def _training_control_contract(
+    config: dict[str, Any], run_dir: Path, provenance: dict[str, Any]
+) -> dict[str, Any]:
+    train_manifest = config.get("data", {}).get("train_manifest")
+    if not isinstance(train_manifest, str) or not Path(train_manifest).is_file():
+        raise ReportContractError(f"run config has no readable train manifest: {run_dir}")
+    adapter = config.get("model", {}).get("adapter", {})
+    train = config.get("train", {})
+    required = {
+        "seed": config.get("seed"),
+        "model.init_checkpoint_sha256": config.get("model", {}).get("init_checkpoint_sha256"),
+        "model.backbone_frozen": config.get("model", {}).get("backbone_frozen"),
+        "model.logit_scale_frozen": config.get("model", {}).get("logit_scale_frozen"),
+        "model.adapter.enabled": adapter.get("enabled"),
+        "model.adapter.radius": adapter.get("radius"),
+        "model.adapter.hidden_dim": adapter.get("hidden_dim"),
+        "model.adapter.zero_init_output": adapter.get("zero_init_output"),
+        "model.adapter.trainable": adapter.get("trainable", True),
+        "train.epochs": train.get("epochs"),
+        "train.per_device_batch": train.get("per_device_batch"),
+        "train.accumulation_steps": train.get("accumulation_steps"),
+        "train.optimizer": train.get("optimizer"),
+        "train.beta1": train.get("beta1"),
+        "train.beta2": train.get("beta2"),
+        "train.epsilon": train.get("epsilon"),
+        "train.exclude_bias_and_1d_from_weight_decay": train.get(
+            "exclude_bias_and_1d_from_weight_decay"
+        ),
+        "train.core_lr": train.get("core_lr"),
+        "train.adapter_lr": train.get("adapter_lr"),
+        "train.head_lr": train.get("head_lr"),
+        "train.weight_decay": train.get("weight_decay"),
+        "train.warmup_ratio": train.get("warmup_ratio"),
+        "train.schedule": train.get("schedule"),
+        "train.grad_clip_norm": train.get("grad_clip_norm"),
+        "train.precision": train.get("precision"),
+        "train.checkpoint_metric": train.get("checkpoint_metric"),
+    }
+    missing = [name for name, value in required.items() if value is None]
+    if missing:
+        raise ReportContractError("run config lacks matched-training fields: " + ", ".join(missing))
+    initialization = provenance.get("initialization")
+    if (
+        not isinstance(initialization, dict)
+        or initialization.get("sha256") != required["model.init_checkpoint_sha256"]
+    ):
+        raise ReportContractError(f"run initialization provenance differs from config: {run_dir}")
+    method = str(config.get("method"))
+    teacher_sha256 = None
+    cache_meta_sha256 = None
+    if method != "baseline":
+        teacher_sha256 = config.get("model", {}).get("teacher_checkpoint_sha256")
+        teacher = provenance.get("teacher")
+        if (
+            not isinstance(teacher_sha256, str)
+            or not isinstance(teacher, dict)
+            or teacher.get("sha256") != teacher_sha256
+        ):
+            raise ReportContractError(f"run teacher provenance differs from config: {run_dir}")
+        cache_path = config.get("cache", {}).get("path")
+        cache_meta = Path(str(cache_path)) / "cache_meta.json"
+        if not cache_meta.is_file():
+            raise ReportContractError(f"run cache metadata is missing: {cache_meta}")
+        cache_meta_sha256 = sha256_file(cache_meta)
+        if provenance.get("cache_meta_sha256") != cache_meta_sha256:
+            raise ReportContractError(f"run cache provenance is stale: {run_dir}")
+    return {
+        "schema_version": 1,
+        "train_manifest_sha256": sha256_file(train_manifest),
+        "teacher_checkpoint_sha256": teacher_sha256,
+        "cache_meta_sha256": cache_meta_sha256,
+        "fields": required,
+    }
+
+
 def _validate_summary_from_ranks(
     metrics: dict[str, Any], direction: str, ranks: list[int], path: Path
 ) -> None:
@@ -206,6 +281,10 @@ def _load_run(run_dir: Path, split: str) -> dict[str, Any]:
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
     config = load_config(config_path, validate=False)
     selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    provenance_path = run_dir / "provenance.json"
+    if not provenance_path.is_file():
+        raise ReportContractError(f"run lacks training provenance: {run_dir}")
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
     relative_checkpoint = selection.get("checkpoint")
     if not isinstance(relative_checkpoint, str):
         raise ReportContractError(f"selection lacks checkpoint path: {selection_path}")
@@ -231,6 +310,7 @@ def _load_run(run_dir: Path, split: str) -> dict[str, Any]:
             f"test result has no validated dev-selection lock: {metrics_path}"
         )
     contract = _evaluation_contract(config, str(selection["dev_manifest_sha256"]))
+    training_contract = _training_control_contract(config, run_dir, provenance)
     return {
         "run_dir": str(run_dir),
         "seed": int(config["seed"]),
@@ -242,6 +322,8 @@ def _load_run(run_dir: Path, split: str) -> dict[str, Any]:
         "checkpoint_sha256": selection["checkpoint_sha256"],
         "evaluation_contract": contract,
         "evaluation_contract_hash": sha256_json(contract),
+        "training_control_contract": training_contract,
+        "training_control_contract_hash": sha256_json(training_contract),
         "metrics": metrics,
     }
 

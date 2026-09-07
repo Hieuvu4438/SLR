@@ -88,11 +88,30 @@ def _method_run_identity(report: dict[str, Any]) -> list[tuple[Any, ...]]:
                 str(run["selection_sha256"]),
                 str(run["checkpoint_sha256"]),
                 str(run["metrics_sha256"]),
+                str(run["training_control_contract_hash"]),
             )
             for run in runs
         ]
     except (KeyError, TypeError, ValueError) as error:
         raise GateContractError("Gate M method-run provenance is incomplete") from error
+
+
+def _require_matched_training_controls(report: dict[str, Any], label: str) -> None:
+    controls = report.get("baseline_runs")
+    methods = report.get("method_runs")
+    if (
+        not isinstance(controls, list)
+        or not isinstance(methods, list)
+        or len(controls) != len(methods)
+    ):
+        raise GateContractError(f"Gate M {label} report lacks paired run provenance")
+    for control, method in zip(controls, methods, strict=True):
+        if control.get("training_control_contract_hash") != method.get(
+            "training_control_contract_hash"
+        ):
+            raise GateContractError(
+                f"Gate M {label} control does not match the true-support training contract"
+            )
 
 
 def _per_seed_mean_r1_delta(report: dict[str, Any], paired_seeds: list[int]) -> list[float]:
@@ -127,6 +146,8 @@ def evaluate_mechanism_gate(
         raise GateContractError("Gate M control reports must use identical paired seeds")
     if _method_run_identity(true_vs_random_report) != _method_run_identity(true_vs_caption_report):
         raise GateContractError("Gate M control reports must evaluate the same true-support runs")
+    _require_matched_training_controls(true_vs_random_report, "random-support")
+    _require_matched_training_controls(true_vs_caption_report, "caption")
     versus_random = _per_seed_mean_r1_delta(true_vs_random_report, random_seeds)
     versus_caption = _per_seed_mean_r1_delta(true_vs_caption_report, caption_seeds)
     per_seed = [

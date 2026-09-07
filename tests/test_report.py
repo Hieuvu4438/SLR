@@ -20,12 +20,16 @@ def _write_run(
     root.mkdir(parents=True)
     dev_manifest = root / "dev.jsonl"
     dev_manifest.write_text("{}\n", encoding="utf-8")
+    train_manifest = root / "train.jsonl"
+    train_manifest.write_text("{}\n", encoding="utf-8")
     (root / "resolved_config.yaml").write_text(
         f"""schema_version: 1
 seed: {seed}
+method: baseline
 upstream:
   cico_commit: pinned-upstream
 data:
+  train_manifest: {train_manifest}
   dev_manifest: {dev_manifest}
   dataset: ph
   caption_language: en
@@ -38,6 +42,14 @@ data:
   sampling: upstream_uniform
   text_augmentation: cico_random_swap_v1
 model:
+  init_checkpoint_sha256: fixture-initialization
+  backbone_frozen: false
+  logit_scale_frozen: false
+  adapter:
+    enabled: false
+    radius: 0
+    hidden_dim: 256
+    zero_init_output: true
   sim_header: Filip
   dual_mix: 0.5
   mix_design: balance
@@ -46,6 +58,24 @@ evaluation:
   metrics: upstream_cico
   full_gallery: true
   filter_by_aux_eligibility: false
+train:
+  epochs: 20
+  per_device_batch: 512
+  accumulation_steps: 1
+  optimizer: adamw
+  beta1: 0.9
+  beta2: 0.98
+  epsilon: 0.000001
+  exclude_bias_and_1d_from_weight_decay: true
+  core_lr: 0.00001
+  adapter_lr: 0.0001
+  head_lr: 0.0001
+  weight_decay: 0.001
+  warmup_ratio: 0.1
+  schedule: cosine
+  grad_clip_norm: 1.0
+  precision: amp_bf16
+  checkpoint_metric: mean_t2v_v2t_r1
 """,
         encoding="utf-8",
     )
@@ -62,6 +92,10 @@ evaluation:
         "dev_manifest_sha256": sha256_file(dev_manifest),
     }
     (root / "selection.json").write_text(json.dumps(selection), encoding="utf-8")
+    (root / "provenance.json").write_text(
+        json.dumps({"initialization": {"sha256": "fixture-initialization"}}),
+        encoding="utf-8",
+    )
     output = root / "evaluation" / "dev"
     output.mkdir(parents=True)
     directions = {}

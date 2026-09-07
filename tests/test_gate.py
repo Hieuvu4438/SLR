@@ -98,6 +98,14 @@ def _control_report(seeds, t2v, v2t, *, method_hash="selected-min"):
                 "selection_sha256": f"selection-{seed}",
                 "checkpoint_sha256": f"checkpoint-{seed}",
                 "metrics_sha256": f"metrics-{seed}",
+                "training_control_contract_hash": f"matched-{seed}",
+            }
+            for seed in seeds
+        ],
+        "baseline_runs": [
+            {
+                "seed": seed,
+                "training_control_contract_hash": f"matched-{seed}",
             }
             for seed in seeds
         ],
@@ -131,6 +139,11 @@ def test_mechanism_gate_reports_insufficient_seeds_and_checks_pairing():
     mismatched = _control_report([1337], [0.2], [0.4])
     with pytest.raises(GateContractError, match="identical paired seeds"):
         evaluate_mechanism_gate(versus_random, mismatched)
+
+    mismatched_control = _control_report([42], [0.2], [0.4])
+    mismatched_control["baseline_runs"][0]["training_control_contract_hash"] = "different"
+    with pytest.raises(GateContractError, match="does not match"):
+        evaluate_mechanism_gate(versus_random, mismatched_control)
 
 
 def _passing_full_gate_inputs():
