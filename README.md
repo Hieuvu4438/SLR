@@ -179,6 +179,13 @@ hash-validated extraction reports, then prepares manifests and runs the seed-42 
 dev screen. The CSL training sampler deterministically selects one signer video per caption group
 per epoch, matching the upstream loader's group-balanced training semantics.
 
+`scripts/run_csl_multiseed.sh` expands the screen only when seed 42 passes Gate G. The conditional
+`scripts/run_csl_full_pilot.sh` then requires the scoped three-seed Gate X artifact plus passing G
+and M gates before it builds the independently bound Full cache. It validates Gate F's receptive-
+field contract, GPU memory, matched optimization budget, and a 28 GiB launch-disk reserve before
+running the seed-42 Full versus continued-Min pilot. No CSL test annotation is available to any of
+these queues.
+
 The current local audit marks CSL-Daily ready for feature extraction. How2Sign remains blocked:
 its annotations reference 118 train, 2 validation, and 6 test clips absent from both the extracted
 directories and the local train/test ZIP inventories. The directory named `subset_2000` contains an

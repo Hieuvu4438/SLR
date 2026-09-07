@@ -67,3 +67,8 @@ translated from the local Chinese dev CSV with `Helsinki-NLP/opus-mt-zh-en` revi
 I3D processes were launched under tmux with 24-hour hard timeouts, and a separate process-alive
 queue will automatically run manifest validation and the seed-42 baseline/ELSC-Min dev screen once
 both streams complete.
+The registered multiseed queue expands only after a passing seed-42 Gate G. A second conditional
+queue is defined for the CSL Full pilot: it requires the completed three-seed Gate X scope artifact,
+passing G and M gates, the train-only RF/cache Gate F contract, a real batch-512 GPU preflight, and
+a 28 GiB launch-disk reserve. The Full row is compared with a ten-epoch continued-Min row from the
+same selected Min initialization; all reports remain dev-only and explicitly record no test access.
