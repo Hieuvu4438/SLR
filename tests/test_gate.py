@@ -5,12 +5,15 @@ import json
 import pytest
 
 from elsc.config import config_hash
+from elsc.data.manifest import ManifestRecord
+from elsc.data.views import canonical_view
 from elsc.gate import (
     GateContractError,
     evaluate_full_gate,
     evaluate_gain_gate,
     evaluate_mechanism_gate,
     main,
+    validate_rf_cache_contract,
 )
 
 
@@ -56,9 +59,7 @@ def test_gain_gate_rejects_test_feedback_and_nonmeasured_input():
     ("gain", "expected_status", "expected_exit_code"),
     [(0.6, "passed", 0), (0.4, "no_go", 1)],
 )
-def test_gate_cli_exit_code_tracks_gate_status(
-    tmp_path, gain, expected_status, expected_exit_code
-):
+def test_gate_cli_exit_code_tracks_gate_status(tmp_path, gain, expected_status, expected_exit_code):
     report_path = tmp_path / "report.json"
     output_path = tmp_path / "gate.json"
     report_path.write_text(json.dumps(_report(gain, gain)), encoding="utf-8")
@@ -104,12 +105,8 @@ def _control_report(seeds, t2v, v2t, *, method_hash="selected-min"):
 
 
 def test_mechanism_gate_requires_true_support_to_win_both_controls_on_two_seeds():
-    versus_random = _control_report(
-        [42, 1337, 2026], [0.4, 0.2, -0.1], [0.2, 0.4, 0.1]
-    )
-    versus_caption = _control_report(
-        [42, 1337, 2026], [0.2, 0.6, 0.2], [0.4, 0.2, -0.4]
-    )
+    versus_random = _control_report([42, 1337, 2026], [0.4, 0.2, -0.1], [0.2, 0.4, 0.1])
+    versus_caption = _control_report([42, 1337, 2026], [0.2, 0.6, 0.2], [0.4, 0.2, -0.4])
     result = evaluate_mechanism_gate(versus_random, versus_caption)
     assert result["status"] == "passed"
     assert result["observed"]["winning_seeds"] == [42, 1337]
@@ -172,11 +169,22 @@ def _passing_full_gate_inputs():
         "manifest_hash": "manifest",
         "gates": {"evidence_eligible": 1},
     }
-    return gain, mechanism, config, cache, records
+    rf_contract = {
+        "criteria": {
+            "manifest_pair_binding_pass": True,
+            "verified_temporal_metadata_pass": True,
+            "canonical_view_hash_pass": True,
+            "evidence_rf_closure_pass": True,
+            "control_rf_closure_pass": True,
+            "other_support_exclusion_pass": True,
+        },
+        "observed": {"eligible_records_checked": 1},
+    }
+    return gain, mechanism, config, cache, records, rf_contract
 
 
 def test_full_gate_requires_passed_dev_gates_and_valid_interventions():
-    gain, mechanism, config, cache, records = _passing_full_gate_inputs()
+    gain, mechanism, config, cache, records, rf_contract = _passing_full_gate_inputs()
     result = evaluate_full_gate(
         gain,
         mechanism,
@@ -185,6 +193,7 @@ def test_full_gate_requires_passed_dev_gates_and_valid_interventions():
         records,
         cache_artifacts_match=True,
         train_manifest_sha256="manifest",
+        rf_contract=rf_contract,
     )
     assert result["status"] == "passed"
     assert result["observed"]["eligible_evidence_records"] == 1
@@ -198,13 +207,14 @@ def test_full_gate_requires_passed_dev_gates_and_valid_interventions():
         records,
         cache_artifacts_match=True,
         train_manifest_sha256="manifest",
+        rf_contract=rf_contract,
     )
     assert result["status"] == "no_go"
     assert result["criteria"]["gain_gate_pass"] is False
 
 
 def test_full_gate_rejects_dense_coordinates_and_overlapping_controls():
-    gain, mechanism, config, cache, records = _passing_full_gate_inputs()
+    gain, mechanism, config, cache, records, rf_contract = _passing_full_gate_inputs()
     records[0]["intervention_coordinate_system"] = "dense_index"
     records[0]["control_remove_dense_indices"] = [2, 6]
     result = evaluate_full_gate(
@@ -215,7 +225,75 @@ def test_full_gate_rejects_dense_coordinates_and_overlapping_controls():
         records,
         cache_artifacts_match=True,
         train_manifest_sha256="manifest",
+        rf_contract=rf_contract,
     )
     assert result["status"] == "no_go"
     assert result["criteria"]["input_frame_coordinate_pass"] is False
     assert result["criteria"]["intervention_structure_pass"] is False
+
+
+def test_full_rf_gate_rederives_masks_from_verified_temporal_sidecar(tmp_path):
+    temporal_root = tmp_path / "temporal"
+    temporal_root.mkdir()
+    temporal_path = temporal_root / "video.json"
+    temporal_path.write_text(
+        json.dumps(
+            {
+                "verified": True,
+                "coordinate_system": "input_frame",
+                "recipe_sha256": "recipe",
+                "rf_start": [0, 10, 20, 30, 40, 50],
+                "rf_end": [10, 20, 30, 40, 50, 60],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ManifestRecord(
+        schema_version=1,
+        dataset="ph",
+        split="train",
+        pair_id="pair-1",
+        video_id="video-1",
+        caption_id="caption-1",
+        caption_original="caption",
+        caption_model="caption",
+        caption_language="en",
+        feature_agnostic="agnostic.pkl",
+        feature_aware="aware.pkl",
+        dense_length=6,
+        feature_dim=1024,
+        temporal_metadata=str(temporal_path),
+    )
+    view = canonical_view(6, 4)
+    record = {
+        "pair_id": "pair-1",
+        "video_id": "video-1",
+        "word_id": 1,
+        "evidence_eligible": True,
+        "view_hash": view.hash,
+        "support_dense_indices": [1],
+        "evidence_remove_dense_indices": [1],
+        "control_remove_dense_indices": [3],
+        "evidence_interval": [10, 20],
+        "control_interval": [30, 40],
+    }
+    config = {
+        "sources": {
+            "temporal_metadata_root": str(temporal_root),
+            "feature_recipe_sha256": "recipe",
+        },
+        "data": {"feature_len": 4},
+    }
+
+    result = validate_rf_cache_contract(config, [record], [manifest])
+    assert all(result["criteria"].values())
+    assert result["observed"]["eligible_records_checked"] == 1
+
+    record["evidence_remove_dense_indices"] = [0]
+    result = validate_rf_cache_contract(config, [record], [manifest])
+    assert result["criteria"]["evidence_rf_closure_pass"] is False
+
+    record["evidence_remove_dense_indices"] = [1]
+    record["control_remove_dense_indices"] = [5]
+    result = validate_rf_cache_contract(config, [record], [manifest])
+    assert result["criteria"]["control_rf_closure_pass"] is False

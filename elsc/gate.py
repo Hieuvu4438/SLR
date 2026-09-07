@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from elsc.config import config_hash, load_config
+from elsc.data.manifest import ManifestRecord, load_manifest
+from elsc.data.views import canonical_view
 from elsc.utils import atomic_json_dump, sha256_file
 
 
@@ -51,9 +55,7 @@ def evaluate_gain_gate(
         raise GateContractError("comparison report lacks directional R1 deltas") from error
     mean_gain = 0.5 * (directional["T2V"] + directional["V2T"])
     mean_pass = mean_gain >= float(mean_r1_gain_min)
-    directions_pass = all(
-        delta >= -float(max_direction_r1_drop) for delta in directional.values()
-    )
+    directions_pass = all(delta >= -float(max_direction_r1_drop) for delta in directional.values())
     return {
         "schema_version": 1,
         "gate": "G",
@@ -93,9 +95,7 @@ def _method_run_identity(report: dict[str, Any]) -> list[tuple[Any, ...]]:
         raise GateContractError("Gate M method-run provenance is incomplete") from error
 
 
-def _per_seed_mean_r1_delta(
-    report: dict[str, Any], paired_seeds: list[int]
-) -> list[float]:
+def _per_seed_mean_r1_delta(report: dict[str, Any], paired_seeds: list[int]) -> list[float]:
     try:
         directional = [
             [float(value) for value in report["delta"][direction]["R1"]["values"]]
@@ -105,7 +105,9 @@ def _per_seed_mean_r1_delta(
         raise GateContractError("Gate M report lacks per-seed directional R1 deltas") from error
     if any(len(values) != len(paired_seeds) for values in directional):
         raise GateContractError("Gate M per-seed deltas do not align with paired seeds")
-    return [0.5 * (directional[0][index] + directional[1][index]) for index in range(len(paired_seeds))]
+    return [
+        0.5 * (directional[0][index] + directional[1][index]) for index in range(len(paired_seeds))
+    ]
 
 
 def evaluate_mechanism_gate(
@@ -123,9 +125,7 @@ def evaluate_mechanism_gate(
     caption_seeds = _validate_report_header(true_vs_caption_report, gate="M")
     if random_seeds != caption_seeds:
         raise GateContractError("Gate M control reports must use identical paired seeds")
-    if _method_run_identity(true_vs_random_report) != _method_run_identity(
-        true_vs_caption_report
-    ):
+    if _method_run_identity(true_vs_random_report) != _method_run_identity(true_vs_caption_report):
         raise GateContractError("Gate M control reports must evaluate the same true-support runs")
     versus_random = _per_seed_mean_r1_delta(true_vs_random_report, random_seeds)
     versus_caption = _per_seed_mean_r1_delta(true_vs_caption_report, caption_seeds)
@@ -180,6 +180,201 @@ def _require_completed_gate(value: dict[str, Any], name: str) -> bool:
     return status == "passed"
 
 
+def validate_rf_cache_contract(
+    config: dict[str, Any],
+    records: list[dict[str, Any]],
+    manifest_records: list[ManifestRecord],
+) -> dict[str, Any]:
+    checks = {
+        "manifest_pair_binding_pass": True,
+        "verified_temporal_metadata_pass": True,
+        "canonical_view_hash_pass": True,
+        "evidence_rf_closure_pass": True,
+        "control_rf_closure_pass": True,
+        "other_support_exclusion_pass": True,
+    }
+    failures: list[str] = []
+
+    def fail(check: str, message: str) -> None:
+        checks[check] = False
+        if len(failures) < 20:
+            failures.append(message)
+
+    manifest_by_pair = {record.pair_id: record for record in manifest_records}
+    records_by_pair: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for record in records:
+        records_by_pair[str(record.get("pair_id"))].append(record)
+    eligible = [record for record in records if record.get("evidence_eligible") is True]
+    temporal_root = Path(config["sources"]["temporal_metadata_root"]).resolve()
+    recipe_sha = config["sources"].get("feature_recipe_sha256")
+    if not isinstance(recipe_sha, str) or not recipe_sha:
+        fail(
+            "verified_temporal_metadata_pass",
+            "Full RF validation requires a pinned feature recipe SHA",
+        )
+    sidecars: dict[str, tuple[list[float], list[float], list[int], str]] = {}
+
+    for record in eligible:
+        pair_id = str(record.get("pair_id"))
+        manifest = manifest_by_pair.get(pair_id)
+        if manifest is None or str(record.get("video_id")) != (
+            manifest.video_id if manifest is not None else None
+        ):
+            fail("manifest_pair_binding_pass", f"{pair_id}: cache/manifest pair binding differs")
+            continue
+        if pair_id not in sidecars:
+            try:
+                temporal_path = Path(str(manifest.temporal_metadata)).resolve()
+                temporal_path.relative_to(temporal_root)
+                value = json.loads(temporal_path.read_text(encoding="utf-8"))
+                starts = [float(item) for item in value["rf_start"]]
+                ends = [float(item) for item in value["rf_end"]]
+                if (
+                    value.get("verified") is not True
+                    or value.get("coordinate_system") != "input_frame"
+                    or value.get("recipe_sha256") != recipe_sha
+                    or len(starts) != manifest.dense_length
+                    or len(ends) != manifest.dense_length
+                    or any(
+                        not math.isfinite(start) or not math.isfinite(end) or end <= start
+                        for start, end in zip(starts, ends, strict=True)
+                    )
+                ):
+                    raise ValueError("temporal sidecar contract differs")
+                view = canonical_view(manifest.dense_length, int(config["data"]["feature_len"]))
+                sidecars[pair_id] = (starts, ends, view.indices.tolist(), view.hash)
+            except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+                fail(
+                    "verified_temporal_metadata_pass",
+                    f"{pair_id}: invalid temporal sidecar ({error})",
+                )
+                continue
+        starts, ends, sampled, view_hash = sidecars[pair_id]
+        if record.get("view_hash") != view_hash:
+            fail("canonical_view_hash_pass", f"{pair_id}: canonical view hash differs")
+        sampled_set = set(sampled)
+
+        def integer_ids(name: str) -> list[int] | None:
+            values = record.get(name)
+            if (
+                not isinstance(values, list)
+                or not values
+                or not all(isinstance(value, int) for value in values)
+                or len(set(values)) != len(values)
+                or not set(values) <= sampled_set
+            ):
+                return None
+            return values
+
+        support_ids = integer_ids("support_dense_indices")
+        evidence_ids = integer_ids("evidence_remove_dense_indices")
+        control_ids = integer_ids("control_remove_dense_indices")
+        if support_ids is None or evidence_ids is None:
+            fail("evidence_rf_closure_pass", f"{pair_id}: invalid evidence/support dense IDs")
+        else:
+            support_interval = (
+                min(starts[index] for index in support_ids),
+                max(ends[index] for index in support_ids),
+            )
+            expected_evidence = [
+                index
+                for index in sampled
+                if starts[index] < support_interval[1] and ends[index] > support_interval[0]
+            ]
+            try:
+                recorded_interval = tuple(float(value) for value in record["evidence_interval"])
+            except (KeyError, TypeError, ValueError):
+                recorded_interval = ()
+            if (
+                len(recorded_interval) != 2
+                or not all(
+                    math.isclose(left, right, rel_tol=0.0, abs_tol=1e-6)
+                    for left, right in zip(recorded_interval, support_interval, strict=True)
+                )
+                or evidence_ids != expected_evidence
+            ):
+                fail(
+                    "evidence_rf_closure_pass",
+                    f"{pair_id}: evidence mask is not the support RF closure",
+                )
+        if control_ids is None:
+            fail("control_rf_closure_pass", f"{pair_id}: invalid control dense IDs")
+        else:
+            control_interval = (
+                min(starts[index] for index in control_ids),
+                max(ends[index] for index in control_ids),
+            )
+            expected_control = [
+                index
+                for index in sampled
+                if starts[index] < control_interval[1] and ends[index] > control_interval[0]
+            ]
+            try:
+                recorded_control = tuple(float(value) for value in record["control_interval"])
+            except (KeyError, TypeError, ValueError):
+                recorded_control = ()
+            if (
+                len(recorded_control) != 2
+                or not all(
+                    math.isclose(left, right, rel_tol=0.0, abs_tol=1e-6)
+                    for left, right in zip(recorded_control, control_interval, strict=True)
+                )
+                or control_ids != expected_control
+            ):
+                fail(
+                    "control_rf_closure_pass",
+                    f"{pair_id}: control mask is not its recorded RF closure",
+                )
+            for other in records_by_pair[pair_id]:
+                if other is record or other.get("word_id") == record.get("word_id"):
+                    continue
+                other_support = other.get("support_dense_indices")
+                if (
+                    not isinstance(other_support, list)
+                    or not other_support
+                    or not all(
+                        isinstance(index, int) and 0 <= index < len(starts)
+                        for index in other_support
+                    )
+                ):
+                    fail(
+                        "other_support_exclusion_pass",
+                        f"{pair_id}: another target has invalid support IDs",
+                    )
+                    continue
+                try:
+                    other_interval = (
+                        min(starts[int(index)] for index in other_support),
+                        max(ends[int(index)] for index in other_support),
+                    )
+                except (IndexError, TypeError, ValueError):
+                    fail(
+                        "other_support_exclusion_pass",
+                        f"{pair_id}: another target support is outside RF metadata",
+                    )
+                    continue
+                other_closure = {
+                    index
+                    for index in sampled
+                    if starts[index] < other_interval[1] and ends[index] > other_interval[0]
+                }
+                if set(control_ids) & other_closure:
+                    fail(
+                        "other_support_exclusion_pass",
+                        f"{pair_id}: control overlaps another target RF closure",
+                    )
+
+    return {
+        "criteria": checks,
+        "observed": {
+            "eligible_records_checked": len(eligible),
+            "temporal_sidecars_checked": len(sidecars),
+            "failure_count": sum(not value for value in checks.values()),
+            "failures": failures,
+        },
+    }
+
+
 def evaluate_full_gate(
     gain_gate: dict[str, Any],
     mechanism_gate: dict[str, Any],
@@ -189,6 +384,7 @@ def evaluate_full_gate(
     *,
     cache_artifacts_match: bool,
     train_manifest_sha256: str,
+    rf_contract: dict[str, Any],
 ) -> dict[str, Any]:
     gain_pass = _require_completed_gate(gain_gate, "G")
     mechanism_pass = _require_completed_gate(mechanism_gate, "M")
@@ -207,6 +403,17 @@ def evaluate_full_gate(
         "teacher_checkpoint_sha256"
     )
     manifest_match = cache_meta.get("manifest_hash") == train_manifest_sha256
+    required_rf_checks = {
+        "manifest_pair_binding_pass",
+        "verified_temporal_metadata_pass",
+        "canonical_view_hash_pass",
+        "evidence_rf_closure_pass",
+        "control_rf_closure_pass",
+        "other_support_exclusion_pass",
+    }
+    rf_checks = rf_contract.get("criteria")
+    if not isinstance(rf_checks, dict) or set(rf_checks) != required_rf_checks:
+        raise GateContractError("Gate F requires the complete RF revalidation contract")
 
     eligible = [record for record in records if record.get("evidence_eligible") is True]
     per_video: dict[str, int] = {}
@@ -269,6 +476,7 @@ def evaluate_full_gate(
         "teacher_margin_pass": margin_pass,
         "duration_matched_control_pass": duration_pass,
         "per_video_cap_pass": per_video_cap_pass,
+        **{f"rf_{name}": bool(value) for name, value in rf_checks.items()},
     }
     passed = all(criteria.values())
     return {
@@ -283,6 +491,7 @@ def evaluate_full_gate(
             "maximum_evidence_records_per_video": max(per_video.values(), default=0),
             "teacher_margin_min": threshold,
             "control_duration_tolerance": tolerance,
+            "rf_contract": rf_contract.get("observed", {}),
         },
         "test_used_for_gate": False,
     }
@@ -322,9 +531,7 @@ def main(argv: list[str] | None = None) -> int:
         result["comparison_report_sha256"] = sha256_file(report_path)
     elif args.gate == "M":
         if args.true_vs_random_report is None or args.true_vs_caption_report is None:
-            parser.error(
-                "Gate M requires --true-vs-random-report and --true-vs-caption-report"
-            )
+            parser.error("Gate M requires --true-vs-random-report and --true-vs-caption-report")
         random_path = Path(args.true_vs_random_report)
         caption_path = Path(args.true_vs_caption_report)
         result = evaluate_mechanism_gate(
@@ -357,10 +564,10 @@ def main(argv: list[str] | None = None) -> int:
         records_path = cache_path / "records.jsonl"
         cache_meta = json.loads(meta_path.read_text(encoding="utf-8"))
         records = [
-            json.loads(line)
-            for line in records_path.read_text(encoding="utf-8").splitlines()
+            json.loads(line) for line in records_path.read_text(encoding="utf-8").splitlines()
         ]
         config = load_config(config_path, stage="train")
+        train_manifest = load_manifest(config["data"]["train_manifest"], expected_split="train")
         train_manifest_sha256 = sha256_file(config["data"]["train_manifest"])
         artifact_paths = {
             "records_sha256": records_path,
@@ -379,6 +586,7 @@ def main(argv: list[str] | None = None) -> int:
             records,
             cache_artifacts_match=all(artifact_integrity.values()),
             train_manifest_sha256=train_manifest_sha256,
+            rf_contract=validate_rf_cache_contract(config, records, train_manifest),
         )
         result["inputs"] = {
             "gain_gate": str(gain_path.resolve()),
