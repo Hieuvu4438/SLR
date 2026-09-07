@@ -95,6 +95,37 @@ report_pair() {
     --output "$output" >>"$log_path" 2>&1
 }
 
+run_gate() {
+  local expected_gate=$1
+  local output=$2
+  shift 2
+  local pending_output="${output}.pending.$$"
+  local cli_status=0
+
+  "$@" --output "$pending_output" || cli_status=$?
+  python - "$pending_output" "$expected_gate" "$cli_status" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+expected_gate = sys.argv[2]
+cli_status = int(sys.argv[3])
+value = json.loads(path.read_text(encoding="utf-8"))
+if value.get("schema_version") != 1 or value.get("gate") != expected_gate:
+    raise ValueError(f"invalid Gate {expected_gate} artifact: {path}")
+status = value.get("status")
+if status not in {"passed", "no_go", "insufficient_seeds"}:
+    raise ValueError(f"Gate {expected_gate} has invalid status: {status}")
+if (status == "passed") != (cli_status == 0):
+    raise ValueError(
+        f"Gate {expected_gate} status/exit mismatch: status={status}, exit={cli_status}"
+    )
+print(json.dumps({"gate": expected_gate, "status": status, "exit": cli_status}))
+PY
+  mv -f -- "$pending_output" "$output"
+}
+
 run_seed() {
   local seed=$1
   local baseline_config="configs/ph_base_s${seed}.yaml"
@@ -189,16 +220,16 @@ python -m elsc.report \
   --output artifacts/campaign/ph_min_vs_random_span_b512_dev_3seed.json \
   >>"$log_path" 2>&1
 
-python -m elsc.gate --gate G \
+run_gate G artifacts/campaign/ph_min_vs_base_b512_dev_3seed_gate_g.json \
+  python -m elsc.gate --gate G \
   --report artifacts/campaign/ph_min_vs_base_b512_dev_3seed.json \
-  --output artifacts/campaign/ph_min_vs_base_b512_dev_3seed_gate_g.json \
   >>"$log_path" 2>&1
-python -m elsc.gate --gate M \
+run_gate M artifacts/campaign/ph_min_controls_b512_dev_3seed_gate_m.json \
+  python -m elsc.gate --gate M \
   --true-vs-random-report \
     artifacts/campaign/ph_min_vs_random_span_b512_dev_3seed.json \
   --true-vs-caption-report \
     artifacts/campaign/ph_min_vs_caption_b512_dev_3seed.json \
-  --output artifacts/campaign/ph_min_controls_b512_dev_3seed_gate_m.json \
   >>"$log_path" 2>&1
 
 printf '%s multiseed_complete seeds=42,1337,2026\n' \

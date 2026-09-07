@@ -393,7 +393,7 @@ def main(argv: list[str] | None = None) -> int:
         }
     atomic_json_dump(result, args.output)
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 0
+    return 0 if result["status"] == "passed" else 1
 
 
 if __name__ == "__main__":

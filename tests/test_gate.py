@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from elsc.config import config_hash
@@ -8,6 +10,7 @@ from elsc.gate import (
     evaluate_full_gate,
     evaluate_gain_gate,
     evaluate_mechanism_gate,
+    main,
 )
 
 
@@ -47,6 +50,32 @@ def test_gain_gate_rejects_test_feedback_and_nonmeasured_input():
     invalid["result_kind"] = "placeholder"
     with pytest.raises(GateContractError, match="measured_local"):
         evaluate_gain_gate(invalid)
+
+
+@pytest.mark.parametrize(
+    ("gain", "expected_status", "expected_exit_code"),
+    [(0.6, "passed", 0), (0.4, "no_go", 1)],
+)
+def test_gate_cli_exit_code_tracks_gate_status(
+    tmp_path, gain, expected_status, expected_exit_code
+):
+    report_path = tmp_path / "report.json"
+    output_path = tmp_path / "gate.json"
+    report_path.write_text(json.dumps(_report(gain, gain)), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "--gate",
+            "G",
+            "--report",
+            str(report_path),
+            "--output",
+            str(output_path),
+        ]
+    )
+
+    assert exit_code == expected_exit_code
+    assert json.loads(output_path.read_text(encoding="utf-8"))["status"] == expected_status
 
 
 def _control_report(seeds, t2v, v2t, *, method_hash="selected-min"):
