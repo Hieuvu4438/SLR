@@ -25,3 +25,6 @@ evidence:
   control_duration_tolerance: 0.10
 cache:
   path: artifacts/cache/ph_train_elsc_full_v1
+train:
+  # Step-matched to ablation_continued_min.yaml for the first Full pilot.
+  epochs: 10
