@@ -1,7 +1,7 @@
 # ELSC implementation status
 
 This file distinguishes implemented contracts from experiment results. It must not be used as a
-SOTA claim. Last audited: 2026-09-07 19:42 (Asia/Ho_Chi_Minh).
+SOTA claim. Last audited: 2026-09-07 20:09 (Asia/Ho_Chi_Minh).
 
 | Acceptance requirement | Current evidence | Status |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ SOTA claim. Last audited: 2026-09-07 19:42 (Asia/Ho_Chi_Minh).
 | Frozen teacher and train-only cache | Dev-selection provenance and all cache hashes are fail-fast; cache CLI accepts only `train` | Implemented and tested |
 | Raw local branch | Pointwise zero-init adapter and pre-Transformer local head; padding/locality tests | Implemented and tested |
 | Auxiliary gradient flow | Two-step zero-init test and periodic lexical-only adapter/head gradient diagnostics | Implemented and tested |
-| ELSC-Min and matched controls | Canonical batch-512 A0/A1/A2/A3/A4 runs for seeds 42/1337/2026 are hash-validated. Across seeds, Min reaches mean dev R@1 75.080 versus baseline 74.984 (+0.096 pp), adapter-only 75.048 (+0.032 pp), matched-caption 74.984 (+0.096 pp), and random-support 75.112 (-0.032 pp). A5/A6/A7 diagnostics are complete at seed 42. Lower-LR and generic local word-video three-seed screens reach +0.257 pp and +0.225 pp over baseline respectively | Registered Gate G `no_go`, Gate M `no_go`; both corrective Gate G screens `no_go` |
+| ELSC-Min and matched controls | Canonical batch-512 A0/A1/A2/A3/A4 runs for seeds 42/1337/2026 are hash-validated. Across seeds, Min reaches mean dev R@1 75.080 versus baseline 74.984 (+0.096 pp), adapter-only 75.048 (+0.032 pp), matched-caption 74.984 (+0.096 pp), and random-support 75.112 (-0.032 pp). A5/A6/A7 diagnostics are complete at seed 42. Lower-LR and generic local word-video three-seed screens reach +0.257 pp and +0.225 pp over baseline respectively. Registered weight-0.02 and five-epoch lexical-ramp screens both retain initialization at seed 42 (delta 0.000 pp) | Registered Gate G `no_go`, Gate M `no_go`; all four corrective Gate G screens `no_go` |
 | ELSC-Full | RF closure/control matching and per-video cap exist; deterministic extractor emits verified input-frame RF for generated train/dev features | Implemented gate; experiment not run |
 | DDP/AMP math | Global-count DDP auxiliary normalization test; FP16/BF16 scaler/resume code; BF16 real-checkpoint GPU backward smoke | Implemented for single-GPU MVP; multi-GPU run not claimed |
 | Full-gallery evaluation | Blockwise CiCo score, direction-specific singleton tie behavior, multi-positive IDs, explicit per-query artifact | Implemented and tested |
@@ -42,8 +42,11 @@ post-screen diagnostics are complete: shuffled lexical and head-only retain init
 75.915. A source-matched Min reproduction exactly matches the registered seed-42 Min metrics. The
 registered lower-LR three-seed screen improves mean dev R@1 by 0.257 pp and the local word-video
 screen by 0.225 pp; both fail the 0.5 pp Gate G threshold. KEEP reaches 75.723 at seed 42 but was not
-expanded after lower-LR failed Gate G. Full and locked test evaluation remain blocked by their
-gates; dataset/backbone transfer and any SOTA claim also remain pending.
+expanded after lower-LR failed Gate G. Reducing the lexical weight from 0.1 to 0.02 and ramping the
+0.1 weight over five epochs were each screened under the same registered seed-42 Gate G contract;
+both selected initialization at 75.241 and were not expanded. This exhausts the registered PH
+corrective screens without using test feedback. Full and locked test evaluation remain blocked by
+their gates; dataset/backbone transfer and any SOTA claim also remain pending.
 
 Transfer audits are stored locally under `artifacts/transfer/`. They do not download data, hash
 large video contents, extract features, or expose test captions in their output. The How2Sign
