@@ -26,6 +26,7 @@ def configure_from_teacher(
     output: Path,
     *,
     student_run: Path | None = None,
+    cache_path: Path | None = None,
 ) -> dict[str, Any]:
     template = load_config(template_path, validate=False)
     teacher_checkpoint, selection_path, selection, teacher_config = _selected_run(
@@ -64,6 +65,8 @@ def configure_from_teacher(
             "teacher_selection_provenance": str(selection_path),
         }
     )
+    if cache_path is not None:
+        template.setdefault("cache", {})["path"] = str(cache_path)
     if model.get("require_init_equals_teacher", False) and initialization_sha != teacher_sha:
         raise ValueError("template requires student initialization to equal teacher checkpoint")
     validate_config(template, stage="train")
@@ -88,6 +91,7 @@ def configure_from_teacher(
         "student_initialization_selected_epoch": initialization_selection.get(
             "selected_epoch"
         ),
+        "cache_path": template.get("cache", {}).get("path"),
         "output": str(output.resolve()),
         "resolved_config_hash": digest,
     }
@@ -105,6 +109,10 @@ def main(argv: list[str] | None = None) -> int:
         "--student-run",
         help="Optional dev-selected prior stage used only for student initialization",
     )
+    parser.add_argument(
+        "--cache-path",
+        help="Optional run-specific train-only cache path (recommended across seeds)",
+    )
     parser.add_argument("--output", required=True)
     args = parser.parse_args(argv)
     result = configure_from_teacher(
@@ -112,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.teacher_run),
         Path(args.output),
         student_run=Path(args.student_run) if args.student_run else None,
+        cache_path=Path(args.cache_path) if args.cache_path else None,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

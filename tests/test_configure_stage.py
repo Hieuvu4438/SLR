@@ -97,10 +97,13 @@ evaluation: {filter_by_aux_eligibility: false}
         baseline_run,
         output,
         student_run=min_run,
+        cache_path=tmp_path / "cache_s42",
     )
     resolved = yaml.safe_load(output.read_text(encoding="utf-8"))
     assert resolved["model"]["teacher_checkpoint"] == str(baseline_checkpoint)
     assert resolved["model"]["init_checkpoint"] == str(min_checkpoint)
+    assert resolved["cache"]["path"] == str(tmp_path / "cache_s42")
+    assert result["cache_path"] == str(tmp_path / "cache_s42")
     assert result["teacher_checkpoint_sha256"] == sha256_file(baseline_checkpoint)
     assert result["student_initialization_checkpoint_sha256"] == sha256_file(
         min_checkpoint

@@ -70,7 +70,8 @@ python -m elsc.train --config configs/ph_base.yaml --run-dir runs/ph_base_s42
 
 # Bind Min to the dev-selected baseline teacher/student initialization.
 python -m elsc.configure_stage --template configs/ph_min.yaml \
-  --teacher-run runs/ph_base_s42 --output artifacts/campaign/ph_min_s42.yaml
+  --teacher-run runs/ph_base_s42 --cache-path artifacts/cache/ph_min_s42_v1 \
+  --output artifacts/campaign/ph_min_s42.yaml
 python -m elsc.audit --config artifacts/campaign/ph_min_s42.yaml --stage teacher
 python -m elsc.mining.build_cache --config artifacts/campaign/ph_min_s42.yaml --split train
 python -m elsc.train --config artifacts/campaign/ph_min_s42.yaml --run-dir runs/ph_min_s42
@@ -98,6 +99,7 @@ initialization:
 ```bash
 python -m elsc.configure_stage --template configs/ph_full.yaml \
   --teacher-run runs/ph_base_s42 --student-run runs/ph_min_s42 \
+  --cache-path artifacts/cache/ph_full_s42_v1 \
   --output artifacts/campaign/ph_full_s42.yaml
 python -m elsc.train --config artifacts/campaign/ph_full_s42.yaml \
   --run-dir runs/ph_full_s42
