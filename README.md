@@ -62,7 +62,7 @@ Feature extraction is resumable and can wait in the background until the shared 
 free VRAM; training and parity checks still require an idle device:
 
 ```bash
-tmux new-session -d -s elsc_ph_i3d 'bash scripts/run_ph_i3d_extraction.sh'
+tmux new-session -d -s elsc_ph_i3d 'bash methods/elsc/scripts/run_ph_i3d_extraction.sh'
 tail -f artifacts/logs/ph_i3d_extraction.log
 ```
 
