@@ -7,7 +7,7 @@ from typing import Any
 
 from elsc.config import dump_resolved, load_config, validate_config
 from elsc.provenance import validate_dev_selection
-from elsc.utils import atomic_json_dump, sha256_file
+from elsc.utils import atomic_json_dump, git_worktree_state, sha256_file
 
 
 def _selected_run(run: Path) -> tuple[Path, Path, dict[str, Any], dict[str, Any]]:
@@ -73,6 +73,7 @@ def configure_from_teacher(
     digest = dump_resolved(template, output)
     record = {
         "schema_version": 1,
+        "implementation": git_worktree_state(Path(__file__)),
         "template": str(template_path.resolve()),
         "template_sha256": sha256_file(template_path),
         "teacher_run": str(teacher_run.resolve()),

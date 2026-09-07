@@ -48,6 +48,7 @@ evaluation: {filter_by_aux_eligibility: false}
     assert resolved["model"]["init_checkpoint_sha256"] == sha256_file(checkpoint)
     assert resolved["seed"] == 42
     assert result["teacher_selected_epoch"] == 3
+    assert result["implementation"]["status"] == "ready"
 
 
 def test_full_config_uses_selected_min_student_and_baseline_teacher(tmp_path: Path):
