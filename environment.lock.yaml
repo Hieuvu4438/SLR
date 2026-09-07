@@ -9,6 +9,9 @@ runtime:
   regex: 2026.4.4
   pytest: 9.0.3
   ruff: 0.15.22
+  transformers: 5.5.4
+  sentencepiece: 0.2.1
+  huggingface_hub: 1.14.0
 hardware:
   gpu: NVIDIA RTX 5880 Ada Generation
   gpu_memory_mib: 49140
@@ -26,6 +29,18 @@ pretrained:
     sha256: 598b822aafd1b3cd767b290410ea1191f723dc87dd096775c3670e224b6e7b9f
     source: https://drive.google.com/file/d/1Hpcn5obCcG5JHa3nLvHqX9pfrp7g6wDu/view
     archive_sha256: f02ea0b2a64123b2c8386ccb467c00143454ee6405ed4c07e074dcc712224c6c
+  cico_csl_checkpoint:
+    path: artifacts/pretrained/csl_sota.pth
+    sha256: bdf32b5083db7039f0b5678812154ee39e03541d1eea0f614571cedeb174886f
+    source: https://drive.google.com/file/d/1Hpcn5obCcG5JHa3nLvHqX9pfrp7g6wDu/view
+    archive_sha256: f02ea0b2a64123b2c8386ccb467c00143454ee6405ed4c07e074dcc712224c6c
+    role: csl_release_initialization_pending_local_dev_parity
+  cico_how2sign_checkpoint:
+    path: artifacts/pretrained/H2S_sota.pth
+    sha256: 67f557976d523dc3cd63cae73c29c88145e409b77221c90260ae51b9d0c95b35
+    source: https://drive.google.com/file/d/1Hpcn5obCcG5JHa3nLvHqX9pfrp7g6wDu/view
+    archive_sha256: f02ea0b2a64123b2c8386ccb467c00143454ee6405ed4c07e074dcc712224c6c
+    role: retained_for_blocked_how2sign_transfer
   domain_agnostic_i3d:
     path: artifacts/pretrained/bsl5k.pth.tar
     sha256: 6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f
@@ -36,6 +51,14 @@ pretrained:
     source: https://drive.google.com/file/d/1TbX3UjaUvXhsXSQX2UAm81nitt8tsgLq/view
     scope: how2sign_target_encoder_used_as_an_explicit_phoenix_transfer_stream
     phoenix_release_parity_expected: false
+  opus_mt_zh_en:
+    path: artifacts/pretrained/opus-mt-zh-en
+    model_id: Helsinki-NLP/opus-mt-zh-en
+    revision: cf109095479db38d6df799875e34039d4938aaa6
+    pytorch_model_sha256: 9d8ceb91d103ef89400c9d9d62328b4858743cf8924878aee3b8afc594242ce0
+    source_spm_sha256: e27a3a1b539f4959ec72ea60e453f49156289f95d4e6000b29332efc45616203
+    target_spm_sha256: 6a881f4717cd7265f53fea54fd3dc689c767c05338fac7a4590f3088cb2d7855
+    role: fixed_dev_only_zh_en_input_translation
 data_artifacts:
   cico_sign_features_release:
     source: https://drive.google.com/file/d/1Vb-HFZd-rhjN49sB5WwLRpIbyhiC6xTy/view
@@ -89,6 +112,22 @@ data_artifacts:
     gpu_free_after_bytes: 5700845568
     required_free_after_bytes: 4294967296
     train_manifest_sha256: f032260cf21578876fcff997bef1df0d46094635d30032edb6b01c80693ace53
+  csl_transfer_inputs:
+    status: prepared
+    source_root: /home/dongvk/datasets/CSL_Daily_Sentence_Crop
+    prepared_splits: [train, dev]
+    test_annotation_accessed: false
+    train_records: 18401
+    train_caption_groups: 6598
+    dev_records: 1077
+    dev_caption_groups: 797
+    train_annotation_sha256: a52f968c92458998dc2cfdd8d3d0451485f84ef167ef97805227426e851375e7
+    dev_annotation_sha256: 0a465e95d00d1000419a6f1ef6874e2d84ac93697e09e1a56f331e382dd1a5ad
+    dev_translation_artifact_sha256: 2711600811ae3bd90acc8235d4eb4d6a19090927bf5588608848cfdbf3919d8a
+    extraction_videos_per_stream: 19478
+    extraction_windows_per_stream: 2883145
+    two_stream_planned_write_gib: 23.103219985961914
+    extraction_recipe_sha256: 50045403867d7bdbee644de13e94389b5567c67b0f7f87e7218952dcde49a571
 notes:
   - This is the implementation runtime, not the historical CiCo environment.
   - The release checkpoint is an initialization/parity artifact, not a dev-selected teacher.
