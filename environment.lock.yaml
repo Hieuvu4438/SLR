@@ -48,8 +48,9 @@ data_artifacts:
     contains_ph_train: false
     contains_ph_dev: false
   ph_all_split_reextraction:
-    status: running_in_tmux_elsc_ph_i3d
+    status: complete
     started_at: "2026-09-07T05:53:42+07:00"
+    completed_at: "2026-09-07T08:57:57+07:00"
     video_root: /home/dongvk/datasets/phoenix14T/videos_phoenix/videos
     clip_frames: 16
     stride: 1
@@ -59,8 +60,35 @@ data_artifacts:
     gpu_resample_align_corners: false
     output_dtype: float32
     domain_agnostic_root: artifacts/features_reextracted/ph_domain_agnostic
-    domain_aware_transfer_root: artifacts/features_reextracted/ph_domain_aware_h2s_transfer
+    domain_aware_transfer_root: artifacts/features_reextracted/ph_domain_aware_h2s_transfer_gpu
     temporal_metadata_root: artifacts/features_reextracted/ph_temporal_metadata
+    expected_split_counts:
+      train: 7096
+      dev: 519
+      test: 642
+    domain_agnostic_split_counts:
+      train: 7096
+      dev: 519
+      test: 642
+    domain_aware_transfer_split_counts:
+      train: 7096
+      dev: 519
+      test: 642
+    failed_videos: 0
+    recipe_sha256: 50045403867d7bdbee644de13e94389b5567c67b0f7f87e7218952dcde49a571
+    agnostic_train_report_sha256: d70c8ae392f6a11497eb2ad850ee550cfb9bfa0978d6ffc3c21e3745b7a7963c
+    aware_all_report_sha256: 7295ba001370cf44c0ba462b5562a397f6ddda70900721cfcbb33ccee4cbd2c3
+  ph_batch_preflight:
+    verified_at: "2026-09-07T11:13:14+07:00"
+    status: passed
+    batch_size: 512
+    negative_pool_per_query: 511
+    precision: amp_bf16
+    peak_allocated_bytes: 42462040576
+    peak_reserved_bytes: 44728057856
+    gpu_free_after_bytes: 5700845568
+    required_free_after_bytes: 4294967296
+    train_manifest_sha256: f032260cf21578876fcff997bef1df0d46094635d30032edb6b01c80693ace53
 notes:
   - This is the implementation runtime, not the historical CiCo environment.
   - The release checkpoint is an initialization/parity artifact, not a dev-selected teacher.
