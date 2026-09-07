@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from statistics import median
 
 import pytest
 
@@ -46,8 +47,9 @@ def _write_run(
             "R1": 100.0 * sum(rank < 1 for rank in values) / 3,
             "R5": 100.0 * sum(rank < 5 for rank in values) / 3,
             "R10": 100.0 * sum(rank < 10 for rank in values) / 3,
-            "MedianR": 1.0,
+            "MedianR": 1.0 + median(values),
             "MeanR": 1.0 + sum(values) / 3,
+            "cols": values,
         }
         query_ids = ids if direction == "V2T" else text_ids
         candidate_ids = text_ids if direction == "V2T" else ids
@@ -57,6 +59,7 @@ def _write_run(
                 "rank": rank,
                 "matched_positive_id": text_ids[index] if direction == "V2T" else ids[index],
                 "ranked_candidate_ids": candidate_ids,
+                "official_tie_ranks": [rank],
             }
             for index, (query, rank) in enumerate(zip(query_ids, values, strict=True))
         ]
@@ -130,4 +133,15 @@ def test_paired_report_rejects_truncated_candidate_gallery(tmp_path: Path):
     metrics["per_query"]["V2T"][0]["ranked_candidate_ids"].pop()
     metrics_path.write_text(json.dumps(metrics), encoding="utf-8")
     with pytest.raises(ReportContractError, match="full gallery"):
+        compare_runs([baseline], [method], split="dev", bootstrap_samples=100)
+
+
+def test_paired_report_rejects_summary_that_disagrees_with_query_ranks(tmp_path: Path):
+    baseline = _write_run(tmp_path / "base", 42, ([0, 0, 0], [0, 0, 0]))
+    method = _write_run(tmp_path / "method", 42, ([0, 0, 0], [0, 0, 0]))
+    metrics_path = method / "evaluation" / "dev" / "metrics.json"
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    metrics["V2T"]["R1"] = 0.0
+    metrics_path.write_text(json.dumps(metrics), encoding="utf-8")
+    with pytest.raises(ReportContractError, match="does not match per-query ranks"):
         compare_runs([baseline], [method], split="dev", bootstrap_samples=100)

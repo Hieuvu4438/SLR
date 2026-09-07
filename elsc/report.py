@@ -21,6 +21,33 @@ class ReportContractError(ValueError):
     pass
 
 
+def _validate_summary_from_ranks(
+    metrics: dict[str, Any], direction: str, ranks: list[int], path: Path
+) -> None:
+    if not ranks:
+        raise ReportContractError(f"{direction} metrics have no primary ranks: {path}")
+    array = np.asarray(ranks, dtype=np.int64)
+    expected = {
+        "R1": float((array < 1).mean() * 100.0),
+        "R5": float((array < 5).mean() * 100.0),
+        "R10": float((array < 10).mean() * 100.0),
+        "MedianR": float(np.median(array) + 1),
+        "MeanR": float(np.mean(array) + 1),
+    }
+    summary = metrics.get(direction)
+    if not isinstance(summary, dict):
+        raise ReportContractError(f"metrics lack {direction} summary: {path}")
+    for name, expected_value in expected.items():
+        try:
+            actual = float(summary[name])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ReportContractError(f"metrics lack numeric {direction} {name}: {path}") from error
+        if not np.isfinite(actual) or not np.isclose(actual, expected_value, rtol=0.0, atol=1e-9):
+            raise ReportContractError(f"{direction} {name} does not match per-query ranks: {path}")
+    if summary.get("cols") != ranks:
+        raise ReportContractError(f"{direction} rank vector differs from per-query ranks: {path}")
+
+
 def _validate_full_gallery_metrics(metrics: dict[str, Any], path: Path) -> None:
     if metrics.get("schema_version") != 1:
         raise ReportContractError(f"unsupported metrics schema: {path}")
@@ -51,6 +78,7 @@ def _validate_full_gallery_metrics(metrics: dict[str, Any], path: Path) -> None:
     }
     query_ids_by_direction: dict[str, list[str]] = {}
     candidate_ids_by_direction: dict[str, set[str]] = {}
+    primary_ranks_by_direction: dict[str, list[int]] = {}
     for direction, (query_count, candidate_count, hash_name) in direction_contracts.items():
         records = metrics.get("per_query", {}).get(direction)
         if not isinstance(records, list) or len(records) != query_count:
@@ -65,6 +93,8 @@ def _validate_full_gallery_metrics(metrics: dict[str, Any], path: Path) -> None:
                 f"{direction} ordered query IDs do not match their gallery hash: {path}"
             )
         expected_candidates: set[str] | None = None
+        query_ranks: list[int] = []
+        official_tie_ranks: list[int] = []
         for record in records:
             ranked = record.get("ranked_candidate_ids")
             if (
@@ -88,17 +118,43 @@ def _validate_full_gallery_metrics(metrics: dict[str, Any], path: Path) -> None:
                 raise ReportContractError(f"invalid {direction} query rank: {path}") from error
             if not 0 <= rank < candidate_count:
                 raise ReportContractError(f"out-of-range {direction} query rank: {path}")
+            query_ranks.append(rank)
+            ties = record.get("official_tie_ranks")
+            if not isinstance(ties, list) or not ties:
+                raise ReportContractError(f"{direction} query lacks official tie ranks: {path}")
+            try:
+                numeric_ties = [int(value) for value in ties]
+            except (TypeError, ValueError) as error:
+                raise ReportContractError(
+                    f"invalid {direction} official tie ranks: {path}"
+                ) from error
+            if any(not 0 <= value < candidate_count for value in numeric_ties):
+                raise ReportContractError(f"out-of-range {direction} official tie rank: {path}")
+            official_tie_ranks.extend(numeric_ties)
             if str(record.get("matched_positive_id")) not in candidates:
                 raise ReportContractError(
                     f"{direction} matched positive is absent from the gallery: {path}"
                 )
         query_ids_by_direction[direction] = query_ids
         candidate_ids_by_direction[direction] = expected_candidates or set()
+        primary_ranks_by_direction[direction] = (
+            official_tie_ranks
+            if metrics["metric_kernel"] == "cico_direction_specific_singleton_tie_behavior"
+            and direction == "T2V"
+            else query_ranks
+        )
 
     if candidate_ids_by_direction["V2T"] != set(query_ids_by_direction["T2V"]):
         raise ReportContractError(f"V2T candidate IDs differ from T2V query IDs: {path}")
     if candidate_ids_by_direction["T2V"] != set(query_ids_by_direction["V2T"]):
         raise ReportContractError(f"T2V candidate IDs differ from V2T query IDs: {path}")
+    if (
+        metrics["metric_kernel"] == "cico_direction_specific_singleton_tie_behavior"
+        and video_count != text_count
+    ):
+        raise ReportContractError(f"singleton CiCo metrics require a square gallery: {path}")
+    for direction, ranks in primary_ranks_by_direction.items():
+        _validate_summary_from_ranks(metrics, direction, ranks, path)
 
 
 def _load_run(run_dir: Path, split: str) -> dict[str, Any]:
