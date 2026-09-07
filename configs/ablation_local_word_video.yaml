@@ -1,3 +1,1 @@
-extends: ph_min.yaml
-experiment: ph_local_word_video_contrast
-method: local_word_video
+extends: ../methods/elsc/configs/ablation_local_word_video.yaml

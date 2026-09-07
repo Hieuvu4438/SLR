@@ -1,0 +1,9 @@
+extends: csl_min.yaml
+experiment: csl_daily_elsc_min_continued
+
+model:
+  init_checkpoint: required_same_selected_min_checkpoint_as_full
+  require_init_equals_teacher: false
+
+train:
+  epochs: 10

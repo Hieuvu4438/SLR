@@ -1,0 +1,5 @@
+extends: ph_min.yaml
+experiment: ph_elsc_random_frequency_neighbors
+cache:
+  path: artifacts/cache/ph_train_random_neighbors_v1
+  negatives_source: train_random_frequency_matched_v1

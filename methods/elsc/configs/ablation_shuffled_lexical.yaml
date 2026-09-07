@@ -1,0 +1,3 @@
+extends: ph_min.yaml
+experiment: ph_elsc_shuffled_lexical
+aux_support_mode: shuffled_lexical

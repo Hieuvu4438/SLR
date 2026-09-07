@@ -1,5 +1,1 @@
-extends: ph_min.yaml
-experiment: ph_elsc_keep_005
-keep:
-  weight: 0.05
-  temperature: 1.0
+extends: ../methods/elsc/configs/ablation_keep.yaml

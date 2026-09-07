@@ -1,5 +1,1 @@
-extends: ablation_caption.yaml
-experiment: ph_elsc_lower_lr_caption_control
-train:
-  adapter_lr: 0.00005
-  head_lr: 0.00005
+extends: ../methods/elsc/configs/ablation_lower_lr_caption.yaml

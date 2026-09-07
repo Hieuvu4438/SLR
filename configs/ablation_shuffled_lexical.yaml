@@ -1,3 +1,1 @@
-extends: ph_min.yaml
-experiment: ph_elsc_shuffled_lexical
-aux_support_mode: shuffled_lexical
+extends: ../methods/elsc/configs/ablation_shuffled_lexical.yaml

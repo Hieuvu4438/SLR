@@ -1,0 +1,5 @@
+extends: ph_min.yaml
+experiment: ph_elsc_head_only
+model:
+  adapter:
+    trainable: false

@@ -1,0 +1,13 @@
+extends: ../../../configs/ph_base.yaml
+experiment: ph_adapter_clcl_only
+method: baseline
+model:
+  init_checkpoint: required_same_dev_selected_baseline_checkpoint
+  backbone_frozen: true
+  logit_scale_frozen: true
+  adapter:
+    enabled: true
+loss:
+  lexical_weight: 0.0
+train:
+  epochs: 20

@@ -1,5 +1,1 @@
-extends: ph_min.yaml
-experiment: ph_elsc_head_only
-model:
-  adapter:
-    trainable: false
+extends: ../methods/elsc/configs/ablation_head_only.yaml

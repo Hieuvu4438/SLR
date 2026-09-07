@@ -1,3 +1,1 @@
-extends: csl_min.yaml
-experiment: csl_daily_elsc_random_matched_span
-aux_support_mode: random_matched
+extends: ../methods/elsc/configs/csl_random_span.yaml

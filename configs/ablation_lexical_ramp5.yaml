@@ -1,6 +1,1 @@
-extends: ph_min.yaml
-experiment: ph_elsc_lexical_ramp5
-loss:
-  # Preserve the registered final auxiliary strength while avoiding the
-  # roughly 5:1 lexical/coarse objective imbalance at the start of training.
-  lexical_weight_ramp_epochs: 5
+extends: ../methods/elsc/configs/ablation_lexical_ramp5.yaml
