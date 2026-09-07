@@ -60,6 +60,22 @@ def test_full_rejects_unimplemented_intervention_fill(tmp_path: Path):
         load_config(path)
 
 
+@pytest.mark.parametrize("field", ["encoder_microbatch_size", "score_microbatch_size"])
+def test_full_rejects_nonpositive_microbatch_size(tmp_path: Path, field: str):
+    path = tmp_path / "bad_evidence_microbatch.yaml"
+    path.write_text(
+        "schema_version: 1\nmethod: elsc\n"
+        "train: {eval_split: dev}\n"
+        "model: {backbone_frozen: true, adapter: {enabled: true}}\n"
+        "sources: {temporal_metadata_root: /rf}\n"
+        "evidence: {enabled: true, control_same_token_count: true, "
+        f"mask_fill: zero, {field}: 0}}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match=field):
+        load_config(path)
+
+
 def test_nonzero_adapter_radius_is_rejected_until_dense_path_exists(tmp_path: Path):
     path = tmp_path / "bad_radius.yaml"
     path.write_text(

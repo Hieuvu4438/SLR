@@ -102,6 +102,40 @@ class CiCoBridge:
         *,
         dual_mix: float,
     ) -> torch.Tensor:
+        if video.tokens.shape[0] != text.tokens.shape[0]:
+            raise ValueError("paired_score requires aligned video/text batches")
+        if getattr(self.core, "sim_header", None) == "Filip":
+            # This is the diagonal of CiCo ``flip_similarity_softmax`` without
+            # materializing its [B,B,F,T] all-pairs tensor.  Auxiliary evidence
+            # pairs are local to a rank, so no distributed gather belongs here.
+            video_tokens = video.tokens / video.tokens.norm(dim=-1, keepdim=True)
+            text_tokens = text.tokens / text.tokens.norm(dim=-1, keepdim=True)
+            aligned = torch.einsum("bfs,bts->bft", video_tokens, text_tokens)
+
+            video_valid = video.mask == 0
+            text_valid = text.mask == 1
+            if video_valid.shape != aligned.shape[:2]:
+                raise ValueError("video mask/token shape mismatch in paired Filip score")
+            if text_valid.shape != (aligned.shape[0], aligned.shape[2]):
+                raise ValueError("text mask/token shape mismatch in paired Filip score")
+            if not bool(video_valid.any(dim=1).all()) or not bool(text_valid.any(dim=1).all()):
+                raise ValueError("paired Filip score requires a valid video and text token")
+
+            i2t_token = torch.nansum(
+                aligned * torch.softmax(aligned / 0.07, dim=2), dim=2
+            )
+            i2t_token = i2t_token.masked_fill(~video_valid, 0.0)
+            i2t = i2t_token.sum(dim=1) / video_valid.sum(dim=1)
+
+            t2i_token = torch.nansum(
+                aligned * torch.softmax(aligned / 0.07, dim=1), dim=1
+            )
+            t2i_token = t2i_token.masked_fill(~text_valid, 0.0)
+            t2i = t2i_token.sum(dim=1) / text_valid.sum(dim=1)
+
+            scale = self.core.clip.logit_scale.exp()
+            return scale * (dual_mix * i2t + (1.0 - dual_mix) * t2i)
+
         i2t, t2i = self.score(video, text, objective=True)
         if i2t.shape[0] != i2t.shape[1]:
             raise ValueError("paired_score requires aligned square video/text batches")

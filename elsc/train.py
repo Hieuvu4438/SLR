@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from torch.utils.checkpoint import checkpoint
 
 from elsc.config import config_hash, dump_resolved, load_config
 from elsc.data.cache_dataset import AuxiliaryCache, lexical_tensors_from_batch
@@ -135,17 +136,82 @@ def _caption_objective(
     )
 
 
-def _paired_margin(
-    model, video: VideoEncoding, positive: TextEncoding, negative: TextEncoding, dual_mix: float
-) -> torch.Tensor:
-    text = TextEncoding(
-        torch.cat((positive.mask, negative.mask)),
-        torch.cat((positive.tokens, negative.tokens)),
-        torch.cat((positive.cls, negative.cls)),
+def _video_range(value: VideoEncoding, start: int, end: int) -> VideoEncoding:
+    return VideoEncoding(
+        value.mask[start:end], value.tokens[start:end], value.cls[start:end]
     )
-    i2t, t2i = model.bridge.score(video, text, objective=True)
-    scores = model.bridge.mixed_score(i2t, t2i, dual_mix)[0]
-    return (scores[0] - scores[1]) / model.core.clip.logit_scale.exp().detach().float()
+
+
+def _text_range(value: TextEncoding, start: int, end: int) -> TextEncoding:
+    return TextEncoding(
+        value.mask[start:end], value.tokens[start:end], value.cls[start:end]
+    )
+
+
+def _checkpointed_video_batches(
+    model,
+    h: torch.Tensor,
+    valid: torch.Tensor,
+    *,
+    microbatch_size: int,
+    activation_checkpoint: bool,
+) -> tuple[VideoEncoding, int]:
+    values: list[VideoEncoding] = []
+
+    def encode(h_chunk: torch.Tensor, valid_chunk: torch.Tensor):
+        value, _ = model.encode_video(h_chunk, valid_chunk)
+        return value.mask, value.tokens, value.cls
+
+    for start in range(0, len(h), microbatch_size):
+        end = min(start + microbatch_size, len(h))
+        if activation_checkpoint and torch.is_grad_enabled():
+            mask, tokens, cls = checkpoint(
+                encode,
+                h[start:end],
+                valid[start:end],
+                use_reentrant=False,
+            )
+        else:
+            mask, tokens, cls = encode(h[start:end], valid[start:end])
+        values.append(VideoEncoding(mask, tokens, cls))
+    return (
+        VideoEncoding(
+            torch.cat([value.mask for value in values]),
+            torch.cat([value.tokens for value in values]),
+            torch.cat([value.cls for value in values]),
+        ),
+        len(values),
+    )
+
+
+def _paired_margins(
+    model,
+    video: VideoEncoding,
+    positive: TextEncoding,
+    negative: TextEncoding,
+    dual_mix: float,
+    *,
+    microbatch_size: int,
+) -> tuple[torch.Tensor, int]:
+    margins: list[torch.Tensor] = []
+    calls = 0
+    scale = model.core.clip.logit_scale.exp().detach().float()
+    for start in range(0, len(video.tokens), microbatch_size):
+        end = min(start + microbatch_size, len(video.tokens))
+        own_video = _video_range(video, start, end)
+        positive_scores = model.bridge.paired_score(
+            own_video,
+            _text_range(positive, start, end),
+            dual_mix=dual_mix,
+        )
+        negative_scores = model.bridge.paired_score(
+            own_video,
+            _text_range(negative, start, end),
+            dual_mix=dual_mix,
+        )
+        margins.append((positive_scores - negative_scores) / scale)
+        calls += 2
+    return torch.cat(margins), calls
 
 
 def _evidence_objective(
@@ -162,7 +228,7 @@ def _evidence_objective(
     *,
     epoch: int,
     step: int,
-) -> tuple[torch.Tensor, torch.Tensor, int, dict[str, float | None]]:
+) -> tuple[torch.Tensor, torch.Tensor, int, dict[str, float | int | None]]:
     candidates = [
         (sample, record)
         for sample, records in enumerate(records_by_sample)
@@ -180,6 +246,9 @@ def _evidence_objective(
                 "clean_margin_mean": None,
                 "evidence_removed_margin_mean": None,
                 "control_removed_margin_mean": None,
+                "video_encoder_calls": 0,
+                "paired_score_calls": 0,
+                "negative_text_encoder_calls": 0,
             },
         )
     candidates.sort(
@@ -189,59 +258,104 @@ def _evidence_objective(
     )
     maximum = max(1, int(len(valid) * float(config["evidence"]["batch_fraction"])))
     selected = candidates[:maximum]
-    clean_margins: list[torch.Tensor] = []
-    evidence_margins: list[torch.Tensor] = []
-    control_margins: list[torch.Tensor] = []
+    sample_indexes = torch.tensor(
+        [sample for sample, _ in selected], dtype=torch.long, device=device
+    )
+    selected_h = h.index_select(0, sample_indexes)
+    selected_valid = valid.index_select(0, sample_indexes)
+    selected_dense_index = dense_index.index_select(0, sample_indexes)
+    evidence_masks = torch.zeros_like(selected_valid)
+    control_masks = torch.zeros_like(selected_valid)
     reliability: list[float] = []
-    for sample, record in selected:
+    negative_inputs = []
+    for selected_index, (_, record) in enumerate(selected):
         position_by_dense = {
             int(value): position
-            for position, value in enumerate(dense_index[sample].tolist())
+            for position, value in enumerate(selected_dense_index[selected_index].tolist())
             if value >= 0
         }
-        evidence_mask = torch.zeros_like(valid[sample])
-        control_mask = torch.zeros_like(valid[sample])
         for value in record["evidence_remove_dense_indices"]:
-            evidence_mask[position_by_dense[int(value)]] = True
+            evidence_masks[selected_index, position_by_dense[int(value)]] = True
         for value in record["control_remove_dense_indices"]:
-            control_mask[position_by_dense[int(value)]] = True
-        if int(evidence_mask.sum()) != int(control_mask.sum()):
+            control_masks[selected_index, position_by_dense[int(value)]] = True
+        if int(evidence_masks[selected_index].sum()) != int(
+            control_masks[selected_index].sum()
+        ):
             raise ValueError(f"cache W/C token count mismatch for {record['pair_id']}")
-        own_h = h[sample : sample + 1]
-        own_valid = valid[sample : sample + 1]
-        fill = 0.0
-        h_evidence = apply_input_intervention(own_h, evidence_mask[None], own_valid, fill)
-        h_control = apply_input_intervention(own_h, control_mask[None], own_valid, fill)
-        video_evidence, _ = model.encode_video(h_evidence, own_valid)
-        video_control, _ = model.encode_video(h_control, own_valid)
-        positive = _slice_text(clean_text, sample)
-        encoded = encode_cico_text(
-            record["negative_captions"][0], tokenizer, int(config["data"]["max_words"])
-        )
-        negative = model.encode_text(*(value.unsqueeze(0).to(device) for value in encoded))
-        clean_margins.append(
-            _paired_margin(
-                model,
-                _slice_video(clean_video, sample),
-                positive,
-                negative,
-                float(config["model"]["dual_mix"]),
-            )
-        )
-        evidence_margins.append(
-            _paired_margin(
-                model, video_evidence, positive, negative, float(config["model"]["dual_mix"])
-            )
-        )
-        control_margins.append(
-            _paired_margin(
-                model, video_control, positive, negative, float(config["model"]["dual_mix"])
+        negative_inputs.append(
+            encode_cico_text(
+                record["negative_captions"][0],
+                tokenizer,
+                int(config["data"]["max_words"]),
             )
         )
         reliability.append(float(record["rho"]))
-    clean_tensor = torch.stack(clean_margins)
-    evidence_tensor = torch.stack(evidence_margins)
-    control_tensor = torch.stack(control_margins)
+
+    h_evidence = apply_input_intervention(
+        selected_h, evidence_masks, selected_valid, 0.0
+    )
+    h_control = apply_input_intervention(
+        selected_h, control_masks, selected_valid, 0.0
+    )
+    encoder_microbatch = int(config["evidence"].get("encoder_microbatch_size", 32))
+    checkpoint_activations = bool(
+        config["evidence"].get("activation_checkpoint", True)
+    )
+    video_evidence, evidence_encoder_calls = _checkpointed_video_batches(
+        model,
+        h_evidence,
+        selected_valid,
+        microbatch_size=encoder_microbatch,
+        activation_checkpoint=checkpoint_activations,
+    )
+    video_control, control_encoder_calls = _checkpointed_video_batches(
+        model,
+        h_control,
+        selected_valid,
+        microbatch_size=encoder_microbatch,
+        activation_checkpoint=checkpoint_activations,
+    )
+    negative_tensors = tuple(
+        torch.stack([item[index] for item in negative_inputs]).to(device)
+        for index in range(3)
+    )
+    negative = model.encode_text(*negative_tensors)
+    positive = TextEncoding(
+        clean_text.mask.index_select(0, sample_indexes),
+        clean_text.tokens.index_select(0, sample_indexes),
+        clean_text.cls.index_select(0, sample_indexes),
+    )
+    clean_selected = VideoEncoding(
+        clean_video.mask.index_select(0, sample_indexes),
+        clean_video.tokens.index_select(0, sample_indexes),
+        clean_video.cls.index_select(0, sample_indexes),
+    )
+    score_microbatch = int(config["evidence"].get("score_microbatch_size", 32))
+    dual_mix = float(config["model"]["dual_mix"])
+    clean_tensor, clean_score_calls = _paired_margins(
+        model,
+        clean_selected,
+        positive,
+        negative,
+        dual_mix,
+        microbatch_size=score_microbatch,
+    )
+    evidence_tensor, evidence_score_calls = _paired_margins(
+        model,
+        video_evidence,
+        positive,
+        negative,
+        dual_mix,
+        microbatch_size=score_microbatch,
+    )
+    control_tensor, control_score_calls = _paired_margins(
+        model,
+        video_control,
+        positive,
+        negative,
+        dual_mix,
+        microbatch_size=score_microbatch,
+    )
     reliability_tensor = torch.tensor(reliability, device=device)
     dep, inv = evidence_losses(
         clean_tensor,
@@ -256,6 +370,11 @@ def _evidence_objective(
         "clean_margin_mean": float(clean_tensor.detach().float().mean()),
         "evidence_removed_margin_mean": float(evidence_tensor.detach().float().mean()),
         "control_removed_margin_mean": float(control_tensor.detach().float().mean()),
+        "video_encoder_calls": evidence_encoder_calls + control_encoder_calls,
+        "paired_score_calls": (
+            clean_score_calls + evidence_score_calls + control_score_calls
+        ),
+        "negative_text_encoder_calls": 1,
     }
     return dep, inv, len(selected), diagnostics
 
@@ -666,11 +785,14 @@ def train(
             invariance = zero
             keep = zero
             evidence_count = 0
-            evidence_diagnostics: dict[str, float | None] = {
+            evidence_diagnostics: dict[str, float | int | None] = {
                 "rho_mean": None,
                 "clean_margin_mean": None,
                 "evidence_removed_margin_mean": None,
                 "control_removed_margin_mean": None,
+                "video_encoder_calls": 0,
+                "paired_score_calls": 0,
+                "negative_text_encoder_calls": 0,
             }
             batch_aux_records = 0
             batch_aux_rho_mean = None
@@ -872,6 +994,16 @@ def train(
                     "student_text": 2 + int(caption_count) + evidence_count,
                     "teacher_video": 1 if teacher is not None else 0,
                     "teacher_text": 1 if teacher is not None else 0,
+                    "student_video_calls": 1
+                    + int(evidence_diagnostics["video_encoder_calls"] or 0),
+                    "student_paired_score_calls": int(
+                        evidence_diagnostics["paired_score_calls"] or 0
+                    ),
+                    "student_text_calls": (
+                        2
+                        + int(caption_count)
+                        + int(evidence_diagnostics["negative_text_encoder_calls"] or 0)
+                    ),
                 },
             }
             with log_path.open("a", encoding="utf-8") as handle:

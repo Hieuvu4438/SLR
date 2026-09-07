@@ -5,7 +5,15 @@ import torch
 from elsc.data.cache_dataset import lexical_tensors_from_batch
 from elsc.losses.lexical import lexical_loss
 from elsc.models.adapter import LocalHead, LocalResidualAdapter
-from elsc.train import _auxiliary_gradient_diagnostic
+from elsc.models.retriever import ELSCRetriever
+from elsc.train import _auxiliary_gradient_diagnostic, _checkpointed_video_batches
+
+
+class IdentityVideoCore(torch.nn.Module):
+    def get_visual_output(self, video, mask, shaped, video_frame, get_hidden):
+        assert shaped and video_frame == 1 and get_hidden
+        tokens = video.squeeze(-1).transpose(1, 2)
+        return mask[:, 1:], tokens, tokens.mean(dim=1)
 
 
 def test_zero_init_gradient_reaches_up_then_down_after_update():
@@ -74,3 +82,32 @@ def test_auxiliary_gradient_diagnostic_accepts_frozen_adapter_control():
     assert diagnostics["adapter_up"] == 0.0
     assert diagnostics["adapter_down"] == 0.0
     assert diagnostics["local_head"] > 0.0
+
+
+def test_checkpointed_video_microbatches_preserve_values_and_adapter_gradient():
+    torch.manual_seed(19)
+    model = ELSCRetriever(
+        IdentityVideoCore(),
+        input_dim=8,
+        hidden_dim=4,
+        text_dim=8,
+        core_frozen=True,
+        adapter_enabled=True,
+    )
+    h = torch.randn(5, 3, 8)
+    valid = torch.ones(5, 3, dtype=torch.bool)
+    direct, _ = model.encode_video(h, valid)
+    checkpointed, calls = _checkpointed_video_batches(
+        model,
+        h,
+        valid,
+        microbatch_size=2,
+        activation_checkpoint=True,
+    )
+    assert calls == 3
+    assert torch.equal(checkpointed.mask, direct.mask)
+    assert torch.equal(checkpointed.tokens, direct.tokens)
+    assert torch.equal(checkpointed.cls, direct.cls)
+    checkpointed.tokens.sum().backward()
+    assert model.adapter.up.weight.grad is not None
+    assert model.adapter.up.weight.grad.norm() > 0

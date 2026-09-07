@@ -143,6 +143,10 @@ def validate_config(config: Mapping[str, Any], *, stage: str | None = None) -> N
             raise ConfigError("only evidence.mask_fill=zero is implemented")
         if int(evidence.get("max_pairs_per_video", 1)) < 1:
             raise ConfigError("evidence.max_pairs_per_video must be positive")
+        if int(evidence.get("encoder_microbatch_size", 32)) < 1:
+            raise ConfigError("evidence.encoder_microbatch_size must be positive")
+        if int(evidence.get("score_microbatch_size", 32)) < 1:
+            raise ConfigError("evidence.score_microbatch_size must be positive")
     method = config.get("method", "elsc")
     if method not in {"baseline", "elsc", "matched_caption", "local_word_video"}:
         raise ConfigError(f"unsupported method: {method}")

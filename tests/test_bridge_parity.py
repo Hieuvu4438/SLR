@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 from elsc.models.adapter import LocalResidualAdapter
-from elsc.upstream.cico_bridge import CiCoBridge
+from elsc.upstream.cico_bridge import CiCoBridge, TextEncoding, VideoEncoding
 
 
 class DummyCore(nn.Module):
@@ -23,6 +23,34 @@ class DummyCore(nn.Module):
     def get_similarity_logits(self, text, video, text_mask, video_mask, **kwargs):
         base = video.mean(1) @ text.mean(1).T
         return base, base + torch.arange(base.shape[0], device=base.device)[:, None] * 0.01, ()
+
+
+class DummyFilipCore(nn.Module):
+    sim_header = "Filip"
+
+    def __init__(self):
+        super().__init__()
+        self.clip = nn.Module()
+        self.clip.logit_scale = nn.Parameter(torch.tensor(1.25))
+
+    def get_similarity_logits(self, text, video, text_mask, video_mask, **kwargs):
+        video_valid = video_mask == 0
+        text_valid = text_mask == 1
+        video = video / video.norm(dim=-1, keepdim=True)
+        text = text / text.norm(dim=-1, keepdim=True)
+        similarity = torch.einsum("afs,bts->abft", video, text)
+        i2t_token = torch.nansum(
+            similarity * torch.softmax(similarity / 0.07, dim=3), dim=3
+        )
+        i2t_token = i2t_token.masked_fill(~video_valid[:, None, :], 0.0)
+        i2t = i2t_token.sum(dim=2) / video_valid.sum(dim=1)[:, None]
+        t2i_token = torch.nansum(
+            similarity * torch.softmax(similarity / 0.07, dim=2), dim=2
+        )
+        t2i_token = t2i_token.masked_fill(~text_valid[None, :, :], 0.0)
+        t2i = t2i_token.sum(dim=2) / text_valid.sum(dim=1)[None, :]
+        scale = self.clip.logit_scale.exp()
+        return scale * i2t, scale * t2i, ()
 
 
 def test_feature_bridge_shape_and_mask():
@@ -60,3 +88,24 @@ def test_paired_score_matches_aligned_all_pairs_entries():
     i2t, t2i = bridge.score(video, text, objective=True)
     expected = bridge.mixed_score(i2t, t2i, 0.3).diagonal()
     assert torch.equal(bridge.paired_score(video, text, dual_mix=0.3), expected)
+
+
+def test_paired_filip_score_matches_all_pairs_diagonal_without_quadratic_tensor():
+    torch.manual_seed(11)
+    bridge = CiCoBridge(DummyFilipCore())
+    video = VideoEncoding(
+        mask=torch.tensor([[0, 0, 1, 1], [0, 0, 0, 1], [0, 0, 0, 0]]),
+        tokens=torch.randn(3, 4, 8, requires_grad=True),
+        cls=torch.randn(3, 8),
+    )
+    text = TextEncoding(
+        mask=torch.tensor([[1, 1, 0], [1, 1, 1], [1, 0, 0]]),
+        tokens=torch.randn(3, 3, 8),
+        cls=torch.randn(3, 8),
+    )
+    i2t, t2i = bridge.score(video, text, objective=True)
+    expected = bridge.mixed_score(i2t, t2i, 0.3).diagonal()
+    actual = bridge.paired_score(video, text, dual_mix=0.3)
+    assert torch.allclose(actual, expected, atol=2e-6, rtol=1e-6)
+    actual.sum().backward()
+    assert video.tokens.grad is not None and torch.isfinite(video.tokens.grad).all()
