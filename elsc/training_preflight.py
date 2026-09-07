@@ -133,14 +133,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--batch-size", type=int)
     parser.add_argument("--min-free-after-gib", type=float, default=4.0)
     args = parser.parse_args(argv)
     if args.min_free_after_gib < 0:
         raise ValueError("min-free-after-gib must be nonnegative")
+    if args.batch_size is not None and args.batch_size < 1:
+        raise ValueError("batch-size must be positive")
     output = Path(args.output)
     try:
+        config = load_config(args.config, stage="train")
+        if args.batch_size is not None:
+            config["train"]["per_device_batch"] = args.batch_size
         result = run_preflight(
-            load_config(args.config, stage="train"),
+            config,
             device=torch.device(args.device),
             min_free_after_gib=args.min_free_after_gib,
         )
