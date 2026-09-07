@@ -47,7 +47,8 @@ the terms/provenance of the upstream SLRT repository.
 
 ## End-to-end commands
 
-Feature extraction is resumable and can wait in the background until the shared GPU is idle:
+Feature extraction is resumable and can wait in the background until the shared GPU has enough
+free VRAM; training and parity checks still require an idle device:
 
 ```bash
 tmux new-session -d -s elsc_ph_i3d 'bash scripts/run_ph_i3d_extraction.sh'
@@ -62,6 +63,9 @@ python -m elsc.audit --config configs/ph_base.yaml --stage assets
 python -m elsc.audit --config configs/ph_base.yaml --stage checkpoint
 python -m elsc.prepare --config configs/ph_base.yaml --splits train dev test
 python -m elsc.audit --config configs/ph_base.yaml --stage parity
+python -m elsc.training_preflight --config configs/ph_base.yaml \
+  --batch-size 512 --min-free-after-gib 4 \
+  --output artifacts/preflight/ph_base_b512.json
 python -m elsc.train --config configs/ph_base.yaml --run-dir runs/ph_base_s42
 
 # Set model.teacher_checkpoint to the dev-selected baseline and preserve selection provenance.
@@ -89,6 +93,9 @@ checkpoint. It will fail rather than infer receptive fields from sequence length
 - exact CiCo BPE token identity including its `linspace` long-caption subsampling;
 - teacher frozen in eval mode while student gradients pass through the frozen transformer;
 - train-only cache with teacher/manifest/tokenizer/feature-fusion hashes;
+- generated feature SHA/checkpoint/recipe sidecars and verified receptive-field metadata before
+  manifest creation;
+- a real train-only optimizer-step GPU preflight before committing a long-run batch size;
 - exact balanced/depart CLCL losses, lexical log-sum-exp margin, Huber evidence loss, and KL direction;
 - FP32/FP16/BF16 training with GradScaler state, accumulation-aware clipping and exact resume;
 - full `video × text` score orientation, multi-positive ID mappings, exact CiCo tie behavior,
