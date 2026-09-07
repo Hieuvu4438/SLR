@@ -9,8 +9,8 @@ import zipfile
 from collections import Counter
 from pathlib import Path, PurePosixPath
 
-from elsc.resources import require_storage_budget
-from elsc.utils import atomic_json_dump, ordered_hash, sha256_file
+from slr_common.resources import require_storage_budget
+from slr_common.utils import atomic_json_dump, ordered_hash, sha256_file
 
 
 ARCHIVE_SHA256 = "9ba1956cf416df9a31ae3d1a71a3fa9a2d1e2b3724670288b608c8d4eb895c51"

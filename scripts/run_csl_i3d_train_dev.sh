@@ -86,7 +86,7 @@ common_args=(
 printf '%s extraction_start git_commit=%s test_accessed=false\n' \
   "$(date --iso-8601=seconds)" "$(git rev-parse HEAD)" >>"$launcher_log"
 
-timeout "$timeout_seconds" python -m elsc.features.i3d \
+timeout "$timeout_seconds" python -m slr_common.features.i3d \
   "${common_args[@]}" \
   --checkpoint "$agnostic_checkpoint" \
   --expected-checkpoint-sha256 "$agnostic_sha" \
@@ -95,7 +95,7 @@ timeout "$timeout_seconds" python -m elsc.features.i3d \
   >>"$log_root/csl_i3d_agnostic_train_dev.log" 2>&1 &
 agnostic_pid=$!
 
-timeout "$timeout_seconds" python -m elsc.features.i3d \
+timeout "$timeout_seconds" python -m slr_common.features.i3d \
   "${common_args[@]}" \
   --checkpoint "$aware_checkpoint" \
   --expected-checkpoint-sha256 "$aware_sha" \

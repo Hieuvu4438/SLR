@@ -70,7 +70,7 @@ run_extraction() {
   wait_for_gpu_capacity
   printf '%s start stream=%s split=%s\n' \
     "$(date --iso-8601=seconds)" "$stream" "$split" >>"$log_path"
-  PYTHONUNBUFFERED=1 python -m elsc.features.i3d \
+  PYTHONUNBUFFERED=1 python -m slr_common.features.i3d \
     --video-root "$video_root" \
     --checkpoint "$checkpoint" \
     --expected-checkpoint-sha256 "$checkpoint_sha" \
@@ -106,7 +106,7 @@ printf '%s complete official_release_test_parity\n' \
 
 wait_for_idle_gpu
 printf '%s start i3d_release_feature_parity\n' "$(date --iso-8601=seconds)" >>"$log_path"
-PYTHONUNBUFFERED=1 python -m elsc.features.validate_release \
+PYTHONUNBUFFERED=1 python -m slr_common.features.validate_release \
   --device cuda:0 \
   --batch-size 32 \
   --min-free-disk-gib 20 \
