@@ -1,0 +1,7 @@
+extends: ph_min.yaml
+experiment: ph_elsc_balanced_lexical
+loss:
+  # The registered runs measure L_lex at roughly 5x L_coarse early in
+  # training. Balance the unweighted objective magnitudes without changing
+  # the optimizer, schedule, support cache, or training budget.
+  lexical_weight: 0.02
