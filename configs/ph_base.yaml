@@ -87,7 +87,9 @@ caption:
 
 train:
   epochs: 200
-  per_device_batch: 32
+  # Measured on RTX 5880 Ada with the real train-only optimizer-step preflight:
+  # 44.73 GB peak reserved, 5.70 GB free, and a 511-example negative pool.
+  per_device_batch: 512
   accumulation_steps: 1
   optimizer: adamw
   optimizer_provenance: pytorch_adamw_with_cico_beta2_epsilon_and_weight_decay

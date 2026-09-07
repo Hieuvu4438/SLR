@@ -86,6 +86,11 @@ python -m elsc.report --baseline-runs runs/ph_base_s42 --method-runs runs/ph_min
   --split dev --output artifacts/reports/ph_min_vs_base_dev.json
 ```
 
+The checked-in PH batch size is 512. It was accepted only after a real BF16
+optimizer-step preflight on the RTX 5880 Ada measured 44.73 GB peak reserved
+memory and 5.70 GB free memory after the step. Do not run another GPU workload
+alongside this training configuration.
+
 `ph_full.yaml` additionally requires verified receptive-field metadata and a selected ELSC-Min
 checkpoint. Resolve it with the baseline kept as teacher and Min used only for student
 initialization:
