@@ -47,3 +47,16 @@ def test_mixed_score_does_not_transpose_t2i():
     t2i = torch.tensor([[10.0, 20.0], [30.0, 40.0]])
     mixed = CiCoBridge.mixed_score(i2t, t2i, 0.25)
     assert torch.equal(mixed, 0.25 * i2t + 0.75 * t2i)
+
+
+def test_paired_score_matches_aligned_all_pairs_entries():
+    bridge = CiCoBridge(DummyCore())
+    h = torch.randn(3, 4, 8)
+    valid = torch.ones(3, 4, dtype=torch.bool)
+    ids = torch.tensor([[1, 2, 3], [3, 4, 5], [5, 6, 7]])
+    mask = torch.ones_like(ids)
+    video = bridge.encode_video(h, valid)
+    text = bridge.encode_text(ids, torch.zeros_like(ids), mask)
+    i2t, t2i = bridge.score(video, text, objective=True)
+    expected = bridge.mixed_score(i2t, t2i, 0.3).diagonal()
+    assert torch.equal(bridge.paired_score(video, text, dual_mix=0.3), expected)
