@@ -116,8 +116,8 @@ printf '%s complete i3d_release_feature_parity\n' "$(date --iso-8601=seconds)" >
 for split in dev test train; do
   run_extraction domain_agnostic "$agnostic_checkpoint" "$agnostic_sha" "$split" \
     artifacts/features_reextracted/ph_domain_agnostic
-  run_extraction domain_aware_h2s_transfer "$aware_checkpoint" "$aware_sha" "$split" \
-    artifacts/features_reextracted/ph_domain_aware_h2s_transfer
+  run_extraction domain_aware_h2s_transfer_gpu "$aware_checkpoint" "$aware_sha" "$split" \
+    artifacts/features_reextracted/ph_domain_aware_h2s_transfer_gpu
 done
 
 printf '%s all_feature_extraction_complete\n' "$(date --iso-8601=seconds)" >>"$log_path"
