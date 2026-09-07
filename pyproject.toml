@@ -26,7 +26,8 @@ translation = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["elsc*"]
+where = ["methods/elsc", "shared"]
+include = ["elsc*", "slr_common*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
