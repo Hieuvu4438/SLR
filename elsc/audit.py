@@ -58,11 +58,11 @@ def _pickle_keys(path: Path | None) -> set[str] | None:
     return {str(key) for key in value} if isinstance(value, dict) else None
 
 
-def _official_keys(path: Path | None) -> set[str] | None:
+def _official_keys(path: Path | None, *, delimiter: str = "|") -> set[str] | None:
     if path is None or not path.is_file():
         return None
     with path.open("r", encoding="utf-8", newline="") as handle:
-        return {str(row["name"]) for row in csv.DictReader(handle, delimiter="|")}
+        return {str(row["name"]) for row in csv.DictReader(handle, delimiter=delimiter)}
 
 
 def audit_assets(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
@@ -71,6 +71,13 @@ def audit_assets(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
     )
     paths: dict[str, dict[str, Any]] = {}
     sources = config.get("sources", {})
+    prepared_splits = tuple(sources.get("prepared_splits", ("train", "dev", "test")))
+    if not prepared_splits or len(set(prepared_splits)) != len(prepared_splits):
+        raise ValueError("sources.prepared_splits must be non-empty and unique")
+    invalid_splits = set(prepared_splits) - {"train", "dev", "test"}
+    if invalid_splits:
+        raise ValueError(f"invalid prepared splits: {sorted(invalid_splits)}")
+    official_delimiter = str(sources.get("official_annotation_delimiter", "|"))
     for key in (
         "train_annotation",
         "dev_annotation",
@@ -122,8 +129,11 @@ def audit_assets(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             continue
         stream_complete = True
         stream_splits: dict[str, Any] = {}
-        for split in ("train", "dev", "test"):
-            official = _official_keys(_resolve(root, sources.get(f"{split}_official_annotation")))
+        for split in prepared_splits:
+            official = _official_keys(
+                _resolve(root, sources.get(f"{split}_official_annotation")),
+                delimiter=official_delimiter,
+            )
             actual = {path.stem for path in (feature_root / split).glob("*.pkl")}
             missing_ids = sorted((official or set()) - actual)
             extra_ids = sorted(actual - (official or set())) if official is not None else []
@@ -151,9 +161,17 @@ def audit_assets(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
         "model.init_checkpoint",
         "upstream.cico_root",
     }
-    for split in ("train", "dev", "test"):
+    for split in prepared_splits:
         if sources.get(f"{split}_official_annotation") is not None:
             required_keys.add(f"sources.{split}_official_annotation")
+    required_keys = {
+        key
+        for key in required_keys
+        if not key.startswith("sources.")
+        or not key.endswith("_annotation")
+        or any(key == f"sources.{split}_annotation" for split in prepared_splits)
+        or any(key == f"sources.{split}_official_annotation" for split in prepared_splits)
+    }
     if config.get("method") != "baseline":
         required_keys.add("model.teacher_checkpoint")
     if config.get("evidence", {}).get("enabled"):
@@ -174,9 +192,12 @@ def audit_assets(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
     commit_ok = actual_commit == expected_commit
     split_integrity: dict[str, Any] = {}
     official_sets: dict[str, set[str]] = {}
-    for split in ("train", "dev", "test"):
+    for split in prepared_splits:
         source_keys = _pickle_keys(_resolve(root, sources.get(f"{split}_annotation")))
-        official_keys = _official_keys(_resolve(root, sources.get(f"{split}_official_annotation")))
+        official_keys = _official_keys(
+            _resolve(root, sources.get(f"{split}_official_annotation")),
+            delimiter=official_delimiter,
+        )
         if source_keys is not None and official_keys is not None:
             official_sets[split] = official_keys
             split_integrity[split] = {
@@ -223,6 +244,7 @@ def audit_assets(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "cross_split_official_id_overlap": cross_split_overlap,
             "split_integrity_ok": split_integrity_ok,
             "feature_split_integrity": feature_split_integrity,
+            "prepared_splits": list(prepared_splits),
         },
         "upstream": {
             "expected_commit": expected_commit,
