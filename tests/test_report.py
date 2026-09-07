@@ -7,10 +7,15 @@ import pytest
 
 from elsc.config import config_hash, load_config
 from elsc.report import ReportContractError, compare_runs
-from elsc.utils import sha256_file
+from elsc.utils import ordered_hash, sha256_file
 
 
-def _write_run(root: Path, seed: int, ranks: tuple[list[int], list[int]], id_hash: str) -> Path:
+def _write_run(
+    root: Path,
+    seed: int,
+    ranks: tuple[list[int], list[int]],
+    id_prefix: str = "",
+) -> Path:
     root.mkdir(parents=True)
     dev_manifest = root / "dev.jsonl"
     dev_manifest.write_text("{}\n", encoding="utf-8")
@@ -34,7 +39,8 @@ def _write_run(root: Path, seed: int, ranks: tuple[list[int], list[int]], id_has
     output = root / "evaluation" / "dev"
     output.mkdir(parents=True)
     directions = {}
-    ids = ["v0", "v1", "v2"]
+    ids = [f"{id_prefix}v0", f"{id_prefix}v1", f"{id_prefix}v2"]
+    text_ids = [f"{id_prefix}t0", f"{id_prefix}t1", f"{id_prefix}t2"]
     for direction, values in zip(("V2T", "T2V"), ranks, strict=True):
         directions[direction] = {
             "R1": 100.0 * sum(rank < 1 for rank in values) / 3,
@@ -43,12 +49,14 @@ def _write_run(root: Path, seed: int, ranks: tuple[list[int], list[int]], id_has
             "MedianR": 1.0,
             "MeanR": 1.0 + sum(values) / 3,
         }
-        query_ids = ids if direction == "V2T" else ["t0", "t1", "t2"]
+        query_ids = ids if direction == "V2T" else text_ids
+        candidate_ids = text_ids if direction == "V2T" else ids
         directions.setdefault("per_query", {})[direction] = [
             {
                 "query_id": query,
                 "rank": rank,
-                "matched_positive_id": f"t{index}" if direction == "V2T" else ids[index],
+                "matched_positive_id": text_ids[index] if direction == "V2T" else ids[index],
+                "ranked_candidate_ids": candidate_ids,
             }
             for index, (query, rank) in enumerate(zip(query_ids, values, strict=True))
         ]
@@ -58,7 +66,13 @@ def _write_run(root: Path, seed: int, ranks: tuple[list[int], list[int]], id_has
         "units": "percent",
         "split": "dev",
         "checkpoint": {"path": str(checkpoint), "sha256": sha256_file(checkpoint)},
-        "id_hashes": {"videos": id_hash, "texts": id_hash},
+        "gallery": {"videos": len(ids), "texts": len(text_ids)},
+        "metric_kernel": "cico_direction_specific_singleton_tie_behavior",
+        "id_hashes": {
+            "videos": ordered_hash(ids),
+            "texts": ordered_hash(text_ids),
+            "positive_mapping": "fixture-positive-mapping",
+        },
         **directions,
     }
     (output / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
@@ -66,8 +80,8 @@ def _write_run(root: Path, seed: int, ranks: tuple[list[int], list[int]], id_has
 
 
 def test_paired_report_uses_query_identity_and_video_groups(tmp_path: Path):
-    baseline = _write_run(tmp_path / "base", 42, ([1, 0, 2], [1, 0, 2]), "same")
-    method = _write_run(tmp_path / "method", 42, ([0, 0, 2], [0, 0, 2]), "same")
+    baseline = _write_run(tmp_path / "base", 42, ([1, 0, 2], [1, 0, 2]))
+    method = _write_run(tmp_path / "method", 42, ([0, 0, 2], [0, 0, 2]))
     result = compare_runs(
         [baseline], [method], split="dev", bootstrap_samples=200, bootstrap_seed=7
     )
@@ -78,18 +92,42 @@ def test_paired_report_uses_query_identity_and_video_groups(tmp_path: Path):
 
 
 def test_paired_report_rejects_different_galleries(tmp_path: Path):
-    baseline = _write_run(tmp_path / "base", 42, ([0, 0, 0], [0, 0, 0]), "left")
-    method = _write_run(tmp_path / "method", 42, ([0, 0, 0], [0, 0, 0]), "right")
+    baseline = _write_run(tmp_path / "base", 42, ([0, 0, 0], [0, 0, 0]), "left-")
+    method = _write_run(tmp_path / "method", 42, ([0, 0, 0], [0, 0, 0]), "right-")
     with pytest.raises(ReportContractError, match="gallery ID hashes differ"):
         compare_runs([baseline], [method], split="dev", bootstrap_samples=100)
 
 
 def test_paired_report_rejects_metrics_from_nonselected_checkpoint(tmp_path: Path):
-    baseline = _write_run(tmp_path / "base", 42, ([0, 0, 0], [0, 0, 0]), "same")
-    method = _write_run(tmp_path / "method", 42, ([0, 0, 0], [0, 0, 0]), "same")
+    baseline = _write_run(tmp_path / "base", 42, ([0, 0, 0], [0, 0, 0]))
+    method = _write_run(tmp_path / "method", 42, ([0, 0, 0], [0, 0, 0]))
     metrics_path = method / "evaluation" / "dev" / "metrics.json"
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
     metrics["checkpoint"]["sha256"] = "0" * 64
     metrics_path.write_text(json.dumps(metrics), encoding="utf-8")
     with pytest.raises(ReportContractError, match="dev-selected checkpoint"):
+        compare_runs([baseline], [method], split="dev", bootstrap_samples=100)
+
+
+@pytest.mark.parametrize("missing", ["metric_kernel", "gallery"])
+def test_paired_report_rejects_missing_full_gallery_contract(tmp_path: Path, missing: str):
+    baseline = _write_run(tmp_path / "base", 42, ([0, 0, 0], [0, 0, 0]))
+    method = _write_run(tmp_path / "method", 42, ([0, 0, 0], [0, 0, 0]))
+    for run in (baseline, method):
+        metrics_path = run / "evaluation" / "dev" / "metrics.json"
+        metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+        metrics.pop(missing)
+        metrics_path.write_text(json.dumps(metrics), encoding="utf-8")
+    with pytest.raises(ReportContractError, match="metric kernel|gallery"):
+        compare_runs([baseline], [method], split="dev", bootstrap_samples=100)
+
+
+def test_paired_report_rejects_truncated_candidate_gallery(tmp_path: Path):
+    baseline = _write_run(tmp_path / "base", 42, ([0, 0, 0], [0, 0, 0]))
+    method = _write_run(tmp_path / "method", 42, ([0, 0, 0], [0, 0, 0]))
+    metrics_path = method / "evaluation" / "dev" / "metrics.json"
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    metrics["per_query"]["V2T"][0]["ranked_candidate_ids"].pop()
+    metrics_path.write_text(json.dumps(metrics), encoding="utf-8")
+    with pytest.raises(ReportContractError, match="full gallery"):
         compare_runs([baseline], [method], split="dev", bootstrap_samples=100)

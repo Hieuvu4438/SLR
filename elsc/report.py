@@ -10,7 +10,7 @@ import numpy as np
 
 from elsc.config import config_hash, load_config
 from elsc.provenance import ProvenanceError, validate_test_lock
-from elsc.utils import atomic_json_dump, sha256_file
+from elsc.utils import atomic_json_dump, ordered_hash, sha256_file
 
 
 RECALL_K = (1, 5, 10)
@@ -19,6 +19,86 @@ SUMMARY_METRICS = ("R1", "R5", "R10", "MedianR", "MeanR")
 
 class ReportContractError(ValueError):
     pass
+
+
+def _validate_full_gallery_metrics(metrics: dict[str, Any], path: Path) -> None:
+    if metrics.get("schema_version") != 1:
+        raise ReportContractError(f"unsupported metrics schema: {path}")
+    if metrics.get("metric_kernel") not in {
+        "cico_direction_specific_singleton_tie_behavior",
+        "id_multi_positive_best_rank",
+    }:
+        raise ReportContractError(f"missing or unsupported metric kernel: {path}")
+    gallery = metrics.get("gallery")
+    if not isinstance(gallery, dict):
+        raise ReportContractError(f"metrics lack full-gallery cardinalities: {path}")
+    try:
+        video_count = int(gallery["videos"])
+        text_count = int(gallery["texts"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ReportContractError(f"invalid full-gallery cardinalities: {path}") from error
+    if video_count < 1 or text_count < 1:
+        raise ReportContractError(f"full gallery must be non-empty: {path}")
+    id_hashes = metrics.get("id_hashes")
+    if not isinstance(id_hashes, dict) or any(
+        not isinstance(id_hashes.get(name), str) for name in ("videos", "texts", "positive_mapping")
+    ):
+        raise ReportContractError(f"metrics lack gallery ID hashes: {path}")
+
+    direction_contracts = {
+        "V2T": (video_count, text_count, "videos"),
+        "T2V": (text_count, video_count, "texts"),
+    }
+    query_ids_by_direction: dict[str, list[str]] = {}
+    candidate_ids_by_direction: dict[str, set[str]] = {}
+    for direction, (query_count, candidate_count, hash_name) in direction_contracts.items():
+        records = metrics.get("per_query", {}).get(direction)
+        if not isinstance(records, list) or len(records) != query_count:
+            raise ReportContractError(
+                f"{direction} query count does not match the full gallery: {path}"
+            )
+        query_ids = [str(record.get("query_id")) for record in records]
+        if len(set(query_ids)) != query_count:
+            raise ReportContractError(f"duplicate {direction} query IDs: {path}")
+        if ordered_hash(query_ids) != id_hashes[hash_name]:
+            raise ReportContractError(
+                f"{direction} ordered query IDs do not match their gallery hash: {path}"
+            )
+        expected_candidates: set[str] | None = None
+        for record in records:
+            ranked = record.get("ranked_candidate_ids")
+            if (
+                not isinstance(ranked, list)
+                or len(ranked) != candidate_count
+                or len({str(value) for value in ranked}) != candidate_count
+            ):
+                raise ReportContractError(
+                    f"{direction} ranked candidates do not contain the full gallery: {path}"
+                )
+            candidates = {str(value) for value in ranked}
+            if expected_candidates is None:
+                expected_candidates = candidates
+            elif candidates != expected_candidates:
+                raise ReportContractError(
+                    f"{direction} candidate set changes between queries: {path}"
+                )
+            try:
+                rank = int(record["rank"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise ReportContractError(f"invalid {direction} query rank: {path}") from error
+            if not 0 <= rank < candidate_count:
+                raise ReportContractError(f"out-of-range {direction} query rank: {path}")
+            if str(record.get("matched_positive_id")) not in candidates:
+                raise ReportContractError(
+                    f"{direction} matched positive is absent from the gallery: {path}"
+                )
+        query_ids_by_direction[direction] = query_ids
+        candidate_ids_by_direction[direction] = expected_candidates or set()
+
+    if candidate_ids_by_direction["V2T"] != set(query_ids_by_direction["T2V"]):
+        raise ReportContractError(f"V2T candidate IDs differ from T2V query IDs: {path}")
+    if candidate_ids_by_direction["T2V"] != set(query_ids_by_direction["V2T"]):
+        raise ReportContractError(f"T2V candidate IDs differ from V2T query IDs: {path}")
 
 
 def _load_run(run_dir: Path, split: str) -> dict[str, Any]:
@@ -44,10 +124,10 @@ def _load_run(run_dir: Path, split: str) -> dict[str, Any]:
         raise ReportContractError(f"invalid evaluation contract: {metrics_path}")
     if metrics.get("split") != split:
         raise ReportContractError(f"metrics split does not match requested split: {metrics_path}")
+    _validate_full_gallery_metrics(metrics, metrics_path)
     metric_checkpoint = metrics.get("checkpoint")
-    if (
-        not isinstance(metric_checkpoint, dict)
-        or metric_checkpoint.get("sha256") != selection.get("checkpoint_sha256")
+    if not isinstance(metric_checkpoint, dict) or metric_checkpoint.get("sha256") != selection.get(
+        "checkpoint_sha256"
     ):
         raise ReportContractError(
             f"metrics were not produced from the dev-selected checkpoint: {metrics_path}"
