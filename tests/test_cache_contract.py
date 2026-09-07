@@ -5,6 +5,7 @@ import torch
 
 from elsc.data.cache_dataset import (
     CacheMismatchError,
+    _shuffled_lexical_id,
     lexical_tensors_from_batch,
     validate_cache_meta,
 )
@@ -86,3 +87,41 @@ def test_random_support_abstains_without_duration_matched_disjoint_span():
         random_span_duration_tolerance=0.10,
     )
     assert len(support_z) == 0
+
+
+def test_shuffled_lexical_control_is_fixed_point_free_and_batch_independent():
+    vocabulary_size = 11
+    mapping = [
+        _shuffled_lexical_id(word_id, vocabulary_size, seed=42)
+        for word_id in range(vocabulary_size)
+    ]
+    assert sorted(mapping) == list(range(vocabulary_size))
+    assert all(mapped != original for original, mapped in enumerate(mapping))
+
+    z = torch.randn(1, 2, 3)
+    dense = torch.tensor([[0, 1]])
+    record = {
+        "pair_id": "pair-shuffle",
+        "word_id": 2,
+        "support_dense_indices": [0],
+        "support_weights": [1.0],
+        "negative_word_ids": [4, 6],
+        "rho": 1.0,
+    }
+    bank = torch.arange(vocabulary_size * 3, dtype=torch.float32).reshape(
+        vocabulary_size, 3
+    )
+    _, _, positive, negative, valid, _ = lexical_tensors_from_batch(
+        z,
+        dense,
+        [[record]],
+        bank,
+        support_mode="shuffled_lexical",
+        seed=42,
+    )
+    expected_positive = _shuffled_lexical_id(2, vocabulary_size, 42)
+    expected_negatives = [
+        _shuffled_lexical_id(word_id, vocabulary_size, 42) for word_id in (4, 6)
+    ]
+    assert torch.equal(positive[0], bank[expected_positive])
+    assert torch.equal(negative[0, valid[0]], bank[expected_negatives])

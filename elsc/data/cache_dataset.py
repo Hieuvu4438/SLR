@@ -47,6 +47,15 @@ def validate_cache_meta(meta: dict[str, Any], expected: dict[str, Any]) -> None:
         raise CacheMismatchError(f"cache metadata mismatch: {details}")
 
 
+def _shuffled_lexical_id(word_id: int, vocabulary_size: int, seed: int) -> int:
+    if vocabulary_size < 2:
+        raise CacheMismatchError("shuffled lexical control requires at least two words")
+    if not 0 <= word_id < vocabulary_size:
+        raise CacheMismatchError(f"word ID {word_id} is outside lexical bank")
+    offset = 1 + stable_seed(seed, "shuffled_lexical_vocab_v1") % (vocabulary_size - 1)
+    return (word_id + offset) % vocabulary_size
+
+
 class AuxiliaryCache:
     def __init__(self, directory: str | Path, expected_meta: dict[str, Any]):
         root = Path(directory)
@@ -165,10 +174,13 @@ def lexical_tensors_from_batch(
     negative = z.new_zeros((count, max_negatives, dimension), dtype=torch.float32)
     negative_valid = torch.zeros((count, max_negatives), dtype=torch.bool, device=z.device)
     rho = z.new_zeros((count,), dtype=torch.float32)
-    word_ids = [item[2] for item in occurrences]
-    if support_mode == "shuffled_lexical" and len(word_ids) > 1:
-        word_ids = word_ids[1:] + word_ids[:1]
-    for index, ((tokens, weights, _, negatives, reliability), word_id) in enumerate(zip(occurrences, word_ids, strict=True)):
+    for index, (tokens, weights, word_id, negatives, reliability) in enumerate(occurrences):
+        if support_mode == "shuffled_lexical":
+            word_id = _shuffled_lexical_id(word_id, len(lexical_bank), seed)
+            negatives = [
+                _shuffled_lexical_id(value, len(lexical_bank), seed)
+                for value in negatives
+            ]
         support_z[index, : len(tokens)] = tokens
         support_weights[index, : len(weights)] = weights
         positive[index] = lexical_bank[word_id].to(z.device)
