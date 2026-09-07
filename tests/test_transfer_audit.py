@@ -6,7 +6,7 @@ import json
 import pickle
 from pathlib import Path
 
-from elsc.transfer_audit import audit_csl_daily, audit_how2sign
+from elsc.transfer_audit import audit_csl_daily, audit_how2sign, write_csl_video_lists
 
 
 def _touch_videos(root: Path, names: list[str]) -> None:
@@ -63,3 +63,9 @@ def test_csl_daily_audit_uses_union_inventory_and_disjoint_splits(tmp_path: Path
     assert result["status"] == "ready_for_feature_extraction"
     assert result["union_video_inventory"]["referenced_video_count"] == 3
     assert all(value["count"] == 0 for value in result["cross_split_pair_overlap"].values())
+
+    lists = write_csl_video_lists(root, tmp_path / "lists", ["train", "dev"])
+    assert (tmp_path / "lists" / "train.txt").read_text(encoding="utf-8") == "train.mp4\n"
+    assert set(lists) == {"train", "dev"}
+    assert lists["dev"]["count"] == 1
+    assert lists["dev"]["annotation_sha256"]

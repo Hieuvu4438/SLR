@@ -337,14 +337,82 @@ def _is_complete(
         return False
 
 
-def _collect_plan(video_root: Path, splits: list[str], recipe: ExtractionRecipe):
+def _parse_split_video_lists(
+    assignments: list[str], splits: list[str]
+) -> dict[str, Path]:
+    result: dict[str, Path] = {}
+    for assignment in assignments:
+        split, separator, raw_path = assignment.partition("=")
+        if not separator or split not in {"train", "dev", "test"} or not raw_path:
+            raise ValueError(
+                "--split-video-list must use SPLIT=PATH with split train, dev, or test"
+            )
+        if split in result:
+            raise ValueError(f"duplicate video-list assignment for split={split}")
+        result[split] = Path(raw_path)
+    if result and set(result) != set(splits):
+        raise ValueError(
+            "video-list assignments must exactly match requested splits: "
+            f"assigned={sorted(result)}, requested={sorted(splits)}"
+        )
+    return result
+
+
+def _listed_videos(video_root: Path, split: str, list_path: Path) -> list[Path]:
+    if not list_path.is_file():
+        raise FileNotFoundError(f"video list is missing for split={split}: {list_path}")
+    videos: list[Path] = []
+    seen: set[str] = set()
+    with list_path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, 1):
+            name = line.rstrip("\n\r")
+            candidate = Path(name)
+            if (
+                not name
+                or candidate.is_absolute()
+                or len(candidate.parts) != 1
+                or candidate.suffix.lower() != ".mp4"
+            ):
+                raise ValueError(
+                    f"invalid relative MP4 filename at {list_path}:{line_number}: {name!r}"
+                )
+            if name in seen:
+                raise ValueError(f"duplicate filename at {list_path}:{line_number}: {name}")
+            source = video_root / name
+            if not source.is_file():
+                raise FileNotFoundError(
+                    f"listed video is missing for split={split}: {source}"
+                )
+            seen.add(name)
+            videos.append(source)
+    if not videos:
+        raise ValueError(f"video list is empty for split={split}: {list_path}")
+    return videos
+
+
+def _collect_plan(
+    video_root: Path,
+    splits: list[str],
+    recipe: ExtractionRecipe,
+    split_video_lists: dict[str, Path] | None = None,
+):
     plan: list[tuple[str, Path, int, int]] = []
+    seen_sources: dict[str, str] = {}
     for split in splits:
-        split_root = video_root / split
-        videos = sorted(split_root.glob("*.mp4"))
+        if split_video_lists:
+            videos = _listed_videos(video_root, split, split_video_lists[split])
+        else:
+            split_root = video_root / split
+            videos = sorted(split_root.glob("*.mp4"))
         if not videos:
-            raise FileNotFoundError(f"no MP4 videos found: {split_root}")
+            raise FileNotFoundError(f"no MP4 videos found for split={split}")
         for video in videos:
+            source_key = str(video.resolve())
+            previous_split = seen_sources.setdefault(source_key, split)
+            if previous_split != split:
+                raise ValueError(
+                    f"video appears in multiple splits: {video} ({previous_split}, {split})"
+                )
             frames = _video_frame_count(video)
             windows = len(sliding_window_starts(frames, recipe.clip_frames, recipe.stride))
             plan.append((split, video, frames, windows))
@@ -397,7 +465,8 @@ def extract(args: argparse.Namespace) -> dict[str, Any]:
             f"checkpoint SHA-256 mismatch: {checkpoint_sha256} != "
             f"{args.expected_checkpoint_sha256}"
         )
-    plan = _collect_plan(video_root, args.splits, recipe)
+    split_video_lists = _parse_split_video_lists(args.split_video_list, args.splits)
+    plan = _collect_plan(video_root, args.splits, recipe, split_video_lists)
     raw_feature_bytes = sum(item[3] for item in plan) * FEATURE_DIM * 4
     missing_feature_bytes = sum(
         windows * FEATURE_DIM * 4
@@ -421,6 +490,13 @@ def extract(args: argparse.Namespace) -> dict[str, Any]:
         "output_root": str(output_root.resolve()),
         "temporal_metadata_root": str(temporal_root.resolve()),
         "splits": args.splits,
+        "split_video_lists": {
+            split: {
+                "path": str(path.resolve()),
+                "sha256": sha256_file(path),
+            }
+            for split, path in split_video_lists.items()
+        },
         "videos": len(plan),
         "windows": sum(item[3] for item in plan),
         "raw_feature_bytes": raw_feature_bytes,
@@ -562,6 +638,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-root", required=True)
     parser.add_argument("--temporal-metadata-root", required=True)
     parser.add_argument("--splits", nargs="+", choices=("train", "dev", "test"), required=True)
+    parser.add_argument(
+        "--split-video-list",
+        action="append",
+        default=[],
+        metavar="SPLIT=PATH",
+        help="read exact flat-root MP4 filenames for each requested split",
+    )
     parser.add_argument("--stride", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--device", default="cuda:0")

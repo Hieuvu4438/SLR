@@ -4,6 +4,7 @@ import argparse
 import csv
 import gzip
 import json
+import os
 import pickle
 import shutil
 from collections import Counter
@@ -278,6 +279,53 @@ def audit_csl_daily(root: Path) -> dict[str, Any]:
     return result
 
 
+def write_csl_video_lists(
+    root: Path, output_root: Path, splits: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Write exact, ordered flat-root video lists without copying dataset files."""
+
+    if not splits or len(set(splits)) != len(splits):
+        raise ValueError("video-list splits must be non-empty and unique")
+    invalid = set(splits) - {"train", "dev", "test"}
+    if invalid:
+        raise ValueError(f"invalid video-list splits: {sorted(invalid)}")
+    video_root = root / "videos"
+    output_root.mkdir(parents=True, exist_ok=True)
+    result: dict[str, dict[str, Any]] = {}
+    for split in splits:
+        annotation = root / f"{split}_data_with_num_frames.csv"
+        records = _csl_records(annotation)
+        names = [record.video_file for record in records]
+        if len(set(names)) != len(names):
+            raise ValueError(f"duplicate video references in split={split}")
+        for name in names:
+            path = Path(name)
+            if (
+                path.is_absolute()
+                or len(path.parts) != 1
+                or path.suffix.lower() != ".mp4"
+                or not (video_root / path).is_file()
+            ):
+                raise ValueError(f"invalid or missing flat-root video for split={split}: {name}")
+        output = output_root / f"{split}.txt"
+        temporary = output.with_suffix(output.suffix + f".tmp-{os.getpid()}")
+        with temporary.open("w", encoding="utf-8") as handle:
+            for name in names:
+                handle.write(name + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.replace(output)
+        result[split] = {
+            "path": str(output.resolve()),
+            "sha256": sha256_file(output),
+            "annotation": str(annotation.resolve()),
+            "annotation_sha256": sha256_file(annotation),
+            "count": len(names),
+            "ordered_video_filename_hash": ordered_hash(names),
+        }
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Audit existing transfer-dataset annotations and video identities"
@@ -286,6 +334,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", required=True)
     parser.add_argument("--auxiliary-label-root")
     parser.add_argument("--subset-root")
+    parser.add_argument("--video-list-root")
+    parser.add_argument(
+        "--video-list-splits",
+        nargs="+",
+        choices=("train", "dev", "test"),
+    )
     parser.add_argument("--output", required=True)
     args = parser.parse_args(argv)
     root = Path(args.root)
@@ -299,6 +353,16 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         result = audit_csl_daily(root)
+    if bool(args.video_list_root) != bool(args.video_list_splits):
+        parser.error("--video-list-root and --video-list-splits must be provided together")
+    if args.video_list_root:
+        if args.dataset != "csl_daily":
+            parser.error("ordered video-list export is currently supported for CSL-Daily")
+        if result["status"] != "ready_for_feature_extraction":
+            raise ValueError("refusing to export video lists from a blocked asset audit")
+        result["video_lists"] = write_csl_video_lists(
+            root, Path(args.video_list_root), args.video_list_splits
+        )
     atomic_json_dump(result, args.output)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result["status"] == "ready_for_feature_extraction" else 2

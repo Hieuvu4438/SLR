@@ -10,6 +10,8 @@ import pytest
 from elsc.features.i3d import (
     ExtractionRecipe,
     _acquire_extraction_lock,
+    _collect_plan,
+    _parse_split_video_lists,
     _temporal_metadata,
     preprocess_rgb_frame,
     sliding_window_starts,
@@ -82,3 +84,35 @@ def test_extraction_lock_acquires_unowned_split(tmp_path):
             poll_seconds=0.01,
         )
         assert waited >= 0
+
+
+def test_flat_video_lists_preserve_order_and_split_identity(tmp_path, monkeypatch):
+    for name in ("train-b.mp4", "train-a.mp4", "dev.mp4"):
+        (tmp_path / name).write_bytes(b"video")
+    train_list = tmp_path / "train.txt"
+    train_list.write_text("train-b.mp4\ntrain-a.mp4\n", encoding="utf-8")
+    dev_list = tmp_path / "dev.txt"
+    dev_list.write_text("dev.mp4\n", encoding="utf-8")
+    lists = _parse_split_video_lists(
+        [f"train={train_list}", f"dev={dev_list}"], ["train", "dev"]
+    )
+    monkeypatch.setattr("elsc.features.i3d._video_frame_count", lambda _: 20)
+    plan = _collect_plan(tmp_path, ["train", "dev"], ExtractionRecipe(), lists)
+    assert [(split, video.name, frames, windows) for split, video, frames, windows in plan] == [
+        ("train", "train-b.mp4", 20, 5),
+        ("train", "train-a.mp4", 20, 5),
+        ("dev", "dev.mp4", 20, 5),
+    ]
+
+
+def test_flat_video_lists_reject_incomplete_or_unsafe_assignments(tmp_path):
+    with pytest.raises(ValueError, match="exactly match"):
+        _parse_split_video_lists([f"train={tmp_path / 'train.txt'}"], ["train", "dev"])
+    unsafe = tmp_path / "unsafe.txt"
+    unsafe.write_text("../outside.mp4\n", encoding="utf-8")
+    outside = tmp_path.parent / "outside.mp4"
+    outside.write_bytes(b"video")
+    with pytest.raises(ValueError, match="invalid relative MP4"):
+        from elsc.features.i3d import _listed_videos
+
+        _listed_videos(tmp_path, "train", unsafe)
