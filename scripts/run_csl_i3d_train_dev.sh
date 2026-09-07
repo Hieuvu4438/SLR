@@ -38,8 +38,10 @@ from elsc.utils import sha256_file
 report_path, train_path, dev_path = map(Path, sys.argv[1:4])
 reserve_gib = float(sys.argv[4])
 report = json.loads(report_path.read_text(encoding="utf-8"))
-if report.get("status") != "planned" or report.get("splits") != ["train", "dev"]:
-    raise SystemExit("dry-run report is not a train+dev extraction plan")
+if report.get("status") not in {"planned", "running", "failed", "complete"}:
+    raise SystemExit("extraction report has an unsupported status")
+if report.get("splits") != ["train", "dev"]:
+    raise SystemExit("extraction report is not a train+dev plan")
 expected = report.get("split_video_lists", {})
 for split, path in (("train", train_path), ("dev", dev_path)):
     if expected.get(split, {}).get("sha256") != sha256_file(path):
