@@ -9,6 +9,7 @@ import pytest
 
 from elsc.data.manifest import ManifestRecord
 from elsc.prepare import (
+    _feature_provenance_mismatches,
     _validate_temporal_sidecar,
     _validated_feature_sidecar,
     cross_split_overlaps,
@@ -121,3 +122,33 @@ def test_generated_feature_and_temporal_sidecars_are_hash_checked(tmp_path):
         handle.write(b"tamper")
     with pytest.raises(ValueError, match="SHA-256 mismatch"):
         _validated_feature_sidecar(feature, (3, 4))
+
+
+def test_feature_provenance_is_checked_against_configured_encoder():
+    provenance = {
+        "agnostic": {
+            "stream_name": ["domain_agnostic"],
+            "checkpoint_sha256": ["agnostic-sha"],
+            "recipe_sha256": ["recipe-sha"],
+        },
+        "aware": {
+            "stream_name": ["wrong-aware"],
+            "checkpoint_sha256": ["aware-sha"],
+            "recipe_sha256": ["recipe-sha"],
+        },
+    }
+    sources = {
+        "feature_agnostic_stream_name": "domain_agnostic",
+        "feature_aware_stream_name": "domain_aware_h2s_transfer_gpu",
+        "feature_agnostic_checkpoint_sha256": "agnostic-sha",
+        "feature_aware_checkpoint_sha256": "aware-sha",
+        "feature_recipe_sha256": "recipe-sha",
+    }
+    assert _feature_provenance_mismatches(provenance, sources) == {
+        "aware": {
+            "stream_name": {
+                "expected": "domain_aware_h2s_transfer_gpu",
+                "actual": ["wrong-aware"],
+            }
+        }
+    }

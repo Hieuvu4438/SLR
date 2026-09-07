@@ -107,6 +107,35 @@ def _validate_temporal_sidecar(
         raise ValueError(f"temporal metadata length mismatch: {path}")
 
 
+def _feature_provenance_mismatches(
+    provenance: dict[str, dict[str, list[str]]], sources: dict[str, Any]
+) -> dict[str, dict[str, dict[str, Any]]]:
+    expected = {
+        "agnostic": {
+            "stream_name": sources.get("feature_agnostic_stream_name"),
+            "checkpoint_sha256": sources.get("feature_agnostic_checkpoint_sha256"),
+            "recipe_sha256": sources.get("feature_recipe_sha256"),
+        },
+        "aware": {
+            "stream_name": sources.get("feature_aware_stream_name"),
+            "checkpoint_sha256": sources.get("feature_aware_checkpoint_sha256"),
+            "recipe_sha256": sources.get("feature_recipe_sha256"),
+        },
+    }
+    mismatches: dict[str, dict[str, dict[str, Any]]] = {}
+    for label, fields in expected.items():
+        for key, expected_value in fields.items():
+            if expected_value is None:
+                continue
+            actual_values = provenance.get(label, {}).get(key, [])
+            if actual_values != [str(expected_value)]:
+                mismatches.setdefault(label, {})[key] = {
+                    "expected": str(expected_value),
+                    "actual": actual_values,
+                }
+    return mismatches
+
+
 def prepare_split(
     config: dict[str, Any], split: str
 ) -> tuple[list[ManifestRecord], dict[str, Any]]:
@@ -209,9 +238,13 @@ def prepare_split(
         inconsistent_provenance = {
             label: fields for label, fields in inconsistent_provenance.items() if fields
         }
+        provenance_mismatches = _feature_provenance_mismatches(
+            feature_provenance, sources
+        )
     else:
         feature_provenance = {}
         inconsistent_provenance = {}
+        provenance_mismatches = {}
     report = {
         "schema_version": 1,
         "split": split,
@@ -233,6 +266,7 @@ def prepare_split(
         "invalid_features_preview": invalid_features[:20],
         "feature_provenance": feature_provenance,
         "inconsistent_feature_provenance": inconsistent_provenance,
+        "feature_provenance_mismatches": provenance_mismatches,
     }
     return records, report
 
@@ -278,6 +312,7 @@ def main(argv: list[str] | None = None) -> int:
             or report["missing_feature_count"]
             or report["invalid_feature_count"]
             or report["inconsistent_feature_provenance"]
+            or report["feature_provenance_mismatches"]
         ):
             failed = True
     overlaps = cross_split_overlaps(records_by_split)
@@ -291,6 +326,7 @@ def main(argv: list[str] | None = None) -> int:
                 or report["missing_feature_count"]
                 or report["invalid_feature_count"]
                 or report["inconsistent_feature_provenance"]
+                or report["feature_provenance_mismatches"]
             ):
                 continue
             manifest_path = config["data"][f"{split}_manifest"]

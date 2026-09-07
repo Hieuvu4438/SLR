@@ -18,6 +18,11 @@ sources:
   test_official_annotation: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.test.corpus.csv
   feature_agnostic_root: artifacts/features_reextracted/ph_domain_agnostic
   feature_aware_root: artifacts/features_reextracted/ph_domain_aware_h2s_transfer_gpu
+  feature_agnostic_stream_name: domain_agnostic
+  feature_aware_stream_name: domain_aware_h2s_transfer_gpu
+  feature_agnostic_checkpoint_sha256: 6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f
+  feature_aware_checkpoint_sha256: 99e101d696ff63131b5d44fa6e465201216604ba5d8cc773f3cefa4a96ebd518
+  feature_recipe_sha256: 50045403867d7bdbee644de13e94389b5567c67b0f7f87e7218952dcde49a571
   temporal_metadata_root: artifacts/features_reextracted/ph_temporal_metadata
   require_feature_sidecars: true
   require_temporal_metadata: true
