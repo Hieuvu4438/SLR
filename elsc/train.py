@@ -136,16 +136,38 @@ def _caption_objective(
     )
 
 
-def _video_range(value: VideoEncoding, start: int, end: int) -> VideoEncoding:
-    return VideoEncoding(
-        value.mask[start:end], value.tokens[start:end], value.cls[start:end]
+def _keep_objective(
+    model,
+    teacher,
+    h: torch.Tensor,
+    valid: torch.Tensor,
+    clean_inputs: tuple[torch.Tensor, ...],
+    video: VideoEncoding,
+    clean_text: TextEncoding,
+    *,
+    dual_mix: float,
+    temperature: float,
+) -> torch.Tensor:
+    with torch.no_grad():
+        teacher_video, _ = teacher.encode_video(h, valid)
+        teacher_text = teacher.encode_text(*clean_inputs)
+        teacher_i2t, teacher_t2i = teacher.bridge.score(teacher_video, teacher_text, objective=True)
+        teacher_scores = teacher.bridge.mixed_score(teacher_i2t, teacher_t2i, dual_mix)
+    student_i2t, student_t2i = model.bridge.score(video, clean_text, objective=True)
+    student_scores = model.bridge.mixed_score(student_i2t, student_t2i, dual_mix)
+    return bidirectional_kl(
+        teacher_scores,
+        student_scores,
+        temperature=temperature,
     )
+
+
+def _video_range(value: VideoEncoding, start: int, end: int) -> VideoEncoding:
+    return VideoEncoding(value.mask[start:end], value.tokens[start:end], value.cls[start:end])
 
 
 def _text_range(value: TextEncoding, start: int, end: int) -> TextEncoding:
-    return TextEncoding(
-        value.mask[start:end], value.tokens[start:end], value.cls[start:end]
-    )
+    return TextEncoding(value.mask[start:end], value.tokens[start:end], value.cls[start:end])
 
 
 def _checkpointed_video_batches(
@@ -278,9 +300,7 @@ def _evidence_objective(
             evidence_masks[selected_index, position_by_dense[int(value)]] = True
         for value in record["control_remove_dense_indices"]:
             control_masks[selected_index, position_by_dense[int(value)]] = True
-        if int(evidence_masks[selected_index].sum()) != int(
-            control_masks[selected_index].sum()
-        ):
+        if int(evidence_masks[selected_index].sum()) != int(control_masks[selected_index].sum()):
             raise ValueError(f"cache W/C token count mismatch for {record['pair_id']}")
         negative_inputs.append(
             encode_cico_text(
@@ -291,16 +311,10 @@ def _evidence_objective(
         )
         reliability.append(float(record["rho"]))
 
-    h_evidence = apply_input_intervention(
-        selected_h, evidence_masks, selected_valid, 0.0
-    )
-    h_control = apply_input_intervention(
-        selected_h, control_masks, selected_valid, 0.0
-    )
+    h_evidence = apply_input_intervention(selected_h, evidence_masks, selected_valid, 0.0)
+    h_control = apply_input_intervention(selected_h, control_masks, selected_valid, 0.0)
     encoder_microbatch = int(config["evidence"].get("encoder_microbatch_size", 32))
-    checkpoint_activations = bool(
-        config["evidence"].get("activation_checkpoint", True)
-    )
+    checkpoint_activations = bool(config["evidence"].get("activation_checkpoint", True))
     video_evidence, evidence_encoder_calls = _checkpointed_video_batches(
         model,
         h_evidence,
@@ -316,8 +330,7 @@ def _evidence_objective(
         activation_checkpoint=checkpoint_activations,
     )
     negative_tensors = tuple(
-        torch.stack([item[index] for item in negative_inputs]).to(device)
-        for index in range(3)
+        torch.stack([item[index] for item in negative_inputs]).to(device) for index in range(3)
     )
     negative = model.encode_text(*negative_tensors)
     positive = TextEncoding(
@@ -371,9 +384,7 @@ def _evidence_objective(
         "evidence_removed_margin_mean": float(evidence_tensor.detach().float().mean()),
         "control_removed_margin_mean": float(control_tensor.detach().float().mean()),
         "video_encoder_calls": evidence_encoder_calls + control_encoder_calls,
-        "paired_score_calls": (
-            clean_score_calls + evidence_score_calls + control_score_calls
-        ),
+        "paired_score_calls": (clean_score_calls + evidence_score_calls + control_score_calls),
         "negative_text_encoder_calls": 1,
     }
     return dep, inv, len(selected), diagnostics
@@ -427,9 +438,7 @@ def _optimizer(model, config: dict[str, Any]):
     head_required = config.get("method") in {"elsc", "local_word_video"}
     model.local_head.requires_grad_(head_required)
     if head_required:
-        add_groups(
-            "local_head", model.local_head.named_parameters(), float(train_cfg["head_lr"])
-        )
+        add_groups("local_head", model.local_head.named_parameters(), float(train_cfg["head_lr"]))
     if not groups:
         raise ValueError("all model parameters are frozen")
     return torch.optim.AdamW(
@@ -715,15 +724,10 @@ def train(
                         "epoch": -1,
                         "step": 0,
                         "split": "dev",
-                        "metrics": {
-                            direction: metrics[direction]
-                            for direction in ("V2T", "T2V")
-                        },
+                        "metrics": {direction: metrics[direction] for direction in ("V2T", "T2V")},
                         "elapsed_seconds": time.time() - started,
                         "peak_gpu_memory_bytes": (
-                            torch.cuda.max_memory_allocated(device)
-                            if device.type == "cuda"
-                            else 0
+                            torch.cuda.max_memory_allocated(device) if device.type == "cuda" else 0
                         ),
                     },
                     sort_keys=True,
@@ -888,36 +892,20 @@ def train(
                             )
                         )
                 if teacher is not None:
-                    with (
-                        torch.no_grad(),
-                        torch.autocast(
-                            device_type=device.type, dtype=amp_dtype, enabled=amp_enabled
-                        ),
-                    ):
-                        teacher_video, _ = teacher.encode_video(h, valid)
-                        teacher_text = teacher.encode_text(*clean_inputs)
-                        teacher_i2t, teacher_t2i = teacher.bridge.score(
-                            teacher_video, teacher_text, objective=True
-                        )
-                        teacher_scores = teacher.bridge.mixed_score(
-                            teacher_i2t, teacher_t2i, float(config["model"]["dual_mix"])
-                        )
                     with torch.autocast(
                         device_type=device.type, dtype=amp_dtype, enabled=amp_enabled
                     ):
-                        student_clean_i2t, student_clean_t2i = model.bridge.score(
-                            video, clean_text, objective=True
+                        keep = _keep_objective(
+                            model,
+                            teacher,
+                            h,
+                            valid,
+                            clean_inputs,
+                            video,
+                            clean_text,
+                            dual_mix=float(config["model"]["dual_mix"]),
+                            temperature=float(config["keep"].get("temperature", 1.0)),
                         )
-                        student_scores = model.bridge.mixed_score(
-                            student_clean_i2t,
-                            student_clean_t2i,
-                            float(config["model"]["dual_mix"]),
-                        )
-                    keep = bidirectional_kl(
-                        teacher_scores,
-                        student_scores,
-                        temperature=float(config["keep"].get("temperature", 1.0)),
-                    )
             ramp = min(
                 1.0,
                 (epoch + (batch_index + 1) / len(loader))

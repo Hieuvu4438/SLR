@@ -102,9 +102,7 @@ def validate_config(config: Mapping[str, Any], *, stage: str | None = None) -> N
     radius = int(adapter.get("radius", 0))
     data = config.get("data", {})
     if data.get("text_augmentation", "none") not in {"none", "cico_random_swap_v1"}:
-        raise ConfigError(
-            "data.text_augmentation must be none or cico_random_swap_v1"
-        )
+        raise ConfigError("data.text_augmentation must be none or cico_random_swap_v1")
     if radius != 0:
         raise ConfigError(
             "only pointwise model.adapter.radius=0 is implemented; dense temporal adapters "
@@ -150,6 +148,14 @@ def validate_config(config: Mapping[str, Any], *, stage: str | None = None) -> N
     method = config.get("method", "elsc")
     if method not in {"baseline", "elsc", "matched_caption", "local_word_video"}:
         raise ConfigError(f"unsupported method: {method}")
+    keep = config.get("keep", {})
+    keep_weight = float(keep.get("weight", 0.0))
+    if keep_weight < 0:
+        raise ConfigError("keep.weight must be nonnegative")
+    if float(keep.get("temperature", 1.0)) <= 0:
+        raise ConfigError("keep.temperature must be positive")
+    if keep_weight > 0 and method == "baseline":
+        raise ConfigError("keep loss requires an auxiliary method with a frozen teacher")
     support_mode = config.get("aux_support_mode", "teacher")
     if support_mode not in {"teacher", "random_matched", "shuffled_lexical"}:
         raise ConfigError(f"unsupported aux_support_mode: {support_mode}")

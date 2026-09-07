@@ -22,6 +22,7 @@ from elsc.train import (
     _amp_settings,
     _evidence_objective,
     _in_batch_word_negative_mask,
+    _keep_objective,
     _optimizer,
     _seed_everything,
 )
@@ -58,15 +59,11 @@ def _load_auxiliary_cache(
             "language": config["data"]["caption_language"],
             "feature_fusion": f"sum:{config['data']['alpha']}",
             "tokenizer_hash": sha256_file(
-                Path(config["upstream"]["cico_root"])
-                / "modules"
-                / "bpe_simple_vocab_16e6.txt.gz"
+                Path(config["upstream"]["cico_root"]) / "modules" / "bpe_simple_vocab_16e6.txt.gz"
             ),
             "view_sampling": "upstream_uniform+jitter1_v1",
             "mining_config_hash": mining_config_hash(config),
-            "negative_source": config["cache"].get(
-                "negatives_source", "train_visual_neighbors_v1"
-            ),
+            "negative_source": config["cache"].get("negatives_source", "train_visual_neighbors_v1"),
         },
     )
     lexical_bank = (
@@ -89,8 +86,6 @@ def run_preflight(
         raise ValueError("training preflight does not yet support this method objective")
     if float(config.get("caption", {}).get("weight", 0.0)) > 0:
         raise ValueError("training preflight must include caption loss before using its config")
-    if float(config.get("keep", {}).get("weight", 0.0)) > 0:
-        raise ValueError("training preflight must include keep loss before using its config")
     resources = config.get("resources", {})
     initial = require_resources(
         Path(config["data"]["train_manifest"]).parent,
@@ -112,6 +107,7 @@ def run_preflight(
     batch_size = int(config["train"]["per_device_batch"])
     cache = None
     lexical_bank = None
+    teacher = None
     eligible_pair_ids: set[str] = set()
     if config.get("method") != "baseline":
         cache, lexical_bank = _load_auxiliary_cache(config, device)
@@ -122,6 +118,10 @@ def run_preflight(
         }
         if config.get("evidence", {}).get("enabled") and not eligible_pair_ids:
             raise ValueError("ELSC-Full preflight cache has no evidence-eligible records")
+        if float(config.get("keep", {}).get("weight", 0.0)) > 0:
+            teacher_path = Path(config["model"]["teacher_checkpoint"])
+            teacher, _ = build_retriever_from_checkpoint(config, teacher_path, device=device)
+            teacher.eval().requires_grad_(False)
     pair_ids = [str(record.pair_id) for record in dataset.records]
     indexes = _stress_batch_indices(pair_ids, eligible_pair_ids, batch_size)
     collator = CiCoCollator(
@@ -133,9 +133,7 @@ def run_preflight(
     batch = collator([dataset[index] for index in indexes])
     optimizer = _optimizer(model, config)
     amp_enabled, amp_dtype = _amp_settings(config, device)
-    scaler = torch.amp.GradScaler(
-        device.type, enabled=amp_enabled and amp_dtype == torch.float16
-    )
+    scaler = torch.amp.GradScaler(device.type, enabled=amp_enabled and amp_dtype == torch.float16)
     model.train()
     optimizer.zero_grad(set_to_none=True)
     started = time.monotonic()
@@ -160,6 +158,7 @@ def run_preflight(
         lexical_count = torch.zeros((), dtype=torch.long, device=device)
         dependence = h_prime.sum() * 0.0
         invariance = h_prime.sum() * 0.0
+        keep = h_prime.sum() * 0.0
         evidence_count = 0
         evidence_diagnostics: dict[str, float | int | None] = {
             "rho_mean": None,
@@ -198,9 +197,7 @@ def run_preflight(
                 ) = tensors
                 if config.get("method") == "local_word_video" and len(positive_e) > 1:
                     occurrence_count = len(positive_e)
-                    negative_e = positive_e.detach()[None].expand(
-                        occurrence_count, -1, -1
-                    )
+                    negative_e = positive_e.detach()[None].expand(occurrence_count, -1, -1)
                     negative_valid = _in_batch_word_negative_mask(word_ids)
                 elif config.get("method") == "local_word_video":
                     negative_valid = torch.zeros_like(negative_valid)
@@ -216,21 +213,19 @@ def run_preflight(
                 )
                 lexical = globally_normalized_auxiliary(lexical_sum, lexical_count)
             if config.get("evidence", {}).get("enabled"):
-                dependence, invariance, evidence_count, evidence_diagnostics = (
-                    _evidence_objective(
-                        model,
-                        tokenizer,
-                        h,
-                        valid,
-                        dense_index,
-                        video,
-                        clean_text,
-                        records_by_sample,
-                        config,
-                        device,
-                        epoch=0,
-                        step=0,
-                    )
+                dependence, invariance, evidence_count, evidence_diagnostics = _evidence_objective(
+                    model,
+                    tokenizer,
+                    h,
+                    valid,
+                    dense_index,
+                    video,
+                    clean_text,
+                    records_by_sample,
+                    config,
+                    device,
+                    epoch=0,
+                    step=0,
                 )
                 expected_evidence = max(
                     1,
@@ -247,13 +242,24 @@ def run_preflight(
                         "preflight stress batch did not exercise the expected evidence count: "
                         f"{evidence_count} != {exercised_evidence}"
                     )
+            if teacher is not None:
+                keep = _keep_objective(
+                    model,
+                    teacher,
+                    h,
+                    valid,
+                    clean_inputs,
+                    video,
+                    clean_text,
+                    dual_mix=float(config["model"]["dual_mix"]),
+                    temperature=float(config["keep"].get("temperature", 1.0)),
+                )
         loss = (
             coarse
             + float(config["loss"]["lexical_weight"]) * lexical
-            + float(config.get("evidence", {}).get("dependence_weight", 0.0))
-            * dependence
-            + float(config.get("evidence", {}).get("invariance_weight", 0.0))
-            * invariance
+            + float(config.get("evidence", {}).get("dependence_weight", 0.0)) * dependence
+            + float(config.get("evidence", {}).get("invariance_weight", 0.0)) * invariance
+            + float(config.get("keep", {}).get("weight", 0.0)) * keep
         )
     if not bool(torch.isfinite(loss)):
         raise FloatingPointError("training preflight objective is non-finite")
@@ -286,9 +292,11 @@ def run_preflight(
             "lexical": float(lexical.detach()),
             "dependence": float(dependence.detach()),
             "invariance": float(invariance.detach()),
+            "keep": float(keep.detach()),
         },
         "lexical_count": int(lexical_count),
         "evidence_count": evidence_count,
+        "teacher_loaded_for_keep": teacher is not None,
         "auxiliary_record_count": auxiliary_records,
         "evidence_diagnostics": evidence_diagnostics,
         "stress_batch_eligible_pair_count": sum(
@@ -300,9 +308,7 @@ def run_preflight(
         "evidence_encoder_microbatch_size": config.get("evidence", {}).get(
             "encoder_microbatch_size"
         ),
-        "evidence_score_microbatch_size": config.get("evidence", {}).get(
-            "score_microbatch_size"
-        ),
+        "evidence_score_microbatch_size": config.get("evidence", {}).get("score_microbatch_size"),
         "elapsed_seconds": time.monotonic() - started,
         "peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
         "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),

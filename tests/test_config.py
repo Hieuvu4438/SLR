@@ -124,3 +124,27 @@ def test_random_span_duration_tolerance_is_bounded(tmp_path: Path):
     )
     with pytest.raises(ConfigError, match="random_span_duration_tolerance"):
         load_config(path)
+
+
+def test_keep_loss_requires_auxiliary_teacher_and_positive_temperature(tmp_path: Path):
+    baseline = tmp_path / "bad_baseline_keep.yaml"
+    baseline.write_text(
+        "schema_version: 1\nmethod: baseline\n"
+        "train: {eval_split: dev}\n"
+        "model: {backbone_frozen: false}\n"
+        "keep: {weight: 0.1, temperature: 1.0}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="auxiliary method"):
+        load_config(baseline)
+
+    temperature = tmp_path / "bad_keep_temperature.yaml"
+    temperature.write_text(
+        "schema_version: 1\nmethod: elsc\n"
+        "train: {eval_split: dev}\n"
+        "model: {backbone_frozen: true, adapter: {enabled: true}}\n"
+        "keep: {weight: 0.1, temperature: 0}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="keep.temperature"):
+        load_config(temperature)
