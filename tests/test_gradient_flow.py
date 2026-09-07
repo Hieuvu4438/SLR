@@ -50,7 +50,7 @@ def test_empty_cache_batch_keeps_zero_gradient_graph_for_head_only_control():
         [[], []],
         torch.randn(5, 4),
     )
-    value, count = lexical_loss(*tensors)
+    value, count = lexical_loss(*tensors[:6])
     value.backward()
     assert count.item() == 0
     assert head.proj.weight.grad is not None

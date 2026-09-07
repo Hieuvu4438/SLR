@@ -96,7 +96,15 @@ def lexical_tensors_from_batch(
     support_mode: str = "teacher",
     seed: int = 42,
     random_span_duration_tolerance: float = 0.10,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+]:
     """Flatten ragged cache records into occurrence tensors without position assumptions."""
     occurrences: list[tuple[torch.Tensor, torch.Tensor, int, list[int], float]] = []
     for sample_index, records in enumerate(records_by_sample):
@@ -163,6 +171,7 @@ def lexical_tensors_from_batch(
             empty_tokens,
             torch.empty((0, 0), dtype=torch.bool, device=z.device),
             z[:0, 0, 0],
+            torch.empty((0,), dtype=torch.long, device=z.device),
         )
     max_support = max(item[0].shape[0] for item in occurrences)
     max_negatives = max(len(item[3]) for item in occurrences)
@@ -174,6 +183,7 @@ def lexical_tensors_from_batch(
     negative = z.new_zeros((count, max_negatives, dimension), dtype=torch.float32)
     negative_valid = torch.zeros((count, max_negatives), dtype=torch.bool, device=z.device)
     rho = z.new_zeros((count,), dtype=torch.float32)
+    word_ids = torch.empty((count,), dtype=torch.long, device=z.device)
     for index, (tokens, weights, word_id, negatives, reliability) in enumerate(occurrences):
         if support_mode == "shuffled_lexical":
             word_id = _shuffled_lexical_id(word_id, len(lexical_bank), seed)
@@ -187,4 +197,5 @@ def lexical_tensors_from_batch(
         negative[index, : len(negatives)] = lexical_bank[negatives].to(z.device)
         negative_valid[index, : len(negatives)] = True
         rho[index] = reliability
-    return support_z, support_weights, positive, negative, negative_valid, rho
+        word_ids[index] = word_id
+    return support_z, support_weights, positive, negative, negative_valid, rho, word_ids

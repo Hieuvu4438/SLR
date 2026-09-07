@@ -13,6 +13,7 @@ from elsc.losses.evidence import (
     select_matched_control,
 )
 from elsc.losses.lexical import globally_normalized_auxiliary, lexical_loss
+from elsc.train import _in_batch_word_negative_mask
 
 
 def test_balanced_coarse_exact_formula():
@@ -111,3 +112,13 @@ def test_ddp_local_sum_scaling_matches_global_mean_algebra():
     averaged = 0.5 * (rank0 + rank1)
     averaged.backward()
     assert parameter.grad.item() == 1.0
+
+
+def test_local_word_video_mask_excludes_self_and_same_word_occurrences():
+    mask = _in_batch_word_negative_mask(torch.tensor([3, 7, 3, 9]))
+    assert mask.tolist() == [
+        [False, True, False, True],
+        [True, False, True, True],
+        [False, True, False, True],
+        [True, True, True, False],
+    ]

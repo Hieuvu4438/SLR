@@ -111,7 +111,7 @@ def test_shuffled_lexical_control_is_fixed_point_free_and_batch_independent():
     bank = torch.arange(vocabulary_size * 3, dtype=torch.float32).reshape(
         vocabulary_size, 3
     )
-    _, _, positive, negative, valid, _ = lexical_tensors_from_batch(
+    _, _, positive, negative, valid, _, word_ids = lexical_tensors_from_batch(
         z,
         dense,
         [[record]],
@@ -125,3 +125,4 @@ def test_shuffled_lexical_control_is_fixed_point_free_and_batch_independent():
     ]
     assert torch.equal(positive[0], bank[expected_positive])
     assert torch.equal(negative[0, valid[0]], bank[expected_negatives])
+    assert word_ids.tolist() == [expected_positive]

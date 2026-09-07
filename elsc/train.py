@@ -339,6 +339,12 @@ def _dev_selection_values(metrics: dict[str, Any]) -> tuple[float, float]:
     return r1, r5
 
 
+def _in_batch_word_negative_mask(word_ids: torch.Tensor) -> torch.Tensor:
+    if word_ids.ndim != 1:
+        raise ValueError("word_ids must have shape [O]")
+    return word_ids[:, None] != word_ids[None, :]
+
+
 def _auxiliary_gradient_diagnostic(
     loss: torch.Tensor, named_parameters: list[tuple[str, torch.nn.Parameter]]
 ) -> dict[str, float]:
@@ -687,15 +693,19 @@ def train(
                             config["cache"].get("random_span_duration_tolerance", 0.10)
                         ),
                     )
-                    support_z, support_weights, positive_e, negative_e, negative_valid, rho = (
-                        tensors
-                    )
+                    (
+                        support_z,
+                        support_weights,
+                        positive_e,
+                        negative_e,
+                        negative_valid,
+                        rho,
+                        word_ids,
+                    ) = tensors
                     if config.get("method") == "local_word_video" and len(positive_e) > 1:
                         occurrence_count = len(positive_e)
                         negative_e = positive_e.detach()[None].expand(occurrence_count, -1, -1)
-                        negative_valid = ~torch.eye(
-                            occurrence_count, dtype=torch.bool, device=device
-                        )
+                        negative_valid = _in_batch_word_negative_mask(word_ids)
                     elif config.get("method") == "local_word_video":
                         negative_valid = torch.zeros_like(negative_valid)
                     lexical_sum, lexical_count = lexical_loss(
