@@ -1,0 +1,5 @@
+extends: ablation_random_span.yaml
+experiment: ph_elsc_lower_lr_random_span_control
+train:
+  adapter_lr: 0.00005
+  head_lr: 0.00005
