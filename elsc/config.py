@@ -111,8 +111,29 @@ def validate_config(config: Mapping[str, Any], *, stage: str | None = None) -> N
             "require a separate locality implementation"
         )
     evidence = config.get("evidence", {})
+    sources = config.get("sources", {})
+    if sources.get("require_feature_sidecars", False):
+        expected_feature_fields = (
+            "feature_agnostic_stream_name",
+            "feature_aware_stream_name",
+            "feature_agnostic_checkpoint_sha256",
+            "feature_aware_checkpoint_sha256",
+            "feature_recipe_sha256",
+        )
+        missing_expected = [key for key in expected_feature_fields if not sources.get(key)]
+        if missing_expected:
+            raise ConfigError(
+                "sidecar validation requires expected feature provenance: "
+                + ", ".join(missing_expected)
+            )
+        if sources.get("require_temporal_metadata", False) and not sources.get(
+            "temporal_metadata_root"
+        ):
+            raise ConfigError(
+                "sidecar validation requires temporal_metadata_root when temporal metadata is required"
+            )
     if evidence.get("enabled"):
-        rf_root = config.get("sources", {}).get("temporal_metadata_root")
+        rf_root = sources.get("temporal_metadata_root")
         if not rf_root or str(rf_root).lower().startswith("required"):
             if stage not in {None, "schema", "assets"}:
                 raise ConfigError("ELSC-Full requires verified temporal_metadata_root")

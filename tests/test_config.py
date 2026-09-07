@@ -82,3 +82,16 @@ def test_nonpositive_epoch_count_is_rejected(tmp_path: Path):
     )
     with pytest.raises(ConfigError, match="epochs"):
         load_config(path)
+
+
+def test_required_feature_sidecars_must_pin_expected_provenance(tmp_path: Path):
+    path = tmp_path / "weak_sidecar.yaml"
+    path.write_text(
+        "schema_version: 1\nmethod: baseline\n"
+        "train: {eval_split: dev}\n"
+        "model: {backbone_frozen: false}\n"
+        "sources: {require_feature_sidecars: true}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="expected feature provenance"):
+        load_config(path)

@@ -5,6 +5,8 @@ sources:
   feature_agnostic_root: artifacts/sign_features/ph_domain_agnostic
   feature_aware_root: artifacts/sign_features/ph_domain_aware
   temporal_metadata_root: null
+  require_feature_sidecars: false
+  require_temporal_metadata: false
 
 data:
   test_manifest: artifacts/manifests/ph_release_test.jsonl
