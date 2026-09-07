@@ -85,7 +85,7 @@ python -m elsc.export --run-dir runs/ph_min_s42 --checkpoint best_dev --output e
 # Aggregate only measured, ID-paired runs; bootstrap resamples video groups.
 python -m elsc.report --baseline-runs runs/ph_base_s42 --method-runs runs/ph_min_s42 \
   --split dev --output artifacts/reports/ph_min_vs_base_dev.json
-python -m elsc.gate --report artifacts/reports/ph_min_vs_base_dev.json \
+python -m elsc.gate --gate G --report artifacts/reports/ph_min_vs_base_dev.json \
   --output artifacts/reports/ph_min_vs_base_dev_gate_g.json
 ```
 
@@ -98,6 +98,26 @@ After starting the baseline, `scripts/run_ph_b512_followup.sh` can wait for its
 validated dev-selected checkpoint, build a run-isolated train-only cache, train
 ELSC-Min, and emit the paired dev report. It times out instead of retrying a
 failed experiment and never accesses the test split.
+
+The registered post-screen runners are deliberately conditional and dev-only:
+
+```bash
+# A5/A6/A7 plus the generic local word-video diagnostic after terminal G/M artifacts.
+timeout --signal=TERM --kill-after=60s 8h \
+  bash scripts/run_ph_b512_diagnostics.sh
+
+# Lower-LR and keep controls when the original three-seed Gate G is no_go.
+timeout --signal=TERM --kill-after=60s 8h \
+  bash scripts/run_ph_b512_corrective.sh
+
+# Expand the fixed lower-LR recipe to seeds 1337/2026. Matched lower-LR caption/random-support
+# controls run only if its three-seed Gate G passes.
+timeout --signal=TERM --kill-after=60s 8h \
+  bash scripts/run_ph_b512_lower_lr_multiseed.sh
+```
+
+Each runner refuses invalid existing terminal runs, enforces a 20 GiB disk reserve, validates
+dev-selected checkpoints, and never evaluates the test split.
 
 `ph_full.yaml` additionally requires verified receptive-field metadata and a selected ELSC-Min
 checkpoint. Resolve it with the baseline kept as teacher and Min used only for student
