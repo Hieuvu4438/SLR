@@ -3,7 +3,13 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from elsc.train import _optimizer, _save_checkpoint, _scheduler, _tensor_payload_bytes
+from elsc.train import (
+    _dev_selection_values,
+    _optimizer,
+    _save_checkpoint,
+    _scheduler,
+    _tensor_payload_bytes,
+)
 
 
 class _Core(nn.Module):
@@ -21,6 +27,14 @@ class _Model(nn.Module):
         self.adapter = nn.Sequential(nn.LayerNorm(4), nn.Linear(4, 4))
         self.local_head = nn.Linear(4, 3, bias=False)
         self.adapter_enabled = True
+
+
+def test_dev_selection_values_average_both_retrieval_directions():
+    primary, tie_break = _dev_selection_values(
+        {"T2V": {"R1": 70.0, "R5": 90.0}, "V2T": {"R1": 74.0, "R5": 92.0}}
+    )
+    assert primary == 72.0
+    assert tie_break == 91.0
 
 
 def test_optimizer_uses_explicit_cico_moments_and_no_decay_for_1d():

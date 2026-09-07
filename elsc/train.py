@@ -332,6 +332,13 @@ def _scheduler(optimizer, steps: int, warmup_ratio: float):
     return torch.optim.lr_scheduler.LambdaLR(optimizer, scale)
 
 
+def _dev_selection_values(metrics: dict[str, Any]) -> tuple[float, float]:
+    """Return the registered primary/tie-break values for a dev result."""
+    r1 = 0.5 * (float(metrics["V2T"]["R1"]) + float(metrics["T2V"]["R1"]))
+    r5 = 0.5 * (float(metrics["V2T"]["R5"]) + float(metrics["T2V"]["R5"]))
+    return r1, r5
+
+
 def _auxiliary_gradient_diagnostic(
     loss: torch.Tensor, named_parameters: list[tuple[str, torch.nn.Parameter]]
 ) -> dict[str, float]:
@@ -479,9 +486,11 @@ def train(
         metrics_path = run_dir / "best_dev_metrics.json"
         if metrics_path.is_file():
             previous = json.loads(metrics_path.read_text(encoding="utf-8"))["metrics"]
-            best_dev_r5 = 0.5 * (float(previous["V2T"]["R5"]) + float(previous["T2V"]["R5"]))
+            _, best_dev_r5 = _dev_selection_values(previous)
         restore_rng_state(raw_checkpoint["rng"])
         generator.set_state(raw_checkpoint["sampler_generator_state"])
+    elif resume is not None:
+        raise ValueError("--resume requires an elsc-training-v1 checkpoint")
 
     dump_resolved(config, run_dir / "resolved_config.yaml")
 
@@ -498,6 +507,7 @@ def train(
             "split": "dev",
             "primary": config["train"]["checkpoint_metric"],
             "tie_break": "mean_t2v_v2t_r5_then_earlier_epoch",
+            "candidates": "initialization_epoch_minus_one_and_all_post_epoch_checkpoints",
             "test_access_during_training": False,
         },
         "text_augmentation": {
@@ -562,6 +572,56 @@ def train(
 
     log_path = run_dir / "train.jsonl"
     started = time.time()
+    if resume is None:
+        _, metrics = evaluate_model(model, config, "dev", device)
+        best_dev, best_dev_r5 = _dev_selection_values(metrics)
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                json.dumps(
+                    {
+                        "event": "dev_evaluation",
+                        "selection_candidate": "initialization",
+                        "epoch": -1,
+                        "step": 0,
+                        "split": "dev",
+                        "metrics": {
+                            direction: metrics[direction]
+                            for direction in ("V2T", "T2V")
+                        },
+                        "elapsed_seconds": time.time() - started,
+                        "peak_gpu_memory_bytes": (
+                            torch.cuda.max_memory_allocated(device)
+                            if device.type == "cuda"
+                            else 0
+                        ),
+                    },
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+        _save_checkpoint(
+            run_dir / "checkpoints" / "best_dev.pt",
+            model,
+            optimizer,
+            scheduler,
+            scaler,
+            generator,
+            -1,
+            0,
+            config,
+            best_dev,
+            provenance,
+        )
+        atomic_json_dump(
+            {
+                "epoch": -1,
+                "selection_candidate": "initialization",
+                "metric": "mean_t2v_v2t_r1",
+                "value": best_dev,
+                "metrics": metrics,
+            },
+            run_dir / "best_dev_metrics.json",
+        )
     for epoch in range(start_epoch, int(config["train"]["epochs"])):
         collator.set_epoch(epoch)
         model.train()
@@ -801,13 +861,13 @@ def train(
             with log_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(record, sort_keys=True) + "\n")
         _, metrics = evaluate_model(model, config, "dev", device)
-        dev_score = 0.5 * (float(metrics["V2T"]["R1"]) + float(metrics["T2V"]["R1"]))
-        dev_r5 = 0.5 * (float(metrics["V2T"]["R5"]) + float(metrics["T2V"]["R5"]))
+        dev_score, dev_r5 = _dev_selection_values(metrics)
         with log_path.open("a", encoding="utf-8") as handle:
             handle.write(
                 json.dumps(
                     {
                         "event": "dev_evaluation",
+                        "selection_candidate": "post_epoch",
                         "epoch": epoch,
                         "step": global_step,
                         "split": "dev",
