@@ -21,7 +21,32 @@ def _write_run(
     dev_manifest = root / "dev.jsonl"
     dev_manifest.write_text("{}\n", encoding="utf-8")
     (root / "resolved_config.yaml").write_text(
-        f"schema_version: 1\nseed: {seed}\ndata:\n  dev_manifest: {dev_manifest}\n",
+        f"""schema_version: 1
+seed: {seed}
+upstream:
+  cico_commit: pinned-upstream
+data:
+  dev_manifest: {dev_manifest}
+  dataset: ph
+  caption_language: en
+  feature_dim: 1024
+  feature_len: 64
+  max_words: 32
+  combine_type: sum
+  alpha: 0.9
+  feature_path_mode: corrected
+  sampling: upstream_uniform
+  text_augmentation: cico_random_swap_v1
+model:
+  sim_header: Filip
+  dual_mix: 0.5
+  mix_design: balance
+evaluation:
+  scorer: cico_mixed_token_interaction
+  metrics: upstream_cico
+  full_gallery: true
+  filter_by_aux_eligibility: false
+""",
         encoding="utf-8",
     )
     checkpoint = root / "checkpoints" / "best_dev.pt"
@@ -144,4 +169,22 @@ def test_paired_report_rejects_summary_that_disagrees_with_query_ranks(tmp_path:
     metrics["V2T"]["R1"] = 0.0
     metrics_path.write_text(json.dumps(metrics), encoding="utf-8")
     with pytest.raises(ReportContractError, match="does not match per-query ranks"):
+        compare_runs([baseline], [method], split="dev", bootstrap_samples=100)
+
+
+def test_paired_report_rejects_different_controlled_evaluation_config(tmp_path: Path):
+    baseline = _write_run(tmp_path / "base", 42, ([0, 0, 0], [0, 0, 0]))
+    method = _write_run(tmp_path / "method", 42, ([0, 0, 0], [0, 0, 0]))
+    config_path = method / "resolved_config.yaml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace("alpha: 0.9", "alpha: 0.8"),
+        encoding="utf-8",
+    )
+    config = load_config(config_path, validate=False)
+    selection_path = method / "selection.json"
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    selection["config_hash"] = config_hash(config)
+    selection_path.write_text(json.dumps(selection), encoding="utf-8")
+
+    with pytest.raises(ReportContractError, match="evaluation contracts differ"):
         compare_runs([baseline], [method], split="dev", bootstrap_samples=100)

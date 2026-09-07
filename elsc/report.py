@@ -10,7 +10,7 @@ import numpy as np
 
 from elsc.config import config_hash, load_config
 from elsc.provenance import ProvenanceError, validate_test_lock
-from elsc.utils import atomic_json_dump, ordered_hash, sha256_file
+from elsc.utils import atomic_json_dump, ordered_hash, sha256_file, sha256_json
 
 
 RECALL_K = (1, 5, 10)
@@ -19,6 +19,44 @@ SUMMARY_METRICS = ("R1", "R5", "R10", "MedianR", "MeanR")
 
 class ReportContractError(ValueError):
     pass
+
+
+def _evaluation_contract(config: dict[str, Any], dev_manifest_sha256: str) -> dict[str, Any]:
+    required = {
+        "upstream.cico_commit": config.get("upstream", {}).get("cico_commit"),
+        "data.dataset": config.get("data", {}).get("dataset"),
+        "data.caption_language": config.get("data", {}).get("caption_language"),
+        "data.feature_dim": config.get("data", {}).get("feature_dim"),
+        "data.feature_len": config.get("data", {}).get("feature_len"),
+        "data.max_words": config.get("data", {}).get("max_words"),
+        "data.combine_type": config.get("data", {}).get("combine_type"),
+        "data.alpha": config.get("data", {}).get("alpha"),
+        "data.feature_path_mode": config.get("data", {}).get("feature_path_mode"),
+        "data.sampling": config.get("data", {}).get("sampling"),
+        "data.text_augmentation": config.get("data", {}).get("text_augmentation"),
+        "model.sim_header": config.get("model", {}).get("sim_header"),
+        "model.dual_mix": config.get("model", {}).get("dual_mix"),
+        "model.mix_design": config.get("model", {}).get("mix_design"),
+        "evaluation.scorer": config.get("evaluation", {}).get("scorer"),
+        "evaluation.metrics": config.get("evaluation", {}).get("metrics"),
+    }
+    missing = [name for name, value in required.items() if value is None]
+    if missing:
+        raise ReportContractError(
+            "run config lacks controlled evaluation fields: " + ", ".join(missing)
+        )
+    evaluation = config.get("evaluation", {})
+    if evaluation.get("full_gallery") is not True:
+        raise ReportContractError("run config must explicitly enable full-gallery evaluation")
+    if evaluation.get("filter_by_aux_eligibility") is not False:
+        raise ReportContractError("run config must explicitly disable auxiliary gallery filtering")
+    return {
+        "schema_version": 1,
+        "dev_manifest_sha256": dev_manifest_sha256,
+        "fields": required,
+        "full_gallery": True,
+        "filter_by_aux_eligibility": False,
+    }
 
 
 def _validate_summary_from_ranks(
@@ -192,6 +230,7 @@ def _load_run(run_dir: Path, split: str) -> dict[str, Any]:
         raise ReportContractError(
             f"test result has no validated dev-selection lock: {metrics_path}"
         )
+    contract = _evaluation_contract(config, str(selection["dev_manifest_sha256"]))
     return {
         "run_dir": str(run_dir),
         "seed": int(config["seed"]),
@@ -201,6 +240,8 @@ def _load_run(run_dir: Path, split: str) -> dict[str, Any]:
         "metrics_sha256": sha256_file(metrics_path),
         "selection_sha256": sha256_file(selection_path),
         "checkpoint_sha256": selection["checkpoint_sha256"],
+        "evaluation_contract": contract,
+        "evaluation_contract_hash": sha256_json(contract),
         "metrics": metrics,
     }
 
@@ -328,6 +369,8 @@ def compare_runs(
     if [run["seed"] for run in baseline] != [run["seed"] for run in method]:
         raise ReportContractError("baseline and method seeds must be paired in the same order")
     for left, right in zip(baseline, method, strict=True):
+        if left["evaluation_contract_hash"] != right["evaluation_contract_hash"]:
+            raise ReportContractError("baseline and method controlled evaluation contracts differ")
         _aligned_group_differences(left["metrics"], right["metrics"])
     baseline_aggregate = _aggregate(baseline)
     method_aggregate = _aggregate(method)
