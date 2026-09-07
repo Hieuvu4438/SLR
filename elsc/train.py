@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import random
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,7 @@ from elsc.upstream.factory import build_retriever_from_checkpoint, load_cico_tok
 from elsc.utils import (
     atomic_json_dump,
     capture_rng_state,
+    git_worktree_state,
     restore_rng_state,
     sha256_file,
     stable_seed,
@@ -501,6 +503,10 @@ def train(
     dump_resolved(config, run_dir / "resolved_config.yaml")
 
     provenance: dict[str, Any] = {
+        "implementation": {
+            **git_worktree_state(Path(__file__)),
+            "command": sys.argv,
+        },
         "upstream_commit": config["upstream"]["cico_commit"],
         "initialization": {
             "path": str(config["model"]["init_checkpoint"]),

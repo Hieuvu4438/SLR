@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import random
+import subprocess
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -81,3 +82,36 @@ def ordered_hash(values: Iterable[object]) -> str:
         digest.update(len(encoded).to_bytes(8, "big"))
         digest.update(encoded)
     return digest.hexdigest()
+
+
+def git_worktree_state(path: str | Path) -> dict[str, Any]:
+    """Capture the checked-out implementation revision without mutating Git state."""
+    probe = Path(path).resolve()
+    cwd = probe if probe.is_dir() else probe.parent
+    try:
+        root = subprocess.run(
+            ["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        commit = subprocess.run(
+            ["git", "-C", root, "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        status = subprocess.run(
+            ["git", "-C", root, "status", "--porcelain", "--untracked-files=no"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as error:
+        return {"status": "unavailable", "error": type(error).__name__}
+    return {
+        "status": "ready",
+        "root": root,
+        "commit": commit,
+        "tracked_worktree_dirty": bool(status.strip()),
+    }

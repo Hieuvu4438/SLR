@@ -29,7 +29,7 @@ from elsc.losses.evidence import receptive_field_closure, select_matched_control
 from elsc.upstream.factory import build_retriever_from_checkpoint, load_cico_tokenizer_components
 from elsc.provenance import validate_dev_selection
 from elsc.resources import require_resources
-from elsc.utils import atomic_json_dump, sha256_file, sha256_json
+from elsc.utils import atomic_json_dump, git_worktree_state, sha256_file, sha256_json
 
 
 STOPWORDS_V1 = {
@@ -279,6 +279,7 @@ def _record_text_units(records, tokenizer, max_words, basic_clean, whitespace_cl
 
 @torch.no_grad()
 def build_cache(config: dict[str, Any], device: torch.device) -> dict[str, Any]:
+    implementation = git_worktree_state(Path(__file__))
     resources = config.get("resources", {})
     require_resources(
         Path(config["cache"]["path"]).parent,
@@ -576,6 +577,7 @@ def build_cache(config: dict[str, Any], device: torch.device) -> dict[str, Any]:
             handle.write(json.dumps(record, sort_keys=True, ensure_ascii=False) + "\n")
     metadata = {
         "schema_version": 1,
+        "implementation": implementation,
         "split": "train",
         "teacher_hash": sha256_file(teacher_path),
         "config_hash": config_hash(config),
