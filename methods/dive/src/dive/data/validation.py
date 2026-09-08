@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 from collections import Counter, defaultdict
 from dataclasses import asdict
 from pathlib import Path
@@ -413,7 +414,25 @@ def validate_prepared_data(
     temporary = output.with_suffix(output.suffix + f".tmp-{os.getpid()}")
     temporary.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(temporary, output)
-    outputs = {"audit": output}
+    validated_train_dir = resolver.output_path("shared", "validated_train")
+    validated_train_dir.mkdir(parents=True, exist_ok=True)
+    validated_train = {
+        "train_manifest": validated_train_dir / "manifest.jsonl",
+        "train_relevance": validated_train_dir / "relevance.jsonl",
+        "train_relations": validated_train_dir / "excluded_negatives.jsonl",
+    }
+    for source, destination in (
+        (manifests["train"], validated_train["train_manifest"]),
+        (relevance_paths["train"], validated_train["train_relevance"]),
+        (relations_path, validated_train["train_relations"]),
+    ):
+        temporary_copy = destination.with_suffix(destination.suffix + f".tmp-{os.getpid()}")
+        shutil.copyfile(source, temporary_copy)
+        os.replace(temporary_copy, destination)
+    outputs = {
+        "audit": output,
+        **validated_train,
+    }
     if native_frame_maps_dir is not None:
         outputs["native_frame_maps_dir"] = native_frame_maps_dir
     if text_unit_maps_dir is not None:

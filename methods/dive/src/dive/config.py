@@ -478,6 +478,7 @@ def required_resource_paths(config: Mapping[str, Any], stage: str) -> dict[str, 
             "baseline.locked_checkpoint": baseline.get("locked_checkpoint"),
             "text.tokenizer_artifact": text.get("tokenizer_artifact"),
         },
+        "mine_propose": {},
         "mine_finalize": {
             "data.train_manifest": data.get("train_manifest"),
             "data.train_relations": data.get("train_relations"),

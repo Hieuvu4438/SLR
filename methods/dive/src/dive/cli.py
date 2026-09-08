@@ -22,6 +22,8 @@ from .data.text_units import TextUnitError
 from .data.validation import DataValidationError, validate_prepared_data
 from .doctor import inspect_environment, write_report
 from .evidence_warmup import EvidenceWarmupError, warmup_seds_evidence
+from .mining.neighbors import NeighborError
+from .mining.runner import MiningRunError, propose_train_contrasts
 from .models.evidence import EvidenceError
 from .smoke import run_fixture_smoke
 from .training.optimizer import OptimizerContractError
@@ -47,6 +49,7 @@ def _parser() -> argparse.ArgumentParser:
             "warmup",
             "cache_build",
             "validate_data",
+            "mine_propose",
             "mine_finalize",
             "evaluate_test",
         ),
@@ -106,6 +109,13 @@ def _parser() -> argparse.ArgumentParser:
     cache_build.add_argument("--kind", required=True, choices=("frozen_train",))
     cache_build.add_argument("--batch-size", type=int, default=32)
     cache_build.add_argument("--device", default="cuda:0")
+
+    mine = subparsers.add_parser("mine", help="mine and validate train-only contrast pairs")
+    mine.add_argument("--config", required=True)
+    mine.add_argument("--phase", required=True, choices=("propose",))
+    mine.add_argument("--device", default="cuda:0")
+    mine.add_argument("--pooled-query-chunk-size", type=int, default=512)
+    mine.add_argument("--pair-chunk-size", type=int, default=2048)
 
     smoke = subparsers.add_parser("smoke", help="run fixture-only end-to-end correctness smoke")
     smoke.add_argument("--config", required=True)
@@ -172,6 +182,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             print(json.dumps(report, indent=2, sort_keys=True))
             return 0
+        if args.command == "mine" and args.phase == "propose":
+            report = propose_train_contrasts(
+                config,
+                device=args.device,
+                pooled_query_chunk_size=args.pooled_query_chunk_size,
+                pair_chunk_size=args.pair_chunk_size,
+            )
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return 0
         if args.command == "smoke":
             root = Path(__file__).resolve().parents[4]
             report = run_fixture_smoke(config, args.output_dir, repository_root=root)
@@ -191,6 +210,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         EvidenceWarmupError,
         EvidenceError,
         ManifestError,
+        MiningRunError,
+        NeighborError,
         PreparationError,
         RelevanceError,
         RelationError,

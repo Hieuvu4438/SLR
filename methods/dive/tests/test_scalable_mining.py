@@ -8,7 +8,10 @@ import torch
 
 from dive.adapters import seds_prelogit_fusion_scores
 from dive.mining.neighbors import NeighborError, audit_shortlist_coverage, mine_neighbor_proposals
-from dive.mining.pair_scorer import PersistentSedsPairScorer
+from dive.mining.pair_scorer import (
+    PersistentSedsPairScorer,
+    validate_persistent_pair_score_cache,
+)
 from dive.mining.proposals import load_proposals, write_proposals
 from dive.mining.scalable import (
     audit_sparse_shortlist_coverage,
@@ -204,6 +207,10 @@ def test_persistent_pair_scorer_matches_cartesian_and_resumes_at_chunk_boundary(
     state["scores_sha256"] = None
     state_path.write_text(json.dumps(state), encoding="utf-8")
     np.testing.assert_allclose(scorer(video_indices, text_indices), expected.numpy(), atol=1e-6)
+    assert validate_persistent_pair_score_cache(tmp_path, expected_fingerprint="features") == {
+        "vector_count": 1,
+        "score_count": 4,
+    }
 
     with next(tmp_path.glob("scores-*.npy")).open("ab") as handle:
         handle.write(b"corrupt")

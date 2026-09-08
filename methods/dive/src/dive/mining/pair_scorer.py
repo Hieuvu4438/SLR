@@ -177,3 +177,59 @@ class PersistentSedsPairScorer:
         state["scores_sha256"] = _sha256(data_path)
         _atomic_json(state_path, state)
         return np.asarray(scores).copy()
+
+
+def validate_persistent_pair_score_cache(
+    cache_dir: str | Path, *, expected_fingerprint: str
+) -> dict[str, int]:
+    """Validate every completed sparse score vector without loading feature tensors."""
+    directory = Path(cache_dir)
+    if directory.is_symlink() or not directory.is_dir():
+        raise NeighborError(f"sparse pair-score cache is missing: {directory}")
+    state_paths = sorted(directory.glob("scores-*.json"))
+    data_paths = sorted(directory.glob("scores-*.npy"))
+    if not state_paths or {path.stem for path in state_paths} != {path.stem for path in data_paths}:
+        raise NeighborError("sparse pair-score cache files are incomplete")
+    total = 0
+    for state_path in state_paths:
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise NeighborError("sparse pair-score cache state is unreadable") from exc
+        if not isinstance(state, Mapping):
+            raise NeighborError("sparse pair-score cache state must be an object")
+        count = state.get("count")
+        if (
+            state.get("schema_version") != "seds_sparse_pair_scores.v1"
+            or state.get("fingerprint") != expected_fingerprint
+            or state.get("dtype") != "float32"
+            or isinstance(count, bool)
+            or not isinstance(count, int)
+            or count <= 0
+            or state.get("completed") != count
+        ):
+            raise NeighborError("CACHE_HASH_MISMATCH: sparse pair-score cache state differs")
+        identity = json.dumps(
+            {
+                "fingerprint": expected_fingerprint,
+                "video_indices_sha256": state.get("video_indices_sha256"),
+                "text_indices_sha256": state.get("text_indices_sha256"),
+                "count": count,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        digest = hashlib.sha256(identity).hexdigest()
+        if state_path.name != f"scores-{digest}.json":
+            raise NeighborError("sparse pair-score cache filename identity differs")
+        data_path = state_path.with_suffix(".npy")
+        if not state.get("scores_sha256") or _sha256(data_path) != state["scores_sha256"]:
+            raise NeighborError("sparse pair-score completed checksum mismatch")
+        try:
+            values = np.load(data_path, mmap_mode="r", allow_pickle=False)
+        except (OSError, ValueError) as exc:
+            raise NeighborError("sparse pair-score data is unreadable") from exc
+        if values.shape != (count,) or values.dtype != np.float32 or not np.isfinite(values).all():
+            raise NeighborError("sparse pair-score data shape/dtype/values are invalid")
+        total += count
+    return {"vector_count": len(state_paths), "score_count": total}

@@ -50,6 +50,16 @@ _STAGE_PARENT_ARTIFACTS = {
         ("baseline_validate", "report", "shared"),
         ("evidence_warmup", "reference", "shared"),
     ),
+    "mine_propose": (
+        ("validate_data", "audit", "shared"),
+        ("validate_data", "train_manifest", "shared"),
+        ("validate_data", "train_relations", "shared"),
+        ("validate_data", "train_relevance", "shared"),
+        ("validate_data", "text_unit_maps_dir", "shared"),
+        ("cache_frozen_train", "native_video", "shared"),
+        ("cache_frozen_train", "native_text", "shared"),
+        ("cache_frozen_train", "report", "shared"),
+    ),
     "mine_finalize": (
         ("baseline_validate", "report", "shared"),
         ("evidence_warmup", "reference", "shared"),

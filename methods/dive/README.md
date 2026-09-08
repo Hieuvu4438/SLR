@@ -44,6 +44,8 @@ dive baseline validate --config methods/dive/configs/how2sign_base.yaml --split 
 dive evidence warmup --config methods/dive/configs/how2sign_base.yaml --device cuda:0
 dive cache build --config methods/dive/configs/how2sign_base.yaml \
   --kind frozen_train --batch-size 32 --device cuda:0
+dive mine --config methods/dive/configs/how2sign_base.yaml \
+  --phase propose --device cuda:0
 dive smoke --config methods/dive/configs/fixture.yaml --output-dir artifacts/dive/smoke
 pytest -q methods/dive/tests
 ```
@@ -106,3 +108,11 @@ training pool. Fingerprints bind baseline/reference states, validated input hash
 unit lineage, grid/masks, dtype, config and implementation revision. Shards are written one at a
 time; interrupted builds reopen and validate completed shards instead of restarting, while the
 public index and run-state record remain absent until exact manifest coverage is complete.
+
+`mine --phase propose` consumes only registered train caches and validated relations. It computes
+the bidirectional pooled top-128 shortlist in query blocks, exact-reranks aligned S0 quartets without
+a dense train score matrix, and evaluates full-gallery exact hardness only for the 128 fixed audit
+anchors. Known positives, excluded negatives and the reverse cross-pair relation are all enforced.
+Only strict-numeric candidates with complete native unit mappings enter the blinded-audit proposal
+artifact; all semantic rejections and shortlist coverage remain separately auditable. Shortlists and
+exact pair-score chunks are checksummed and resumable, and no student/test representation is read.

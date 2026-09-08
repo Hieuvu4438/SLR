@@ -14,6 +14,15 @@ from .neighbors import (
     audit_shortlist_coverage,
     mine_neighbor_proposals,
 )
+from .proposals import load_proposals, write_proposals
+from .runner import MiningRunError, propose_train_contrasts
+from .scalable import (
+    PooledShortlists,
+    SparseMiningResult,
+    audit_sparse_shortlist_coverage,
+    pooled_shortlists_blockwise,
+    rerank_sparse_shortlists,
+)
 from .slots import AtomicSlotResult, SchemaAudit, validate_strict_numeric_pair
 from .support import (
     EndpointSupport,
@@ -37,21 +46,30 @@ __all__ = [
     "NeighborError",
     "NeighborProposal",
     "PairSupport",
+    "PooledShortlists",
     "SchemaAudit",
     "SupportError",
+    "SparseMiningResult",
+    "MiningRunError",
     "attach_pair_support",
     "build_endpoint_support",
     "build_pair_support",
     "audit_shortlist_coverage",
+    "audit_sparse_shortlist_coverage",
     "differential_support_weights",
     "export_audit_template",
     "finalize_numeric_bank",
     "interval_union_length",
     "jsd_stability",
     "load_bank",
+    "load_proposals",
     "mine_neighbor_proposals",
+    "pooled_shortlists_blockwise",
+    "propose_train_contrasts",
     "rebin_distribution",
+    "rerank_sparse_shortlists",
     "select_support",
     "validate_strict_numeric_pair",
     "write_bank",
+    "write_proposals",
 ]

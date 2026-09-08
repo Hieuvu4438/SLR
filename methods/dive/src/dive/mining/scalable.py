@@ -186,6 +186,8 @@ def rerank_sparse_shortlists(
             raise NeighborError(f"{name} shortlist must be an integer matrix aligned to IDs")
         if np.any(values < 0) or np.any(values >= count):
             raise NeighborError(f"{name} shortlist contains an invalid index")
+        if any(len(set(row.tolist())) != len(row) for row in values):
+            raise NeighborError(f"{name} shortlist contains duplicate candidates")
     forbidden = _validated_forbidden(forbidden_by_video, count)
     candidates_by_anchor = [
         _shortlist_candidates(shortlists, anchor, forbidden) for anchor in range(count)

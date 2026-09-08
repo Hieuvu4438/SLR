@@ -251,3 +251,6 @@ def test_how2sign_validation_registers_native_seds_frame_lineage(tmp_path, monke
     state = json.loads((root / "run_state.json").read_text(encoding="utf-8"))
     assert "native_frame_maps_dir" in state["stages"]["validate_data"]["outputs"]
     assert "text_unit_maps_dir" in state["stages"]["validate_data"]["outputs"]
+    assert "train_manifest" in state["stages"]["validate_data"]["outputs"]
+    assert "train_relevance" in state["stages"]["validate_data"]["outputs"]
+    assert "train_relations" in state["stages"]["validate_data"]["outputs"]

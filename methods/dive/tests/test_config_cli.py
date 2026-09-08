@@ -147,3 +147,13 @@ def test_frozen_cache_cli_requires_registered_reference_and_data(tmp_path, capsy
     )
     assert result == 2
     assert "MISSING_PARENT_ARTIFACT: controlled data lineage" in capsys.readouterr().err
+
+
+def test_mine_propose_cli_requires_registered_validated_caches(tmp_path, capsys):
+    config = load_config(HERE / "configs" / "how2sign_base.yaml")
+    config["run"]["output_root"] = str(tmp_path / "runs")
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    result = main(["mine", "--config", str(path), "--phase", "propose", "--device", "cpu"])
+    assert result == 2
+    assert "MISSING_PARENT_ARTIFACT: validated train relations" in capsys.readouterr().err
