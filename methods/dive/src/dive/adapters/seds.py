@@ -12,47 +12,17 @@ from typing import Any, Mapping, Sequence
 
 import torch
 import torch.nn.functional as F
-import yaml
 from torch import Tensor, nn
 
 from dive.data.text_units import MappedTextUnit
 from dive.models.evidence import state_hash
 
 from .base import NativeTextFeatures, NativeVideoFeatures, PrelogitScores
-
-
-PINNED_SEDS_COMMIT = "434e3f714fcb6a7d1f4001fb9a246bbd93ec0246"
-
-_OFFICIAL_MODEL_CONFIG_FIELDS = frozenset(
-    {
-        "aug_choose",
-        "cross_model",
-        "dropout",
-        "feature_len",
-        "freeze_exfusion",
-        "fusion_type",
-        "hidden_dim",
-        "in_channels",
-        "kl_logit",
-        "kl_pose_loss",
-        "kl_rgb_loss",
-        "layout_encoder",
-        "linear_patch",
-        "mix_design",
-        "pose_dim",
-        "pretrained_clip_name",
-        "rgb_dim",
-        "rgb_pose_kl",
-        "rgb_pose_match",
-        "rgb_pose_match_loss",
-        "signbert",
-        "sim_header",
-        "slide_windows",
-        "strategy",
-        "temporal_pad",
-        "visual_num_hidden_layers",
-        "windows_stride",
-    }
+from .seds_reproduction import (
+    PINNED_SEDS_COMMIT,
+    SedsReproduction,
+    SedsReproductionError,
+    load_seds_reproduction,
 )
 
 
@@ -133,14 +103,11 @@ def _assert_checkpoint_matches_model(path: Path, model: nn.Module) -> None:
             raise SedsAdapterError(f"constructed SEDS model differs from checkpoint at {name}")
 
 
-def _load_reproduction_config(path: Path) -> Mapping[str, Any]:
+def _load_reproduction_config(path: Path, upstream_root: Path) -> SedsReproduction:
     try:
-        value = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
-        raise SedsAdapterError("SEDS reproduction config is unreadable") from exc
-    if not isinstance(value, Mapping):
-        raise SedsAdapterError("SEDS reproduction config must be a mapping")
-    return value
+        return load_seds_reproduction(path, upstream_root=upstream_root)
+    except SedsReproductionError as exc:
+        raise SedsAdapterError(str(exc)) from exc
 
 
 def _verify_checkout(upstream_root: Path) -> None:
@@ -370,13 +337,8 @@ class SedsAdapter:
         reproduction_path = baseline.get("reproduction_config")
         if not reproduction_path or not Path(reproduction_path).is_file():
             raise SedsAdapterError("controlled SEDS reproduction config is missing")
-        reproduction = dict(_load_reproduction_config(Path(reproduction_path)))
-        missing = _OFFICIAL_MODEL_CONFIG_FIELDS - set(reproduction)
-        if missing:
-            raise SedsAdapterError(
-                f"SEDS reproduction config lacks official model fields: {sorted(missing)}"
-            )
-        clip_weights = root / "modules" / "ViT-B-32.pt"
+        reproduction = _load_reproduction_config(Path(reproduction_path), root)
+        clip_weights = root / reproduction.external_assets["clip_initialization"]
         if not clip_weights.is_file():
             raise SedsAdapterError(f"official SEDS CLIP initialization is missing: {clip_weights}")
         target_device = torch.device(device)
@@ -395,7 +357,8 @@ class SedsAdapter:
             module_file = Path(getattr(existing_modules, "__file__", "")).resolve()
             if root not in module_file.parents:
                 raise SedsAdapterError("a conflicting top-level 'modules' package is already imported")
-        reproduction.update(
+        model_arguments = dict(reproduction.model_arguments)
+        model_arguments.update(
             {
                 "cache_dir": str(root / ".cache"),
                 "distributed": False,
@@ -404,7 +367,7 @@ class SedsAdapter:
                 "local_rank": 0,
             }
         )
-        task_config = SimpleNamespace(**reproduction)
+        task_config = SimpleNamespace(**model_arguments)
         sys.path.insert(0, str(root))
         try:
             modeling = importlib.import_module("modules.modeling")
@@ -463,22 +426,13 @@ class SedsAdapter:
         if not reproduction_path or not Path(reproduction_path).is_file():
             raise SedsAdapterError("controlled SEDS reproduction config is missing")
         reproduction_file = Path(reproduction_path)
-        reproduction = _load_reproduction_config(reproduction_file)
-        required = {
-            "datatype": "h2s_pose",
-            "fusion_type": "gloss_atten",
-            "sim_header": "Filip",
-            "feature_len": 64,
-            "slide_windows": 16,
-            "windows_stride": 1,
-        }
-        mismatches = {
-            key: (reproduction.get(key), expected)
-            for key, expected in required.items()
-            if reproduction.get(key) != expected
-        }
-        if mismatches:
-            raise SedsAdapterError(f"SEDS reproduction config mismatch: {mismatches}")
+        reproduction = _load_reproduction_config(reproduction_file, self.upstream_root)
+        model_arguments = reproduction.model_arguments
+        data = resolved_config.get("data", {})
+        if not isinstance(data, Mapping) or data.get("preparation_protocol") != (
+            reproduction.controlled_protocol["name"]
+        ):
+            raise SedsAdapterError("DIVE data protocol differs from the SEDS reproduction contract")
         task_config = getattr(self.model, "task_config", None)
         model_contract = {
             "slide_windows": getattr(task_config, "slide_windows", None),
@@ -488,10 +442,10 @@ class SedsAdapter:
             "dual_mix": getattr(self.model, "dual_mix", None),
         }
         expected_model_contract = {
-            "slide_windows": reproduction["slide_windows"],
-            "feature_len": reproduction["feature_len"],
-            "fusion_type": reproduction["fusion_type"],
-            "sim_header": reproduction["sim_header"],
+            "slide_windows": model_arguments["slide_windows"],
+            "feature_len": model_arguments["feature_len"],
+            "fusion_type": model_arguments["fusion_type"],
+            "sim_header": model_arguments["sim_header"],
             "dual_mix": self.dual_mix,
         }
         if task_config is None or model_contract != expected_model_contract:

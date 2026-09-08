@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 import torch
+import yaml
 from torch import nn
 
 from dive.adapters import (
@@ -13,11 +14,13 @@ from dive.adapters import (
     SedsAdapter,
     SedsAdapterError,
     SedsLocalPoseEncoder,
+    SedsReproductionError,
     SedsTextBatch,
     SedsVideoBatch,
     normalize_seds_text_mask,
     normalize_seds_video_mask,
     seds_prelogit_fusion_scores,
+    load_seds_reproduction,
 )
 from dive.config import load_config
 from dive.data.text_units import MappedTextUnit, TextUnit
@@ -28,6 +31,7 @@ from dive.training.warmup import WarmupBatch, run_warmup_step
 
 ROOT = Path(__file__).resolve().parents[3]
 SEDS_ROOT = ROOT / "third_party" / "SEDS"
+REPRODUCTION_CONFIG = ROOT / "methods" / "dive" / "configs" / "seds_how2sign_reproduction.yaml"
 
 
 class FakeSignbert(nn.Module):
@@ -220,18 +224,12 @@ def test_adapter_features_prelogit_units_rf_and_checkpoint_provenance(tmp_path):
     model = FakeSeds()
     checkpoint = tmp_path / "seds.pt"
     torch.save(model.state_dict(), checkpoint)
-    reproduction = tmp_path / "reproduction.yaml"
-    reproduction.write_text(
-        "datatype: h2s_pose\nfusion_type: gloss_atten\nsim_header: Filip\n"
-        "feature_len: 64\nslide_windows: 16\nwindows_stride: 1\n",
-        encoding="utf-8",
-    )
     config = load_config(ROOT / "methods" / "dive" / "configs" / "fixture.yaml")
-    config["baseline"]["reproduction_config"] = str(reproduction)
+    config["baseline"]["reproduction_config"] = str(REPRODUCTION_CONFIG)
     config["baseline"]["locked_checkpoint"] = str(checkpoint)
     adapter = SedsAdapter(model, upstream_root=SEDS_ROOT)
     assert isinstance(adapter, BaselineAdapter)
-    with pytest.raises(SedsAdapterError, match="lacks official model fields"):
+    with pytest.raises(SedsAdapterError, match="CLIP initialization is missing"):
         SedsAdapter.from_official_checkpoint(
             checkpoint,
             config,
@@ -266,3 +264,18 @@ def test_adapter_features_prelogit_units_rf_and_checkpoint_provenance(tmp_path):
     assert rf[0]["interval_convention"] == "half_open"
     assert rf[0]["raw_frame_interval"] == [0, 20]
     assert adapter.describe_preprocessing()["padding_fix"] == "mask_before_directional_softmax"
+
+
+def test_checked_reproduction_config_binds_flags_types_and_pinned_sources(tmp_path):
+    reproduction = load_seds_reproduction(REPRODUCTION_CONFIG, upstream_root=SEDS_ROOT)
+    assert reproduction.model_arguments["freeze_exfusion"] is False
+    assert reproduction.published_eval_arguments["init_model"] == "ckpts/h2s_best_model.bin"
+    assert reproduction.published_train_arguments["epochs"] == 200
+    assert reproduction.controlled_protocol["checkpoint_selection"] == "independent_dev_only"
+
+    malformed = yaml.safe_load(REPRODUCTION_CONFIG.read_text(encoding="utf-8"))
+    malformed["model_arguments"]["feature_len"] = "64"
+    malformed_path = tmp_path / "malformed.yaml"
+    malformed_path.write_text(yaml.safe_dump(malformed), encoding="utf-8")
+    with pytest.raises(SedsReproductionError, match="values/types mismatch"):
+        load_seds_reproduction(malformed_path, upstream_root=SEDS_ROOT)

@@ -20,21 +20,21 @@ data:
   relevance_dir: null
   video_root: /home/shared_data/sign_language/How2Sign
   pose_root: /home/shared_data/sign_language/How2Sign
-  rgb_cache_root: null
+  rgb_cache_root: third_party/SEDS/How2Sign/I3D_features
   frame_maps_dir: null
   translation_artifact: null
   allow_split_overlap: false
 baseline:
   family: seds
   upstream_commit: 434e3f714fcb6a7d1f4001fb9a246bbd93ec0246
-  reproduction_config: null
-  initial_weights: null
-  locked_checkpoint: null
+  reproduction_config: methods/dive/configs/seds_how2sign_reproduction.yaml
+  initial_weights: third_party/SEDS/ckpt/pretrain_signbert.pth
+  locked_checkpoint: third_party/SEDS/ckpts/h2s_best_model.bin
   score_branch: fusion
   dual_mix: 0.5
   score_scale: prelogit
 text:
-  tokenizer_artifact: null
+  tokenizer_artifact: third_party/SEDS/modules/bpe_simple_vocab_16e6.txt.gz
   normalization_version: text_norm_v1
   unitizer_version: word_numeric_v1
   unit_pool: mean_raw_projected_subwords_then_normalize

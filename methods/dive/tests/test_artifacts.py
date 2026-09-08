@@ -7,6 +7,7 @@ import pytest
 
 from dive.artifacts import ArtifactError, ArtifactResolver, hash_artifact
 from dive.config import load_config
+from dive.doctor import inspect_environment
 
 
 HERE = Path(__file__).resolve().parents[1]
@@ -127,3 +128,31 @@ def test_artifact_path_must_be_owned_by_its_scope(tmp_path):
     outside.write_text("{}", encoding="utf-8")
     with pytest.raises(ArtifactError, match="escapes"):
         resolver.record_stage("prepare_data", {"audit": outside}, scope="shared")
+
+
+def test_doctor_resolves_and_rehashes_null_prepared_parent_paths(tmp_path):
+    config = load_config(FIXTURE_CONFIG)
+    config["run"]["output_root"] = str(tmp_path / "runs")
+    resolver = ArtifactResolver(config)
+    manifest = resolver.output_path("shared", "data", "train.jsonl")
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text("prepared\n", encoding="utf-8")
+    resolver.record_stage("prepare_data", {"train_manifest": manifest}, scope="shared")
+
+    report = inspect_environment(config, "baseline_train")
+    train = next(item for item in report["resources"] if item["field"] == "data.train_manifest")
+    assert train == {
+        "field": "data.train_manifest",
+        "path": str(manifest),
+        "exists": True,
+        "error_code": None,
+        "resolution": "run_state:shared/prepare_data/train_manifest",
+        "detail": None,
+    }
+
+    manifest.write_text("mutated\n", encoding="utf-8")
+    report = inspect_environment(config, "baseline_train")
+    train = next(item for item in report["resources"] if item["field"] == "data.train_manifest")
+    assert train["exists"] is False
+    assert train["error_code"] == "CACHE_HASH_MISMATCH"
+    assert "registered artifact changed" in train["detail"]

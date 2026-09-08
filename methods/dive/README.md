@@ -16,8 +16,10 @@ fixture results are correctness checks only and must never be reported as How2Si
 benchmark metrics.
 
 The SEDS integration is an adapter around the pinned upstream model, not a forked copy of its code.
-It can construct the official model when the external SEDS checkpoint, CLIP initialization and full
-native reproduction config are supplied; it otherwise fails closed. The checked-in fixture tests
+It can construct the official model when the external SEDS checkpoint and CLIP initialization are
+supplied; it otherwise fails closed. The checked native reproduction artifact records every flag
+from the pinned How2Sign train/eval scripts, verifies their source hashes and types, and explicitly
+records the missing-upstream-parser `freeze_exfusion=false` compatibility value. The fixture tests
 cover score orientation, prelogit scaling, padding behavior, feature-tap layouts and three-stream
 pose flow, but do not constitute released-checkpoint parity.
 
@@ -43,6 +45,7 @@ rejects cross-split source-video leakage and translation hash drift, then regist
 the shared seed run state. Prepared paths can resolve from that state, so users do not copy paths
 between commands. The fixture config intentionally does not pretend to supply these files.
 
-The main How2Sign config intentionally retains unresolved SEDS resources as `null`. The doctor
-command fails closed for a stage whose prerequisites are missing; it does not substitute the local
-CiCo checkpoint for SEDS.
+The main How2Sign config names the intended SEDS resource paths even when the external files are
+absent. The doctor command resolves null prepared-data fields only through checksummed
+`prepare_data` run-state outputs, rehashes those parents, and reports concrete missing SEDS/I3D
+paths. It does not discover arbitrary files or substitute the local CiCo checkpoint for SEDS.

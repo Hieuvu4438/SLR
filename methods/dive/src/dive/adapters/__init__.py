@@ -10,6 +10,11 @@ from .seds import (
     normalize_seds_video_mask,
     seds_prelogit_fusion_scores,
 )
+from .seds_reproduction import (
+    SedsReproduction,
+    SedsReproductionError,
+    load_seds_reproduction,
+)
 
 __all__ = [
     "BaselineAdapter",
@@ -20,9 +25,12 @@ __all__ = [
     "SedsAdapter",
     "SedsAdapterError",
     "SedsLocalPoseEncoder",
+    "SedsReproduction",
+    "SedsReproductionError",
     "SedsTextBatch",
     "SedsVideoBatch",
     "normalize_seds_text_mask",
     "normalize_seds_video_mask",
+    "load_seds_reproduction",
     "seds_prelogit_fusion_scores",
 ]

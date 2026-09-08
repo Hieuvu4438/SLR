@@ -62,6 +62,7 @@ def test_doctor_fails_closed_for_missing_stage_resource(tmp_path):
     report = json.loads(output.read_text(encoding="utf-8"))
     assert result == 2
     assert {item["error_code"] for item in report["missing"]} == {
+        "MISSING_RESOURCE",
         "MISSING_DEV_ARTIFACT",
         "MISSING_BASELINE_CHECKPOINT",
     }

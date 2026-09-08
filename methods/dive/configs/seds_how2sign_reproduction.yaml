@@ -1,0 +1,115 @@
+schema_version: seds_how2sign_reproduction.v1
+upstream_commit: 434e3f714fcb6a7d1f4001fb9a246bbd93ec0246
+source_scripts:
+  eval:
+    path: scripts/eval_h2s.sh
+    sha256: 3692b5a72746d16aa62788073e2b1de81c19c8736d7b06dcaadec7077b68ce29
+  train:
+    path: scripts/train_h2s.sh
+    sha256: c76563b8f334d3af88f76f0b800500a42689bd5027191caec9bd1032911cef58
+published_eval:
+  batch_size_val: 64
+  coef_lr: 1.0
+  crop_size: 256
+  data_path: data_h2
+  datatype: h2s_pose
+  do_eval: true
+  feature_len: 64
+  features_RGB_path: ./How2Sign/I3D_features/
+  features_path: ./How2Sign/RTMpose/Pose_all_24rates/
+  frames_threshold: 0.1
+  freeze_layer_num: 0
+  fusion_type: gloss_atten
+  init_model: ckpts/h2s_best_model.bin
+  linear_patch: 2d
+  lr: 0.00001
+  max_length_frames: 300
+  max_words: 32
+  original_size_h: 256
+  original_size_w: 256
+  output_dir: result_eval/eval_h2s
+  pretrained_clip_name: ViT-B/32
+  rgb_pose_match: true
+  rgb_pose_match_loss: 0.4
+  sign_lr: 0.0001
+  signbert: true
+  sim_header: Filip
+  slide_windows: 16
+  threshold: 0.4
+  windows_stride: 1
+published_train:
+  batch_size: 128
+  batch_size_val: 64
+  coef_lr: 1.0
+  crop_size: 256
+  data_path: data_h2
+  datatype: h2s_pose
+  do_train: true
+  epochs: 200
+  feature_len: 64
+  features_RGB_path: ./How2Sign/I3D_features/
+  features_path: ./How2Sign/RTMpose/Pose_all_24rates/
+  frames_threshold: 0.1
+  freeze_layer_num: 0
+  fusion_type: gloss_atten
+  init_sign_model: ckpt/pretrain_signbert.pth
+  linear_patch: 2d
+  lr: 0.00001
+  max_length_frames: 300
+  max_words: 32
+  n_display: 10
+  num_thread_reader: 64
+  original_size_h: 256
+  original_size_w: 256
+  output_dir: result_train/h2s
+  pretrained_clip_name: ViT-B/32
+  rgb_pose_match: true
+  rgb_pose_match_loss: 0.4
+  sign_lr: 0.0001
+  signbert: true
+  sim_header: Filip
+  slide_windows: 16
+  threshold: 0.4
+  windows_stride: 1
+model_arguments:
+  aug_choose: t2v
+  cross_model: cross-base
+  dropout: 0.1
+  feature_len: 64
+  freeze_exfusion: false
+  fusion_type: gloss_atten
+  hidden_dim: 512
+  in_channels: 2
+  kl_logit: 0.01
+  kl_pose_loss: 0.5
+  kl_rgb_loss: 0.5
+  layout_encoder: stb
+  linear_patch: 2d
+  mix_design: balance
+  not_load_visual: false
+  pose_dim: 1536
+  pretrained_clip_name: ViT-B/32
+  rgb_dim: 1024
+  rgb_pose_kl: false
+  rgb_pose_match: true
+  rgb_pose_match_loss: 0.4
+  signbert: true
+  sim_header: Filip
+  slide_windows: 16
+  strategy: spatial
+  temporal_pad: 0
+  visual_num_hidden_layers: 12
+  windows_stride: 1
+external_assets:
+  clip_initialization: modules/ViT-B-32.pt
+  locked_checkpoint: ckpts/h2s_best_model.bin
+  pose_features: How2Sign/RTMpose/Pose_all_24rates
+  rgb_features: How2Sign/I3D_features
+  signbert_initialization: ckpt/pretrain_signbert.pth
+controlled_protocol:
+  checkpoint_selection: independent_dev_only
+  dev_source: local_labels.dev.json
+  name: seds_how2sign_controlled_v1
+  test_access: single_locked_final_evaluation
+  test_source: pinned_data_h2/test.pkl
+  train_source: pinned_data_h2/train.pkl

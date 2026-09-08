@@ -9,7 +9,18 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from .artifacts import ArtifactError, ArtifactResolver
 from .config import config_hash, required_resource_paths
+
+
+_PREPARED_PARENT_FIELDS = {
+    "data.train_manifest": "train_manifest",
+    "data.dev_manifest": "dev_manifest",
+    "data.test_manifest": "test_manifest",
+    "data.train_relations": "train_relations",
+    "data.relevance_dir": "relevance_dir",
+    "data.frame_maps_dir": "frame_maps_dir",
+}
 
 
 @dataclass(frozen=True)
@@ -18,6 +29,8 @@ class ResourceCheck:
     path: str | None
     exists: bool
     error_code: str | None
+    resolution: str
+    detail: str | None
 
 
 def _version(distribution: str) -> str | None:
@@ -56,15 +69,38 @@ def inspect_environment(config: Mapping[str, Any], stage: str) -> dict[str, Any]
         torch_info["error"] = f"{type(exc).__name__}: {exc}"
 
     checks: list[ResourceCheck] = []
+    resolver = ArtifactResolver(config)
     for field, raw_path in required_resource_paths(config, stage).items():
-        value = None if raw_path is None else os.path.expandvars(os.path.expanduser(str(raw_path)))
+        value = None
+        detail = None
+        resolution = "config"
+        if raw_path is not None:
+            value = os.path.expandvars(os.path.expanduser(str(raw_path)))
+        elif field in _PREPARED_PARENT_FIELDS:
+            resolution = f"run_state:shared/prepare_data/{_PREPARED_PARENT_FIELDS[field]}"
+            try:
+                parent = resolver.resolve(
+                    "prepare_data", _PREPARED_PARENT_FIELDS[field], scope="shared"
+                )
+                value = str(parent.path)
+            except ArtifactError as exc:
+                detail = str(exc)
         exists = value is not None and Path(value).exists()
+        error_code = None
+        if not exists:
+            error_code = (
+                "CACHE_HASH_MISMATCH"
+                if detail is not None and "CACHE_HASH_MISMATCH" in detail
+                else _resource_error_code(field)
+            )
         checks.append(
             ResourceCheck(
                 field=field,
                 path=value,
                 exists=exists,
-                error_code=None if exists else _resource_error_code(field),
+                error_code=error_code,
+                resolution=resolution,
+                detail=detail,
             )
         )
     missing = [asdict(item) for item in checks if not item.exists]

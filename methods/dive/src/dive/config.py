@@ -302,6 +302,12 @@ def required_resource_paths(config: Mapping[str, Any], stage: str) -> dict[str, 
         "data.video_root": data.get("video_root"),
         "data.pose_root": data.get("pose_root"),
     }
+    upstream_root = data.get("upstream_root")
+    clip_initialization = (
+        str(Path(str(upstream_root)) / "modules" / "ViT-B-32.pt")
+        if upstream_root is not None
+        else None
+    )
     requirements: dict[str, dict[str, str | None]] = {
         "fixture": {},
         "prepare": {
@@ -324,18 +330,28 @@ def required_resource_paths(config: Mapping[str, Any], stage: str) -> dict[str, 
         },
         "baseline_train": {
             **common_data,
+            "data.rgb_cache_root": data.get("rgb_cache_root"),
             "data.train_manifest": data.get("train_manifest"),
             "data.dev_manifest": data.get("dev_manifest"),
+            "data.frame_maps_dir": data.get("frame_maps_dir"),
             "baseline.reproduction_config": baseline.get("reproduction_config"),
             "baseline.initial_weights": baseline.get("initial_weights"),
+            "baseline.clip_initialization": clip_initialization,
         },
         "baseline_validate": {
+            **common_data,
+            "data.rgb_cache_root": data.get("rgb_cache_root"),
             "data.dev_manifest": data.get("dev_manifest"),
+            "data.frame_maps_dir": data.get("frame_maps_dir"),
+            "baseline.reproduction_config": baseline.get("reproduction_config"),
             "baseline.locked_checkpoint": baseline.get("locked_checkpoint"),
         },
         "warmup": {
+            **common_data,
+            "data.rgb_cache_root": data.get("rgb_cache_root"),
             "data.train_manifest": data.get("train_manifest"),
             "data.dev_manifest": data.get("dev_manifest"),
+            "data.frame_maps_dir": data.get("frame_maps_dir"),
             "baseline.locked_checkpoint": baseline.get("locked_checkpoint"),
             "text.tokenizer_artifact": text.get("tokenizer_artifact"),
         },

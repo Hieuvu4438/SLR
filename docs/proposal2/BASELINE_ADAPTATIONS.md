@@ -3,7 +3,9 @@
 The official SEDS repository is available at the exact clean detached commit
 `434e3f714fcb6a7d1f4001fb9a246bbd93ec0246`. No upstream source patch is applied. DIVE instead owns
 a side-effect-free adapter in `methods/dive/src/dive/adapters/seds.py`; real checkpoint parity and
-controlled reproduction remain blocked on the separately distributed SEDS assets.
+controlled reproduction remain blocked on the separately distributed SEDS assets. The native
+How2Sign reproduction contract is checked in as
+`methods/dive/configs/seds_how2sign_reproduction.yaml`.
 
 ## Controlled How2Sign split routing
 
@@ -17,7 +19,8 @@ SEDS architecture or score.
 Implemented adapter-level corrections and taps:
 
 - validates the clean pinned checkout, complete locked checkpoint-to-model tensor equality,
-  reproduction-config hash and required native model fields;
+  reproduction-config hash, exact train/eval script hashes, typed published flags and required
+  native model fields;
 - provides a lazy official model factory that imports `modules.modeling` without importing the
   distributed training entry point and fails closed when CLIP/SignBERT/checkpoint resources are
   absent;
@@ -33,10 +36,16 @@ Implemented adapter-level corrections and taps:
 - accepts synchronized right/left/body pose trees in the shared evidence warm-up/student runners and
   records conservative half-open raw-frame RF intervals (nominal 16, pose bound up to 24 frames).
 
+The pinned `modeling.py` reads `task_config.freeze_exfusion`, although the pinned CLI parser never
+defines that argument. The checked contract records `freeze_exfusion=false` as an explicit
+compatibility value; it also supplies `not_load_visual=false`, which the upstream checkpoint loader
+requires. These values repair construction only and do not patch upstream source or alter the
+published score.
+
 Still open before a controlled B0 claim:
 
 - score/tap parity on the actual released How2Sign checkpoint and processed I3D/RTMpose samples;
-- a complete native reproduction config plus the external `ViT-B-32.pt`, SignBERT initialization,
-  processed features and locked SEDS checkpoint.
+- the external `ViT-B-32.pt`, SignBERT initialization, processed I3D features and locked SEDS
+  checkpoint.
 
 The existing CiCo compatibility work for proposal 1 is not silently reused as a SEDS adaptation.
