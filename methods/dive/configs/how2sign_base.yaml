@@ -1,0 +1,131 @@
+spec_version: dive_v2_impl_1_0
+run:
+  seed: 17
+  profile: correctness
+  output_root: runs/dive_v2
+  variant: A6
+  comparison_group: primary_pair
+data:
+  dataset: how2sign
+  train_manifest: null
+  dev_manifest: null
+  test_manifest: null
+  train_relations: null
+  relevance_dir: null
+  video_root: /home/shared_data/sign_language/How2Sign
+  pose_root: /home/shared_data/sign_language/How2Sign
+  rgb_cache_root: null
+  translation_artifact: null
+  allow_split_overlap: false
+baseline:
+  family: seds
+  upstream_commit: 434e3f714fcb6a7d1f4001fb9a246bbd93ec0246
+  reproduction_config: null
+  initial_weights: null
+  locked_checkpoint: null
+  score_branch: fusion
+  dual_mix: 0.5
+  score_scale: prelogit
+text:
+  tokenizer_artifact: null
+  normalization_version: text_norm_v1
+  unitizer_version: word_numeric_v1
+  unit_pool: mean_raw_projected_subwords_then_normalize
+  target_source: frozen_contextual_units
+  truncate_policy: recorded_native_mapping
+  reject_partial_targets: true
+temporal:
+  canonical_policy: validated_artifact_or_deterministic_dense
+  clip_steps: 16
+  dense_stride_steps: 1
+  max_clips: 64
+  support_view_offsets_steps: [-1, 1]
+  require_distinct_views: true
+  record_raw_frame_map: true
+  forbid_unrecorded_global_preprocessing: true
+evidence:
+  output_dim: 512
+  hidden_dim: 1024
+  dropout: 0.0
+  freeze_bn_statistics: true
+  train_bn_affine: false
+  normalize_epsilon: 0.000001
+  tau_alignment: 0.07
+  reference_cache_dtype: float32
+  teacher_update: frozen_after_warmup
+mining:
+  shortlist_per_direction: 128
+  rerank_topk: 16
+  hardness: negative_min_four_baseline_margins
+  semantic_rule_set: strict_numeric_v1
+  schema_audit_artifact: null
+  shortlist_audit_queries: 128
+  shortlist_audit_seed: 701
+support:
+  h_min: 0.001
+  mass_epsilon: 0.000000000001
+  tau_localization: 0.07
+  eta_positive: 0.0
+  eta_differential: 0.05
+  min_stability: 0.7
+  target_mass: 0.6
+  max_clip_fraction: 0.4
+  min_retained_mass: 0.5
+  max_raw_rf_fraction: 0.5
+  strict_schema_weight: 1.0
+  audited_lexical_weight: 0.5
+  failed_record_policy: retain_with_zero_weight
+sampler:
+  effective_batch_size: 128
+  contrasts_per_step: 16
+  endpoint_quota_per_epoch: 4
+  unique_sample_ids: true
+  preserve_pair_schedule_across_controls: true
+loss:
+  tau_retrieval: 0.07
+  tau_pair: 0.07
+  tau_local_margin: 0.1
+  local_margin_alpha: 0.25
+  pair_target_margin: 0.0
+  lambda_pair: 0.1
+  lambda_local: 0.1
+  lambda_preservation: 0.0
+  auxiliary_denominator: sampled_contrasts_before_support_rejection
+  pair_feasibility_bound: two_gamma_train
+train:
+  warmup_epochs: 5
+  pilot_epochs: 10
+  full_epochs: 30
+  budget_mode: pilot
+  gamma_train: 0.1
+  optimizer: adamw
+  lr_projector: 0.0001
+  lr_pose: 0.00001
+  weight_decay: 0.01
+  scheduler: warmup_then_cosine
+  warmup_fraction: 0.1
+  minimum_lr_fraction: 0.1
+  grad_clip_norm: 1.0
+  amp: false
+  world_size: 1
+  gradient_accumulation_steps: 1
+  checkpoint_every_epoch: true
+  include_initial_checkpoint: true
+selection:
+  split: dev
+  metric: mean_t2v_v2t_r1
+  checkpoint_gamma: fixed_gamma_train
+  checkpoint_tie_break: earliest_step
+  gamma_grid: [0.0, 0.05, 0.1, 0.2]
+  gamma_tie_break: smallest_gamma
+evaluation:
+  gallery: full
+  query_chunk: 16
+  candidate_chunk: 128
+  topk: [1, 5, 10]
+  score_layout: video_rows_text_columns
+  ties: score_desc_then_candidate_id
+  bootstrap_replicates: 2000
+  bootstrap_seed: 811
+  final_seeds: [17, 23, 42]
+  final_experiment_plan: null

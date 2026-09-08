@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SHARED = ROOT / "shared" / "slr_common"
 METHOD = ROOT / "methods" / "elsc" / "elsc"
+DIVE_METHOD = ROOT / "methods" / "dive" / "src" / "dive"
 
 
 def test_shared_layer_never_imports_a_method_package():
@@ -20,7 +21,7 @@ def test_shared_layer_never_imports_a_method_package():
                 roots = {node.module.split(".", 1)[0]}
             else:
                 continue
-            if roots & {"elsc", "methods"}:
+            if roots & {"dive", "elsc", "methods"}:
                 violations.append(f"{path.relative_to(ROOT)}:{node.lineno}")
     assert violations == []
 
@@ -30,3 +31,5 @@ def test_method_and_shared_sources_have_distinct_canonical_roots():
     assert (METHOD / "losses" / "evidence.py").is_file()
     assert (SHARED / "features" / "i3d.py").is_file()
     assert (SHARED / "evaluation" / "cico_eval.py").is_file()
+    assert (DIVE_METHOD / "models" / "scoring.py").is_file()
+    assert (DIVE_METHOD / "losses.py").is_file()

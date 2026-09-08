@@ -1,0 +1,11 @@
+# Verified correctness environment on ptitiec, 2026-09-08.
+# CUDA/driver compatibility remains an environment constraint rather than a pip dependency.
+torch==2.11.0+cu128
+numpy==2.2.6
+PyYAML==6.0.3
+ftfy==6.3.1
+regex==2026.4.4
+pytest==9.0.3
+ruff==0.15.22
+setuptools==81.0.0
+wheel==0.45.1

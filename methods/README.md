@@ -7,3 +7,5 @@ and runtime utilities live in `shared/`; vendored dependencies remain in `third_
 Current methods:
 
 - `elsc/`: Evidence-Localized Sign Contrast (proposal 1).
+- `dive/`: Discriminative Visual Evidence Learning (proposal 2). Its package uses the
+  `methods/dive/src/dive` layout so method-owned code remains isolated from shared utilities.

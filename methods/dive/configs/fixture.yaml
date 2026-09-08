@@ -1,0 +1,16 @@
+extends: how2sign_base.yaml
+run:
+  profile: fixture
+  output_root: runs/dive_v2_fixture
+data:
+  dataset: synthetic_fixture
+  video_root: null
+  pose_root: null
+sampler:
+  effective_batch_size: 8
+  contrasts_per_step: 2
+  endpoint_quota_per_epoch: 2
+evaluation:
+  query_chunk: 2
+  candidate_chunk: 3
+  bootstrap_replicates: 20

@@ -25,12 +25,15 @@ translation = [
   "transformers>=5.5",
 ]
 
+[project.scripts]
+dive = "dive.cli:main"
+
 [tool.setuptools.packages.find]
-where = ["methods/elsc", "shared"]
-include = ["elsc*", "slr_common*"]
+where = ["methods/elsc", "methods/dive/src", "shared"]
+include = ["dive*", "elsc*", "slr_common*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "methods/elsc/tests"]
+testpaths = ["tests", "methods/elsc/tests", "methods/dive/tests"]
 addopts = "-ra"
 
 [tool.ruff]
