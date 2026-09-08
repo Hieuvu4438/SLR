@@ -39,6 +39,7 @@ dive doctor --config methods/dive/configs/fixture.yaml --stage fixture \
   --output artifacts/dive/doctor_fixture.json
 dive prepare-data --config methods/dive/configs/how2sign_base.yaml --workers 16
 dive validate-data --config /path/to/resolved_config.yaml
+dive baseline validate --config methods/dive/configs/how2sign_base.yaml --split dev
 dive smoke --config methods/dive/configs/fixture.yaml --output-dir artifacts/dive/smoke
 pytest -q methods/dive/tests
 ```
@@ -56,3 +57,10 @@ The main How2Sign config names the intended SEDS resource paths even when the ex
 absent. The doctor command resolves null prepared-data fields only through checksummed
 `prepare_data` run-state outputs, rehashes those parents, and reports concrete missing SEDS/I3D
 paths. It does not discover arbitrary files or substitute the local CiCo checkpoint for SEDS.
+
+`baseline validate` is a real controlled-dev runner, not a shape-only stub. It requires the
+registered data audit, verifies and loads the locked checkpoint, encodes the full controlled dev
+manifest, compares a real unpadded probe against the released score dispatcher at FP32 tolerances,
+computes the complete prelogit `[video,text]` gallery with stable IDs, evaluates multi-positive
+retrieval, and registers the score archive and report under the shared run state. It permits only
+`--split dev`; final test access belongs to the separately locked evaluation command.

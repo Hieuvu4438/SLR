@@ -306,6 +306,12 @@ class SedsAdapter:
                 raise SedsAdapterError(f"SEDS model is missing required attribute: {attribute}")
         self._checkpoint_metadata: dict[str, Any] | None = None
 
+    @property
+    def checkpoint_metadata(self) -> Mapping[str, Any]:
+        if self._checkpoint_metadata is None:
+            raise SedsAdapterError("SEDS checkpoint has not been validated")
+        return dict(self._checkpoint_metadata)
+
     @classmethod
     def from_official_checkpoint(
         cls,
@@ -556,6 +562,101 @@ class SedsAdapter:
                 "score_orientation": "video_rows_text_columns",
             },
         )
+
+    def validate_unpadded_native_parity(
+        self,
+        video_features: NativeVideoFeatures,
+        text_features: NativeTextFeatures,
+        *,
+        atol: float = 1e-6,
+        rtol: float = 1e-5,
+    ) -> Mapping[str, Any]:
+        """Compare DIVE to the released scorer after removing every padded position."""
+        if not hasattr(self.model, "get_similarity_logits"):
+            raise SedsAdapterError("SEDS model lacks the native similarity dispatcher")
+        if set(video_features.streams) != {"pose_hidden", "rgb_hidden"}:
+            raise SedsAdapterError("SEDS parity probe requires exact pose/RGB contextual streams")
+        video_counts = video_features.validity.sum(dim=1)
+        text_counts = text_features.token_validity.sum(dim=1)
+        video_prefix = (
+            torch.arange(video_features.validity.shape[1], device=video_counts.device)[None]
+            < video_counts[:, None]
+        )
+        text_prefix = (
+            torch.arange(text_features.token_validity.shape[1], device=text_counts.device)[None]
+            < text_counts[:, None]
+        )
+        if not torch.equal(video_features.validity, video_prefix) or not torch.equal(
+            text_features.token_validity, text_prefix
+        ):
+            raise SedsAdapterError("SEDS valid positions must form contiguous prefixes")
+        video_length = int(video_counts.min())
+        text_length = int(text_counts.min())
+        if video_length <= 0 or text_length <= 0:
+            raise SedsAdapterError("SEDS parity probe has no common unpadded prefix")
+        video_mask = video_features.validity[:, :video_length]
+        text_mask = text_features.token_validity[:, :text_length]
+        if not bool(video_mask.all()) or not bool(text_mask.all()):
+            raise SedsAdapterError("SEDS parity trim retained a padded position")
+        pose = video_features.streams["pose_hidden"][:, :video_length]
+        rgb = video_features.streams["rgb_hidden"][:, :video_length]
+        text = text_features.token_features[:, :text_length]
+        legacy_video_mask = torch.zeros_like(video_mask, dtype=torch.long)
+        legacy_text_mask = torch.ones_like(text_mask, dtype=torch.long)
+        self.model.eval()
+        with torch.no_grad():
+            native = self.model.get_similarity_logits(
+                text,
+                pose,
+                rgb,
+                legacy_text_mask,
+                legacy_video_mask,
+                shaped=True,
+                loose_type=getattr(self.model, "loose_type", False),
+                is_train=True,
+            )
+            if not isinstance(native, tuple) or len(native) < 2:
+                raise SedsAdapterError("native SEDS scorer returned an invalid parity payload")
+            native_i2t, native_t2i = native[:2]
+            if not isinstance(native_i2t, Tensor) or not isinstance(native_t2i, Tensor):
+                raise SedsAdapterError("native SEDS scorer did not return directional tensors")
+            fusion = self.model.fusion(pose, rgb, legacy_video_mask)
+            _, dive_i2t, dive_t2i = seds_prelogit_fusion_scores(
+                fusion,
+                text,
+                video_mask,
+                text_mask,
+                dual_mix=self.dual_mix,
+                temperature=self.temperature,
+            )
+            scale = self.model.clip.logit_scale.exp().detach().float()
+            native_i2t_prelogit = native_i2t.float() / scale
+            native_t2i_prelogit = native_t2i.float() / scale
+        if native_i2t_prelogit.shape != dive_i2t.shape or native_t2i_prelogit.shape != dive_t2i.shape:
+            raise SedsAdapterError("native SEDS directional score shapes differ from DIVE")
+        i2t_error = float((dive_i2t.float() - native_i2t_prelogit).abs().max())
+        t2i_error = float((dive_t2i.float() - native_t2i_prelogit).abs().max())
+        passed = torch.allclose(
+            dive_i2t.float(), native_i2t_prelogit, atol=atol, rtol=rtol
+        ) and torch.allclose(dive_t2i.float(), native_t2i_prelogit, atol=atol, rtol=rtol)
+        if not passed:
+            raise SedsAdapterError(
+                f"native unpadded score parity failed: i2t={i2t_error}, t2i={t2i_error}"
+            )
+        return {
+            "schema_version": "seds_score_parity.v1",
+            "passed": True,
+            "video_count": len(video_features.sample_ids),
+            "text_count": len(text_features.text_ids),
+            "unpadded_video_length": video_length,
+            "unpadded_text_length": text_length,
+            "i2t_max_abs_error": i2t_error,
+            "t2i_max_abs_error": t2i_error,
+            "atol": atol,
+            "rtol": rtol,
+            "score_scale": "prelogit",
+            "orientation": "video_rows_text_columns",
+        }
 
     def encode_text_units(
         self,

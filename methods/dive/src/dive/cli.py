@@ -6,7 +6,9 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from .adapters import SedsAdapterError, SedsDataError, SedsReproductionError
 from .artifacts import ArtifactError
+from .baseline import BaselineValidationError, validate_seds_baseline
 from .config import ConfigError, dump_resolved, load_config
 from .data.manifest import ManifestError
 from .data.prepare import PreparationError, prepare_how2sign_data
@@ -50,6 +52,16 @@ def _parser() -> argparse.ArgumentParser:
     prepare_data.add_argument("--config", required=True)
     prepare_data.add_argument("--workers", type=int)
 
+    baseline = subparsers.add_parser("baseline", help="train or validate the controlled B0")
+    baseline_commands = baseline.add_subparsers(dest="baseline_command", required=True)
+    baseline_validate = baseline_commands.add_parser(
+        "validate", help="validate locked SEDS B0 on the controlled dev gallery"
+    )
+    baseline_validate.add_argument("--config", required=True)
+    baseline_validate.add_argument("--split", choices=("dev",), default="dev")
+    baseline_validate.add_argument("--batch-size", type=int, default=64)
+    baseline_validate.add_argument("--device", default="cuda:0")
+
     smoke = subparsers.add_parser("smoke", help="run fixture-only end-to-end correctness smoke")
     smoke.add_argument("--config", required=True)
     smoke.add_argument("--output-dir", required=True)
@@ -77,6 +89,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             report = prepare_how2sign_data(config, workers=args.workers)
             print(json.dumps(report, indent=2, sort_keys=True))
             return 0
+        if args.command == "baseline" and args.baseline_command == "validate":
+            report = validate_seds_baseline(
+                config,
+                split=args.split,
+                batch_size=args.batch_size,
+                device=args.device,
+            )
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return 0
         if args.command == "smoke":
             root = Path(__file__).resolve().parents[4]
             report = run_fixture_smoke(config, args.output_dir, repository_root=root)
@@ -87,11 +108,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     except (
         ArtifactError,
+        BaselineValidationError,
         DataValidationError,
         ManifestError,
         PreparationError,
         RelevanceError,
         RelationError,
+        SedsAdapterError,
+        SedsDataError,
+        SedsReproductionError,
     ) as exc:
         print(f"DATA_ERROR: {exc}", file=sys.stderr)
         return 2

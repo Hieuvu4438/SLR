@@ -52,4 +52,11 @@ Still open before a controlled B0 claim:
 - the external `ViT-B-32.pt`, SignBERT initialization, processed I3D features and locked SEDS
   checkpoint.
 
+The `dive baseline validate` stage is wired to this adapter and controlled manifest bridge. It
+requires `validate_data.audit`, performs a real unpadded parity comparison against the upstream
+`get_similarity_logits(..., is_train=True)` dispatcher after removing `exp(logit_scale)`, checks
+prelogit cosine bounds, evaluates the full ID-addressed dev gallery, and registers checksummed
+scores and metrics. The command is dev-only so its existence cannot provide an accidental test
+selection route.
+
 The existing CiCo compatibility work for proposal 1 is not silently reused as a SEDS adaptation.

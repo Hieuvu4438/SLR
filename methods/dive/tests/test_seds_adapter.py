@@ -84,6 +84,27 @@ class FakeSeds(nn.Module):
         hidden = torch.nn.functional.one_hot(input_ids, num_classes=4).float()
         return attention_mask, hidden
 
+    def get_similarity_logits(
+        self,
+        sequence_output,
+        visual_hidden_pose,
+        visual_hidden_rgb,
+        attention_mask,
+        video_mask,
+        **kwargs,
+    ):
+        del kwargs
+        mixed, i2t, t2i = seds_prelogit_fusion_scores(
+            self.fusion(visual_hidden_pose, visual_hidden_rgb, video_mask),
+            sequence_output,
+            video_mask == 0,
+            attention_mask == 1,
+            dual_mix=self.dual_mix,
+        )
+        del mixed
+        scale = self.clip.logit_scale.exp()
+        return i2t * scale, t2i * scale, None, None, None, None, 0.0, 0.0, None, None
+
 
 def _video_batch() -> SedsVideoBatch:
     rgb_local = torch.tensor(
@@ -246,6 +267,9 @@ def test_adapter_features_prelogit_units_rf_and_checkpoint_provenance(tmp_path):
     assert score.scores.shape == (2, 2)
     assert score.logit_scale == pytest.approx(10.0)
     assert score.diagnostics["score_orientation"] == "video_rows_text_columns"
+    parity = adapter.validate_unpadded_native_parity(video, text)
+    assert parity["passed"] is True
+    assert parity["i2t_max_abs_error"] < 1e-6
 
     unit = TextUnit(0, 0, 1, "x", "x", "word")
     mappings = (

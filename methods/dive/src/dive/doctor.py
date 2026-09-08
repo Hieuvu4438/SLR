@@ -21,6 +21,19 @@ _PREPARED_PARENT_FIELDS = {
     "data.relevance_dir": "relevance_dir",
     "data.frame_maps_dir": "frame_maps_dir",
 }
+_STAGE_PARENT_ARTIFACTS = {
+    "baseline_train": (("validate_data", "audit", "shared"),),
+    "baseline_validate": (("validate_data", "audit", "shared"),),
+    "warmup": (
+        ("validate_data", "audit", "shared"),
+        ("baseline_validate", "report", "shared"),
+    ),
+    "mine_finalize": (
+        ("baseline_validate", "report", "shared"),
+        ("evidence_warmup", "reference", "shared"),
+    ),
+    "evaluate_test": (("validate_data", "audit", "shared"),),
+}
 
 
 @dataclass(frozen=True)
@@ -100,6 +113,32 @@ def inspect_environment(config: Mapping[str, Any], stage: str) -> dict[str, Any]
                 exists=exists,
                 error_code=error_code,
                 resolution=resolution,
+                detail=detail,
+            )
+        )
+    for parent_stage, name, scope in _STAGE_PARENT_ARTIFACTS.get(stage, ()):
+        field = f"artifact.{parent_stage}.{name}"
+        detail = None
+        value = None
+        try:
+            parent = resolver.resolve(parent_stage, name, scope=scope)
+            value = str(parent.path)
+        except ArtifactError as exc:
+            detail = str(exc)
+        exists = value is not None and Path(value).exists()
+        checks.append(
+            ResourceCheck(
+                field=field,
+                path=value,
+                exists=exists,
+                error_code=(
+                    None
+                    if exists
+                    else "CACHE_HASH_MISMATCH"
+                    if detail is not None and "CACHE_HASH_MISMATCH" in detail
+                    else "MISSING_PARENT_ARTIFACT"
+                ),
+                resolution=f"run_state:{scope}/{parent_stage}/{name}",
                 detail=detail,
             )
         )
