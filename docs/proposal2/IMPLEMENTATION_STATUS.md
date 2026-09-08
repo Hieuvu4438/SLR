@@ -15,7 +15,7 @@ are never counted as a benchmark replication.
 | M07 — evidence/reference | in_progress | Pointwise local RGB+pose projector, frozen BN mode/affine, deep-copied reference/student, state hash including buffers, storage independence, identity score, nonzero student gradient and raw-window locality tests pass. Warm-up stage runner/checkpoint artifacts remain. |
 | M08 — mining/audit | blocked | Code is complete for bidirectional pooled shortlist, S0 four-margin reranking, deterministic dedup, exact shortlist-coverage audit, strict numeric schema, blinded audit export, train-only finalize and fingerprint/checksum bank I/O. A real accepted human audit plus SEDS train representations are required to produce the main semantic bank. |
 | M09 — support | blocked | Code is complete for differential own-minus-rival support, absolute/tiny-distance gates, raw-time rebin, JSD, concentration/RF gates, g calculation, and retaining failed records with g=0 in the bank. Actual reference features and two real shifted views are required for the main support artifact. |
-| M10 — sampler/step | not_started | Reproducible shared plans and student step remain. |
+| M10 — sampler/step | passed | Dedicated-RNG plans enforce unique effective batches, unordered-pair uniqueness, endpoint quota, ordinary fill, pre-rejection H and shared-control fingerprints. The exact centered student step uses explicit ID remaps, filters g=0 before nullable fields, computes global/local/pair losses, clips gradients and detaches B0/reference/text/q/g inputs. |
 | M11 — end-to-end smoke | not_started | Requires M04–M10. |
 | M12 — primary pilot | blocked | Requires completed core, controlled B0/reference, accepted audit and real features. |
 | M13 — mechanism | blocked | Requires a successful primary pilot and support-common artifacts. |
@@ -51,3 +51,5 @@ are never counted as a benchmark replication.
 - `pytest -q`: 174 passed; no ELSC/shared regression.
 - `pytest -q methods/dive/tests`: 57 passed after neighbor/bank/audit completion.
 - `pytest -q`: 181 passed; no ELSC/shared regression.
+- `pytest -q methods/dive/tests`: 63 passed after sampler and exact student-step integration.
+- `pytest -q`: 187 passed; no ELSC/shared regression.
