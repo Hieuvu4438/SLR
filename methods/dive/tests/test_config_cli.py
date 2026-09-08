@@ -49,7 +49,9 @@ def test_semantic_validation_rejects_protocol_violations(path, value, message):
 
 def test_doctor_fixture_writes_machine_readable_report(tmp_path, capsys):
     output = tmp_path / "doctor.json"
-    result = main(["doctor", "--config", str(FIXTURE_CONFIG), "--stage", "fixture", "--output", str(output)])
+    result = main(
+        ["doctor", "--config", str(FIXTURE_CONFIG), "--stage", "fixture", "--output", str(output)]
+    )
     assert result == 0
     report = json.loads(output.read_text(encoding="utf-8"))
     assert report["ready"] is True
@@ -105,3 +107,24 @@ def test_baseline_train_cli_requires_registered_data_audit(tmp_path, capsys):
     result = main(["baseline", "train", "--config", str(path), "--device", "cpu"])
     assert result == 2
     assert "MISSING_PARENT_ARTIFACT: validate_data.audit" in capsys.readouterr().err
+
+
+def test_evidence_warmup_cli_requires_all_registered_parent_artifacts(tmp_path, capsys):
+    config = load_config(FIXTURE_CONFIG)
+    config["run"]["output_root"] = str(tmp_path / "runs")
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    result = main(
+        [
+            "evidence",
+            "warmup",
+            "--config",
+            str(path),
+            "--batch-size",
+            "8",
+        ]
+    )
+    assert result == 2
+    assert "MISSING_PARENT_ARTIFACT: validate_data audit/frame/unit maps" in (
+        capsys.readouterr().err
+    )

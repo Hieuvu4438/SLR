@@ -41,6 +41,7 @@ dive prepare-data --config methods/dive/configs/how2sign_base.yaml --workers 16
 dive validate-data --config /path/to/resolved_config.yaml
 dive baseline train --config methods/dive/configs/how2sign_base.yaml --device cuda:0
 dive baseline validate --config methods/dive/configs/how2sign_base.yaml --split dev
+dive evidence warmup --config methods/dive/configs/how2sign_base.yaml --device cuda:0
 dive smoke --config methods/dive/configs/fixture.yaml --output-dir artifacts/dive/smoke
 pytest -q methods/dive/tests
 ```
@@ -85,3 +86,12 @@ manifest, compares a real unpadded probe against the released score dispatcher a
 computes the complete prelogit `[video,text]` gallery with stable IDs, evaluates multi-positive
 retrieval, and registers the score archive and report under the shared run state. It permits only
 `--split dev`; final test access belongs to the separately locked evaluation command.
+
+`evidence warmup` requires that controlled baseline result plus registered native frame and text
+lineage. It rechecks feature hashes and exact native token IDs, caches only frozen contextual text
+units, and streams native pose/RGB batches through the local encoder. Training uses deterministic
+one-view-per-text ordinary batches and the registered positive/candidate relations for exactly five
+FP32 epochs. Dev selection scores the complete gallery in bounded video/text blocks, so it never
+materializes the full video-by-text-by-clip-by-unit interaction tensor. Epoch checkpoints restore
+model, optimizer, scheduler, RNG and candidate history under `--resume`; the earliest best mean
+bidirectional R@1 winner is exported and registered as an immutable FP32 reference.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 import pytest
 import torch
@@ -21,9 +21,11 @@ from dive.data.temporal import (
 from dive.data.text_units import (
     SEDS_CLIP_NORMALIZATION_VERSION,
     TextUnitError,
+    load_text_unit_lineage,
     map_units_to_subwords,
     normalize_text,
     require_target,
+    unit_mapping_hash,
     unitize,
 )
 
@@ -103,6 +105,31 @@ def test_seds_clip_normalization_matches_native_cleaning_contract():
         normalize_text("  Clean &amp; Clear   isnâ€™t bad  ", SEDS_CLIP_NORMALIZATION_VERSION)
         == "clean & clear isn't bad"
     )
+
+
+def test_text_unit_lineage_loader_verifies_derivation_hash_and_manifest_coverage(tmp_path):
+    text = "the value is 12 meters"
+    token_ids = [49406, 10, 11, 12, 13, 14, 49407, 0]
+    offsets = [None, (0, 3), (4, 9), (10, 12), (13, 15), (16, 22), None, None]
+    units = map_units_to_subwords(unitize(text), token_ids, offsets)
+    row = {
+        "schema_version": "seds_text_unit_map.v1",
+        "text_id": "t0",
+        "text_model": text,
+        "token_ids": token_ids,
+        "token_offsets": offsets,
+        "units": [asdict(item) for item in units],
+        "unit_mapping_sha256": unit_mapping_hash(units),
+    }
+    path = tmp_path / "units.jsonl"
+    path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    loaded = load_text_unit_lineage(path, expected_texts={"t0": text})
+    assert loaded["t0"].units == units
+
+    row["unit_mapping_sha256"] = "0" * 64
+    path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    with pytest.raises(TextUnitError, match="does not match"):
+        load_text_unit_lineage(path, expected_texts={"t0": text})
 
 
 def test_pair_relations_keep_positives_and_exclude_ambiguous_negatives():

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 import torch
 from torch import nn
 
@@ -10,8 +11,14 @@ from dive.config import config_hash, load_config
 from dive.models.evidence import EvidenceEncoder, state_hash
 from dive.training.optimizer import build_evidence_optimizer
 from dive.training.warmup import (
+    ChunkedWarmupGallery,
     WarmupBatch,
+    WarmupContractError,
     WarmupGallery,
+    WarmupTextGalleryBatch,
+    WarmupVideoGalleryBatch,
+    evaluate_chunked_warmup_gallery,
+    evaluate_warmup_gallery,
     run_evidence_warmup,
     run_warmup_step,
 )
@@ -76,6 +83,64 @@ def test_warmup_step_updates_evidence_but_not_frozen_inputs():
     assert pose.grad is None and text.grad is None
 
 
+def test_warmup_step_rejects_excluded_positive_relation():
+    model = _model()
+    batch = _batch(model)
+    candidates = batch.candidates.clone()
+    candidates[0, 0] = False
+    invalid = WarmupBatch(**{**batch.__dict__, "candidates": candidates})
+    with pytest.raises(WarmupContractError, match="positives must remain"):
+        run_warmup_step(
+            model,
+            build_evidence_optimizer(model).optimizer,
+            invalid,
+            tau_alignment=0.07,
+            tau_retrieval=0.07,
+            grad_clip_norm=1.0,
+        )
+
+
+def test_chunked_gallery_matches_dense_full_gallery_exactly():
+    model = _model()
+    batch = _batch(model)
+    relevance = {"v0": ("t0",), "v1": ("t1",)}
+    dense = WarmupGallery(
+        batch=batch,
+        video_ids=("v0", "v1"),
+        text_ids=("t0", "t1"),
+        video_to_text_positives=relevance,
+    )
+
+    def video_batches():
+        for index, video_id in enumerate(dense.video_ids):
+            yield WarmupVideoGalleryBatch(
+                pose=batch.pose[index : index + 1],
+                rgb_local=batch.rgb_local[index : index + 1],
+                grid=batch.grid[index : index + 1],
+                video_mask=batch.video_mask[index : index + 1],
+                video_ids=(video_id,),
+            )
+
+    def text_batches():
+        for index, text_id in enumerate(dense.text_ids):
+            yield WarmupTextGalleryBatch(
+                text_units=batch.text_units[index : index + 1],
+                text_mask=batch.text_mask[index : index + 1],
+                text_ids=(text_id,),
+            )
+
+    chunked = ChunkedWarmupGallery(
+        video_batches=video_batches,
+        text_batches=text_batches,
+        video_ids=dense.video_ids,
+        text_ids=dense.text_ids,
+        video_to_text_positives=relevance,
+    )
+    expected = evaluate_warmup_gallery(model, dense, tau_alignment=0.07)
+    actual = evaluate_chunked_warmup_gallery(model, chunked, tau_alignment=0.07)
+    assert actual.to_dict() == expected.to_dict()
+
+
 def test_warmup_runner_selects_earliest_dev_tie_and_exports_reference(tmp_path):
     model = _model()
     batch = _batch(model)
@@ -119,3 +184,65 @@ def test_warmup_runner_selects_earliest_dev_tie_and_exports_reference(tmp_path):
     assert reference["git_revision"] == "fixture_revision"
     assert reference["resolved_config"]["run"]["profile"] == "fixture"
     assert all(not parameter.requires_grad for parameter in model.parameters())
+
+
+def test_warmup_resume_restores_scheduler_history_and_exact_reference(tmp_path):
+    config = load_config(HERE / "configs" / "fixture.yaml")
+    config["train"]["warmup_epochs"] = 2
+    fingerprints = {
+        "baseline": "fixture",
+        "data": "fixture",
+        "units": "fixture",
+        "grid": "fixture",
+    }
+    output = tmp_path / "resume"
+    first_model = _model()
+    first_batch = _batch(first_model)
+    gallery = WarmupGallery(
+        batch=first_batch,
+        video_ids=("v0", "v1"),
+        text_ids=("t0", "t1"),
+        video_to_text_positives={"v0": ("t0",), "v1": ("t1",)},
+    )
+    expected = run_evidence_warmup(
+        first_model,
+        lambda _epoch: (first_batch,),
+        gallery,
+        config=config,
+        steps_per_epoch=1,
+        output_dir=output,
+        config_hash=config_hash(config),
+        fingerprints=fingerprints,
+        git_revision="fixture_revision",
+    )
+    for name in (
+        "warmup_epoch_002.pt",
+        "warmup_epoch_002.pt.sha256",
+        "reference.pt",
+        "reference.pt.sha256",
+        "selection.json",
+    ):
+        (output / name).unlink()
+
+    resumed_model = _model()
+    resumed_batch = _batch(resumed_model)
+    resumed_gallery = WarmupGallery(
+        batch=resumed_batch,
+        video_ids=gallery.video_ids,
+        text_ids=gallery.text_ids,
+        video_to_text_positives=gallery.video_to_text_positives,
+    )
+    actual = run_evidence_warmup(
+        resumed_model,
+        lambda _epoch: (resumed_batch,),
+        resumed_gallery,
+        config=config,
+        steps_per_epoch=1,
+        output_dir=output,
+        config_hash=config_hash(config),
+        fingerprints=fingerprints,
+        git_revision="fixture_revision",
+        resume=True,
+    )
+    assert actual.reference_state_hash == expected.reference_state_hash
+    assert actual.candidates == expected.candidates

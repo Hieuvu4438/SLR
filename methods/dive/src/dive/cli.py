@@ -15,9 +15,16 @@ from .data.manifest import ManifestError
 from .data.prepare import PreparationError, prepare_how2sign_data
 from .data.relations import RelationError
 from .data.relevance import RelevanceError
+from .data.temporal import TemporalError
+from .data.text_units import TextUnitError
 from .data.validation import DataValidationError, validate_prepared_data
 from .doctor import inspect_environment, write_report
+from .evidence_warmup import EvidenceWarmupError, warmup_seds_evidence
+from .models.evidence import EvidenceError
 from .smoke import run_fixture_smoke
+from .training.optimizer import OptimizerContractError
+from .training.state import CheckpointError
+from .training.warmup import WarmupContractError
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -31,8 +38,14 @@ def _parser() -> argparse.ArgumentParser:
         "--stage",
         required=True,
         choices=(
-            "fixture", "prepare", "baseline_train", "baseline_validate", "warmup",
-            "validate_data", "mine_finalize", "evaluate_test",
+            "fixture",
+            "prepare",
+            "baseline_train",
+            "baseline_validate",
+            "warmup",
+            "validate_data",
+            "mine_finalize",
+            "evaluate_test",
         ),
     )
     doctor.add_argument("--output", default="doctor.json")
@@ -70,6 +83,18 @@ def _parser() -> argparse.ArgumentParser:
     baseline_train.add_argument("--eval-batch-size", type=int, default=64)
     baseline_train.add_argument("--device", default="cuda:0")
     baseline_train.add_argument("--resume", action="store_true")
+
+    evidence = subparsers.add_parser("evidence", help="train the DIVE local evidence model")
+    evidence_commands = evidence.add_subparsers(dest="evidence_command", required=True)
+    evidence_warmup = evidence_commands.add_parser(
+        "warmup", help="warm up and dev-select the frozen local reference"
+    )
+    evidence_warmup.add_argument("--config", required=True)
+    evidence_warmup.add_argument("--batch-size", type=int, default=128)
+    evidence_warmup.add_argument("--eval-video-batch-size", type=int)
+    evidence_warmup.add_argument("--eval-text-batch-size", type=int)
+    evidence_warmup.add_argument("--device", default="cuda:0")
+    evidence_warmup.add_argument("--resume", action="store_true")
 
     smoke = subparsers.add_parser("smoke", help="run fixture-only end-to-end correctness smoke")
     smoke.add_argument("--config", required=True)
@@ -117,6 +142,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             print(json.dumps(report, indent=2, sort_keys=True))
             return 0
+        if args.command == "evidence" and args.evidence_command == "warmup":
+            report = warmup_seds_evidence(
+                config,
+                batch_size=args.batch_size,
+                eval_video_batch_size=args.eval_video_batch_size,
+                eval_text_batch_size=args.eval_text_batch_size,
+                device=args.device,
+                resume=args.resume,
+            )
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return 0
         if args.command == "smoke":
             root = Path(__file__).resolve().parents[4]
             report = run_fixture_smoke(config, args.output_dir, repository_root=root)
@@ -129,7 +165,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         ArtifactError,
         BaselineTrainingError,
         BaselineValidationError,
+        CheckpointError,
         DataValidationError,
+        EvidenceWarmupError,
+        EvidenceError,
         ManifestError,
         PreparationError,
         RelevanceError,
@@ -137,6 +176,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         SedsAdapterError,
         SedsDataError,
         SedsReproductionError,
+        TemporalError,
+        TextUnitError,
+        OptimizerContractError,
+        WarmupContractError,
     ) as exc:
         print(f"DATA_ERROR: {exc}", file=sys.stderr)
         return 2

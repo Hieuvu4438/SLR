@@ -5,7 +5,8 @@ import html
 import json
 import unicodedata
 from dataclasses import asdict, dataclass
-from typing import Sequence
+from pathlib import Path
+from typing import Any, Mapping, Sequence
 
 import regex
 import ftfy
@@ -44,6 +45,16 @@ class MappedTextUnit:
     subword_indices: tuple[int, ...]
     token_ids: tuple[int, ...]
     complete_after_truncation: bool
+
+
+@dataclass(frozen=True)
+class TextUnitLineage:
+    text_id: str
+    text_model: str
+    token_ids: tuple[int, ...]
+    token_offsets: tuple[tuple[int, int] | None, ...]
+    units: tuple[MappedTextUnit, ...]
+    unit_mapping_sha256: str
 
 
 def normalize_text(text: str, version: str = NORMALIZATION_VERSION) -> str:
@@ -153,3 +164,189 @@ def unit_mapping_hash(mapping: Sequence[MappedTextUnit]) -> str:
     ]
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _strict_keys(raw: Mapping[str, Any], expected: set[str], context: str) -> None:
+    missing = sorted(expected - set(raw))
+    unknown = sorted(set(raw) - expected)
+    if missing or unknown:
+        details = []
+        if missing:
+            details.append(f"missing={missing}")
+        if unknown:
+            details.append(f"unknown={unknown}")
+        raise TextUnitError(f"{context} has invalid fields: {', '.join(details)}")
+
+
+def _integer(value: Any, context: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TextUnitError(f"{context} must be an integer")
+    return value
+
+
+def _parse_stored_unit(raw: Any, context: str) -> MappedTextUnit:
+    if not isinstance(raw, Mapping):
+        raise TextUnitError(f"{context} must be an object")
+    _strict_keys(
+        raw,
+        {"unit", "subword_indices", "token_ids", "complete_after_truncation"},
+        context,
+    )
+    unit_raw = raw["unit"]
+    if not isinstance(unit_raw, Mapping):
+        raise TextUnitError(f"{context}.unit must be an object")
+    _strict_keys(
+        unit_raw,
+        {"index", "char_start", "char_end", "text", "normalized_value", "unit_kind"},
+        f"{context}.unit",
+    )
+    for name in ("text", "normalized_value", "unit_kind"):
+        if not isinstance(unit_raw[name], str) or not unit_raw[name]:
+            raise TextUnitError(f"{context}.unit.{name} must be a nonempty string")
+    unit = TextUnit(
+        index=_integer(unit_raw["index"], f"{context}.unit.index"),
+        char_start=_integer(unit_raw["char_start"], f"{context}.unit.char_start"),
+        char_end=_integer(unit_raw["char_end"], f"{context}.unit.char_end"),
+        text=unit_raw["text"],
+        normalized_value=unit_raw["normalized_value"],
+        unit_kind=unit_raw["unit_kind"],
+    )
+    indices_raw = raw["subword_indices"]
+    token_ids_raw = raw["token_ids"]
+    if not isinstance(indices_raw, list) or not isinstance(token_ids_raw, list):
+        raise TextUnitError(f"{context} token fields must be JSON lists")
+    complete = raw["complete_after_truncation"]
+    if not isinstance(complete, bool):
+        raise TextUnitError(f"{context}.complete_after_truncation must be bool")
+    return MappedTextUnit(
+        unit=unit,
+        subword_indices=tuple(
+            _integer(value, f"{context}.subword_indices") for value in indices_raw
+        ),
+        token_ids=tuple(_integer(value, f"{context}.token_ids") for value in token_ids_raw),
+        complete_after_truncation=complete,
+    )
+
+
+def _parse_lineage(raw: Mapping[str, Any], context: str) -> TextUnitLineage:
+    _strict_keys(
+        raw,
+        {
+            "schema_version",
+            "text_id",
+            "text_model",
+            "token_ids",
+            "token_offsets",
+            "units",
+            "unit_mapping_sha256",
+        },
+        context,
+    )
+    if raw["schema_version"] != "seds_text_unit_map.v1":
+        raise TextUnitError(f"{context}.schema_version must be seds_text_unit_map.v1")
+    for name in ("text_id", "text_model", "unit_mapping_sha256"):
+        if not isinstance(raw[name], str) or not raw[name]:
+            raise TextUnitError(f"{context}.{name} must be a nonempty string")
+    token_ids_raw = raw["token_ids"]
+    offsets_raw = raw["token_offsets"]
+    units_raw = raw["units"]
+    if not isinstance(token_ids_raw, list) or not token_ids_raw:
+        raise TextUnitError(f"{context}.token_ids must be a nonempty JSON list")
+    if not isinstance(offsets_raw, list) or len(offsets_raw) != len(token_ids_raw):
+        raise TextUnitError(f"{context}.token_offsets must align with token_ids")
+    if not isinstance(units_raw, list):
+        raise TextUnitError(f"{context}.units must be a JSON list")
+    token_ids = tuple(_integer(value, f"{context}.token_ids") for value in token_ids_raw)
+    if any(value < 0 for value in token_ids):
+        raise TextUnitError(f"{context}.token_ids cannot contain negative values")
+    offsets: list[tuple[int, int] | None] = []
+    for index, value in enumerate(offsets_raw):
+        if value is None:
+            offsets.append(None)
+            continue
+        if not isinstance(value, list) or len(value) != 2:
+            raise TextUnitError(f"{context}.token_offsets[{index}] must be null or [start,end]")
+        offsets.append(
+            (
+                _integer(value[0], f"{context}.token_offsets[{index}][0]"),
+                _integer(value[1], f"{context}.token_offsets[{index}][1]"),
+            )
+        )
+    text_length = len(raw["text_model"])
+    if any(
+        offset is not None and (offset[0] < 0 or offset[1] <= offset[0] or offset[1] > text_length)
+        for offset in offsets
+    ):
+        raise TextUnitError(f"{context}.token_offsets escape text_model")
+    units = tuple(
+        _parse_stored_unit(value, f"{context}.units[{index}]")
+        for index, value in enumerate(units_raw)
+    )
+    expected_units = map_units_to_subwords(unitize(raw["text_model"]), token_ids, offsets)
+    if len(units) != len(expected_units):
+        raise TextUnitError(f"{context}.units do not derive from the stored native token lineage")
+    for stored, expected in zip(units, expected_units, strict=True):
+        if (
+            stored.unit != expected.unit
+            or stored.subword_indices != expected.subword_indices
+            or stored.token_ids != expected.token_ids
+            or (stored.complete_after_truncation and not expected.complete_after_truncation)
+        ):
+            raise TextUnitError(
+                f"{context}.units do not derive from the stored native token lineage"
+            )
+    mapping_sha256 = unit_mapping_hash(units)
+    if raw["unit_mapping_sha256"] != mapping_sha256:
+        raise TextUnitError(f"{context}.unit_mapping_sha256 does not match its units")
+    return TextUnitLineage(
+        text_id=raw["text_id"],
+        text_model=raw["text_model"],
+        token_ids=token_ids,
+        token_offsets=tuple(offsets),
+        units=units,
+        unit_mapping_sha256=mapping_sha256,
+    )
+
+
+def load_text_unit_lineage(
+    path: str | Path,
+    *,
+    expected_texts: Mapping[str, str] | None = None,
+) -> dict[str, TextUnitLineage]:
+    """Load a checksummed validation-stage unit map and verify its native derivation."""
+    source = Path(path)
+    if source.is_symlink() or not source.is_file():
+        raise TextUnitError(f"text-unit lineage artifact does not exist: {source}")
+    records: dict[str, TextUnitLineage] = {}
+    for line_number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        context = f"{source}:{line_number}"
+        try:
+            raw = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise TextUnitError(f"invalid JSON at {context}: {exc}") from exc
+        if not isinstance(raw, Mapping):
+            raise TextUnitError(f"{context} must contain an object")
+        record = _parse_lineage(raw, context)
+        if record.text_id in records:
+            raise TextUnitError(f"duplicate text ID in unit lineage: {record.text_id}")
+        records[record.text_id] = record
+    if not records:
+        raise TextUnitError(f"text-unit lineage artifact is empty: {source}")
+    if expected_texts is not None:
+        expected = {str(key): str(value) for key, value in expected_texts.items()}
+        if set(records) != set(expected):
+            missing = sorted(set(expected) - set(records))
+            unknown = sorted(set(records) - set(expected))
+            raise TextUnitError(
+                f"text-unit lineage coverage mismatch: missing={missing}, unknown={unknown}"
+            )
+        mismatched = sorted(
+            text_id
+            for text_id, text_model in expected.items()
+            if records[text_id].text_model != text_model
+        )
+        if mismatched:
+            raise TextUnitError(f"text-unit lineage text mismatch: {mismatched}")
+    return records
