@@ -13,6 +13,7 @@ From the repository root:
 
 ```bash
 python -m pip install -e '.[dev]'
+bash methods/dive/scripts/setup_seds.sh
 dive doctor --config methods/dive/configs/fixture.yaml --stage fixture \
   --output artifacts/dive/doctor_fixture.json
 pytest -q methods/dive/tests

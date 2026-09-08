@@ -6,6 +6,7 @@
 /sign_feature/
 /checkpoints/
 /third_party/SLRT/
+/third_party/SEDS/
 *.pth
 *.pt
 *.ckpt

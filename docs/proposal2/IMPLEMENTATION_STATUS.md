@@ -10,9 +10,9 @@ are never counted as a benchmark replication.
 | M02 — evaluator oracle | passed | ID-based `[video,text]` evaluator passes asymmetric-direction, exact-tie, duplicate-ID, multi-positive and nonfinite/full-gallery guards. |
 | M03 — score/loss core | passed | Dense/chunked masked late interaction, centered composition and retrieval/local/pair kernels pass padding, empty evidence, cosine-bound, four-margin, H-denominator, gradient and FP64 gradcheck oracles. |
 | M04 — data contracts | passed | Versioned manifest/split guards, normalized word/numeric units, native subword offset mapping with partial-target rejection, deterministic canonical/shifted grids, raw-time RF mapping, per-step pose normalization, P/C construction and bool-mask collation have independent fixtures. |
-| M05 — SEDS adapter | blocked | Requires pinned SEDS snapshot `434e3f7...` plus compatible actual checkpoint/artifacts. The typed adapter protocol is present; real parity is not. |
+| M05 — SEDS adapter | in_progress | Official source is reproducibly checked out at pinned commit `434e3f7...` by `methods/dive/scripts/setup_seds.sh`; typed adapter protocol exists. Compatible SEDS checkpoint/features and real score/tap parity remain unresolved. |
 | M06 — B0 reproduction | blocked | No controlled SEDS How2Sign reproduction config/checkpoint has been verified. Existing `H2S_sota.pth` is a CiCo checkpoint and is not relabeled as SEDS. |
-| M07 — evidence/reference | not_started | Evidence encoder, warm-up, copy/storage identity and RF tests remain. |
+| M07 — evidence/reference | in_progress | Pointwise local RGB+pose projector, frozen BN mode/affine, deep-copied reference/student, state hash including buffers, storage independence, identity score, nonzero student gradient and raw-window locality tests pass. Warm-up stage runner/checkpoint artifacts remain. |
 | M08 — mining/audit | not_started | Train-only shortlist, strict numeric proposal bank and human audit export remain. |
 | M09 — support | not_started | Two-view support, rebin/JSD/RF gates and bank remain. |
 | M10 — sampler/step | not_started | Reproducible shared plans and student step remain. |
@@ -27,7 +27,8 @@ are never counted as a benchmark replication.
 - How2Sign root: `/home/shared_data/sign_language/How2Sign` (86 GiB), with train/eval/test raw
   videos and poses present, subject to the existing missing-clip audit documented by proposal 1.
 - Other reusable dataset roots are present: Phoenix14T (48 GiB) and CSL-Daily (42 GiB).
-- Existing upstream checkout is CiCo/SLRT at `38a4f7b...`; it is not the required SEDS snapshot.
+- Existing upstream checkouts are CiCo/SLRT at `38a4f7b...` and official SEDS at the required
+  detached commit `434e3f7...`; both live under ignored `third_party/` paths.
 - Available `artifacts/pretrained/H2S_sota.pth` is tracked in existing provenance as CiCo.
 - GPU was idle enough at inventory time (48,519 MiB free), but no DIVE training is authorized by
   resource presence alone: the controlled SEDS baseline and correctness gates must come first.
@@ -42,3 +43,7 @@ are never counted as a benchmark replication.
   artifacts/dive/doctor_fixture.json`: ready=true; PyTorch CUDA and RTX 5880 Ada detected.
 - `pytest -q methods/dive/tests`: 31 passed after M04 data contracts.
 - `pytest -q`: 155 passed after M04; no ELSC/shared regression.
+- `bash methods/dive/scripts/setup_seds.sh`: official SEDS checkout verified exactly at
+  `434e3f714fcb6a7d1f4001fb9a246bbd93ec0246` with a clean detached worktree.
+- `pytest -q methods/dive/tests`: 35 passed after evidence/reference contracts.
+- `pytest -q`: 159 passed; no ELSC/shared regression.

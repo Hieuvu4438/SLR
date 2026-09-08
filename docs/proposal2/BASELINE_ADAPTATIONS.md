@@ -1,8 +1,9 @@
 # DIVE-SLR v2 baseline adaptations
 
-No SEDS source patch has been applied yet. Real adapter/reproduction work remains blocked until the
-pinned SEDS snapshot and compatible resources are inventoried. The following required adaptations
-from the implementation spec remain open and must be recorded with exact patches when implemented:
+The official SEDS repository is now available at the exact detached commit
+`434e3f714fcb6a7d1f4001fb9a246bbd93ec0246`. No SEDS source patch has been applied yet. Real
+adapter/reproduction work remains blocked on compatible checkpoint/features. The following required
+adaptations remain open and must be recorded with exact patches when implemented:
 
 - true train/dev/test routing and dev-only checkpoint selection;
 - candidate padding masked before softmax;
