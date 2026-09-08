@@ -35,7 +35,7 @@ baseline:
   score_scale: prelogit
 text:
   tokenizer_artifact: third_party/SEDS/modules/bpe_simple_vocab_16e6.txt.gz
-  normalization_version: text_norm_v1
+  normalization_version: seds_clip_text_norm_v1
   unitizer_version: word_numeric_v1
   unit_pool: mean_raw_projected_subwords_then_normalize
   target_source: frozen_contextual_units

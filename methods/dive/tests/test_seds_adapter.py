@@ -200,9 +200,7 @@ def test_receptive_fields_follow_native_filtered_pose_to_raw_mapping():
     receptive_fields = adapter.describe_receptive_field(batch, "canonical")
     assert receptive_fields[0]["raw_frame_interval"] == [0, 39]
     assert receptive_fields[0]["rgb_raw_frame_interval"] == [0, 31]
-    assert receptive_fields[0]["raw_mapping_policy"] == (
-        "native_seds_pose_selected_raw_frames_v1"
-    )
+    assert receptive_fields[0]["raw_mapping_policy"] == ("native_seds_pose_selected_raw_frames_v1")
 
 
 def test_local_pose_clone_uses_gcn_before_fixed_windows_and_sign_conv():
@@ -211,7 +209,9 @@ def test_local_pose_clone_uses_gcn_before_fixed_windows_and_sign_conv():
     pose = {"right": body, "left": body, "body": body}
     grid = torch.tensor([[[0, 2], [2, 4]]])
     output = encoder(pose, grid)
-    torch.testing.assert_close(output, torch.stack((body[:, :2].mean(1), body[:, 2:].mean(1)), dim=1))
+    torch.testing.assert_close(
+        output, torch.stack((body[:, :2].mean(1), body[:, 2:].mean(1)), dim=1)
+    )
 
 
 def test_evidence_warmup_accepts_synchronized_seds_pose_tree_without_input_gradients():
@@ -295,7 +295,9 @@ def test_adapter_features_prelogit_units_rf_and_checkpoint_provenance(tmp_path):
     units = adapter.encode_text_units(_text_batch(), mappings)
     assert units.token_features.shape == (2, 1, 4)
     assert bool(units.token_validity.all())
-    torch.testing.assert_close(torch.linalg.vector_norm(units.token_features, dim=-1), torch.ones(2, 1))
+    torch.testing.assert_close(
+        torch.linalg.vector_norm(units.token_features, dim=-1), torch.ones(2, 1)
+    )
 
     rgb = adapter.rgb_local_features(_video_batch(), "canonical")
     assert rgb.streams["rgb_local"].shape == (2, 2, 4)
@@ -312,6 +314,7 @@ def test_checked_reproduction_config_binds_flags_types_and_pinned_sources(tmp_pa
     assert reproduction.published_eval_arguments["init_model"] == "ckpts/h2s_best_model.bin"
     assert reproduction.published_train_arguments["epochs"] == 200
     assert reproduction.controlled_protocol["checkpoint_selection"] == "independent_dev_only"
+    assert reproduction.controlled_training["precision"] == "float32"
 
     malformed = yaml.safe_load(REPRODUCTION_CONFIG.read_text(encoding="utf-8"))
     malformed["model_arguments"]["feature_len"] = "64"

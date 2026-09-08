@@ -72,16 +72,14 @@ def test_prepare_data_builds_controlled_disjoint_multiview_protocol(tmp_path, mo
         }.items()
         for stem in stems
     ]
-    timing_path.write_text(
-        "".join(json.dumps(row) + "\n" for row in timing_rows), encoding="utf-8"
-    )
+    timing_path.write_text("".join(json.dumps(row) + "\n" for row in timing_rows), encoding="utf-8")
     dev_path = tmp_path / "labels.dev.json"
     dev_path.write_text(
         json.dumps(
             {
                 "source_dev_0": {
                     "sentence_name": "dev_view",
-                    "text": "dev caption",
+                    "text": "Clean &amp; Clear",
                     "video_id": "source_dev",
                     "start_time": 0.0,
                     "end_time": 1.0,
@@ -126,6 +124,9 @@ def test_prepare_data_builds_controlled_disjoint_multiview_protocol(tmp_path, mo
     shared = tmp_path / "runs/shared/seed17/data"
     train_manifest = load_manifest(shared / "manifests/train.jsonl", expected_split="train")
     assert train_manifest[0].text_id == train_manifest[1].text_id == "source_train_0"
+    dev_manifest = load_manifest(shared / "manifests/dev.jsonl", expected_split="dev")
+    assert dev_manifest[0].text_original == "Clean &amp; Clear"
+    assert dev_manifest[0].text_model == "clean & clear"
     test_manifest = load_manifest(shared / "manifests/test.jsonl", expected_split="test")
     relevance = load_relevance(
         shared / "relevance/test.jsonl",

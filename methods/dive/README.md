@@ -57,7 +57,11 @@ between commands. The fixture config intentionally does not pretend to supply th
 For the real How2Sign/SEDS profile, validation also runs every RGB/pose pair through the pinned
 native preprocessing path. It rejects nonfinite or malformed RGB tensors and RGB/pose clip-count
 disagreement, records the exact selected raw pose frames and clip starts after native filtering,
-binds the exact native tokenizer, and registers this lineage directory alongside the audit.
+binds the exact native tokenizer, and registers this lineage directory alongside the audit. The
+prepared `text_model` is the exact FTfy + double-HTML-unescape + whitespace + lowercase string
+seen by SEDS, while `text_original` remains preserved. Validation instruments the pinned byte-level
+BPE path, proves token-ID/mask parity with the native loader, records character spans and selected
+subword indices for every unit, and marks units made partial by the native uniform truncation rule.
 
 The main How2Sign config names the intended SEDS resource paths even when the external files are
 absent. The doctor command resolves null prepared-data fields only through checksummed

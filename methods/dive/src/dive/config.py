@@ -42,83 +42,169 @@ _ALLOWED: dict[str, frozenset[str]] = {
     "run": frozenset({"seed", "profile", "output_root", "variant", "comparison_group"}),
     "data": frozenset(
         {
-            "dataset", "train_manifest", "dev_manifest", "test_manifest", "train_relations",
-            "relevance_dir", "video_root", "pose_root", "rgb_cache_root",
-            "translation_artifact", "allow_split_overlap",
-            "preparation_protocol", "upstream_root", "train_annotation", "dev_annotation",
-            "test_annotation", "train_timing_annotation", "frame_maps_dir",
+            "dataset",
+            "train_manifest",
+            "dev_manifest",
+            "test_manifest",
+            "train_relations",
+            "relevance_dir",
+            "video_root",
+            "pose_root",
+            "rgb_cache_root",
+            "translation_artifact",
+            "allow_split_overlap",
+            "preparation_protocol",
+            "upstream_root",
+            "train_annotation",
+            "dev_annotation",
+            "test_annotation",
+            "train_timing_annotation",
+            "frame_maps_dir",
         }
     ),
     "baseline": frozenset(
         {
-            "family", "upstream_commit", "reproduction_config", "initial_weights",
-            "locked_checkpoint", "score_branch", "dual_mix", "score_scale",
+            "family",
+            "upstream_commit",
+            "reproduction_config",
+            "initial_weights",
+            "locked_checkpoint",
+            "score_branch",
+            "dual_mix",
+            "score_scale",
         }
     ),
     "text": frozenset(
         {
-            "tokenizer_artifact", "normalization_version", "unitizer_version", "unit_pool",
-            "target_source", "truncate_policy", "reject_partial_targets",
+            "tokenizer_artifact",
+            "normalization_version",
+            "unitizer_version",
+            "unit_pool",
+            "target_source",
+            "truncate_policy",
+            "reject_partial_targets",
         }
     ),
     "temporal": frozenset(
         {
-            "canonical_policy", "clip_steps", "dense_stride_steps", "max_clips",
-            "support_view_offsets_steps", "require_distinct_views", "record_raw_frame_map",
+            "canonical_policy",
+            "clip_steps",
+            "dense_stride_steps",
+            "max_clips",
+            "support_view_offsets_steps",
+            "require_distinct_views",
+            "record_raw_frame_map",
             "forbid_unrecorded_global_preprocessing",
         }
     ),
     "evidence": frozenset(
         {
-            "output_dim", "hidden_dim", "dropout", "freeze_bn_statistics", "train_bn_affine",
-            "normalize_epsilon", "tau_alignment", "reference_cache_dtype", "teacher_update",
+            "output_dim",
+            "hidden_dim",
+            "dropout",
+            "freeze_bn_statistics",
+            "train_bn_affine",
+            "normalize_epsilon",
+            "tau_alignment",
+            "reference_cache_dtype",
+            "teacher_update",
         }
     ),
     "mining": frozenset(
         {
-            "shortlist_per_direction", "rerank_topk", "hardness", "semantic_rule_set",
-            "schema_audit_artifact", "shortlist_audit_queries", "shortlist_audit_seed",
+            "shortlist_per_direction",
+            "rerank_topk",
+            "hardness",
+            "semantic_rule_set",
+            "schema_audit_artifact",
+            "shortlist_audit_queries",
+            "shortlist_audit_seed",
         }
     ),
     "support": frozenset(
         {
-            "h_min", "mass_epsilon", "tau_localization", "eta_positive", "eta_differential",
-            "min_stability", "target_mass", "max_clip_fraction", "min_retained_mass",
-            "max_raw_rf_fraction", "strict_schema_weight", "audited_lexical_weight",
+            "h_min",
+            "mass_epsilon",
+            "tau_localization",
+            "eta_positive",
+            "eta_differential",
+            "min_stability",
+            "target_mass",
+            "max_clip_fraction",
+            "min_retained_mass",
+            "max_raw_rf_fraction",
+            "strict_schema_weight",
+            "audited_lexical_weight",
             "failed_record_policy",
         }
     ),
     "sampler": frozenset(
         {
-            "effective_batch_size", "contrasts_per_step", "endpoint_quota_per_epoch",
-            "unique_sample_ids", "preserve_pair_schedule_across_controls",
+            "effective_batch_size",
+            "contrasts_per_step",
+            "endpoint_quota_per_epoch",
+            "unique_sample_ids",
+            "preserve_pair_schedule_across_controls",
         }
     ),
     "loss": frozenset(
         {
-            "tau_retrieval", "tau_pair", "tau_local_margin", "local_margin_alpha",
-            "pair_target_margin", "lambda_pair", "lambda_local", "lambda_preservation",
-            "auxiliary_denominator", "pair_feasibility_bound",
+            "tau_retrieval",
+            "tau_pair",
+            "tau_local_margin",
+            "local_margin_alpha",
+            "pair_target_margin",
+            "lambda_pair",
+            "lambda_local",
+            "lambda_preservation",
+            "auxiliary_denominator",
+            "pair_feasibility_bound",
         }
     ),
     "train": frozenset(
         {
-            "warmup_epochs", "pilot_epochs", "full_epochs", "budget_mode", "gamma_train",
-            "optimizer", "lr_projector", "lr_pose", "weight_decay", "scheduler",
-            "warmup_fraction", "minimum_lr_fraction", "grad_clip_norm", "amp", "world_size",
-            "gradient_accumulation_steps", "checkpoint_every_epoch", "include_initial_checkpoint",
+            "warmup_epochs",
+            "pilot_epochs",
+            "full_epochs",
+            "budget_mode",
+            "gamma_train",
+            "optimizer",
+            "lr_projector",
+            "lr_pose",
+            "weight_decay",
+            "scheduler",
+            "warmup_fraction",
+            "minimum_lr_fraction",
+            "grad_clip_norm",
+            "amp",
+            "world_size",
+            "gradient_accumulation_steps",
+            "checkpoint_every_epoch",
+            "include_initial_checkpoint",
         }
     ),
     "selection": frozenset(
         {
-            "split", "metric", "checkpoint_gamma", "checkpoint_tie_break", "gamma_grid",
+            "split",
+            "metric",
+            "checkpoint_gamma",
+            "checkpoint_tie_break",
+            "gamma_grid",
             "gamma_tie_break",
         }
     ),
     "evaluation": frozenset(
         {
-            "gallery", "query_chunk", "candidate_chunk", "topk", "score_layout", "ties",
-            "bootstrap_replicates", "bootstrap_seed", "final_seeds", "final_experiment_plan",
+            "gallery",
+            "query_chunk",
+            "candidate_chunk",
+            "topk",
+            "score_layout",
+            "ties",
+            "bootstrap_replicates",
+            "bootstrap_seed",
+            "final_seeds",
+            "final_experiment_plan",
         }
     ),
 }
@@ -177,7 +263,9 @@ def config_hash(config: Mapping[str, Any]) -> str:
 def dump_resolved(config: Mapping[str, Any], path: str | Path) -> str:
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(yaml.safe_dump(dict(config), sort_keys=True, allow_unicode=True), encoding="utf-8")
+    output.write_text(
+        yaml.safe_dump(dict(config), sort_keys=True, allow_unicode=True), encoding="utf-8"
+    )
     return config_hash(config)
 
 
@@ -214,6 +302,9 @@ def validate_config(config: Mapping[str, Any]) -> None:
             raise ConfigError(f"missing keys in {name}: " + ", ".join(missing))
 
     run = _require_mapping(config, "run")
+    data = _require_mapping(config, "data")
+    baseline = _require_mapping(config, "baseline")
+    text = _require_mapping(config, "text")
     evidence = _require_mapping(config, "evidence")
     temporal = _require_mapping(config, "temporal")
     support = _require_mapping(config, "support")
@@ -227,6 +318,14 @@ def validate_config(config: Mapping[str, Any]) -> None:
         raise ConfigError(f"unsupported run.variant: {run.get('variant')}")
     if run.get("profile") not in {"correctness", "optimization", "fixture"}:
         raise ConfigError("run.profile must be correctness, optimization, or fixture")
+    if (
+        data.get("dataset") == "how2sign"
+        and baseline.get("family") == "seds"
+        and text.get("normalization_version") != "seds_clip_text_norm_v1"
+    ):
+        raise ConfigError(
+            "How2Sign/SEDS requires text.normalization_version=seds_clip_text_norm_v1"
+        )
     for name, section, key in (
         ("alignment", evidence, "tau_alignment"),
         ("localization", support, "tau_localization"),
@@ -251,9 +350,12 @@ def validate_config(config: Mapping[str, Any]) -> None:
     if _number(loss, "pair_target_margin") != 0:
         raise ConfigError("main pair_target_margin must be zero")
     fractions = (
-        (support, "min_stability"), (support, "target_mass"),
-        (support, "max_clip_fraction"), (support, "min_retained_mass"),
-        (support, "max_raw_rf_fraction"), (train, "warmup_fraction"),
+        (support, "min_stability"),
+        (support, "target_mass"),
+        (support, "max_clip_fraction"),
+        (support, "min_retained_mass"),
+        (support, "max_raw_rf_fraction"),
+        (train, "warmup_fraction"),
         (train, "minimum_lr_fraction"),
     )
     for section, key in fractions:
@@ -267,7 +369,9 @@ def validate_config(config: Mapping[str, Any]) -> None:
     if int(temporal.get("max_clips", 0)) < 1:
         raise ConfigError("temporal.max_clips must be positive")
     offsets = temporal.get("support_view_offsets_steps")
-    if temporal.get("require_distinct_views") and (not isinstance(offsets, list) or len(set(offsets)) < 2):
+    if temporal.get("require_distinct_views") and (
+        not isinstance(offsets, list) or len(set(offsets)) < 2
+    ):
         raise ConfigError("main support requires at least two distinct view offsets")
     batch_size = int(sampler.get("effective_batch_size", 0))
     contrasts = int(sampler.get("contrasts_per_step", 0))

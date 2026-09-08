@@ -13,6 +13,7 @@ from .seds import (
 from .seds_data import (
     SedsDataError,
     SedsManifestInputBuilder,
+    SedsTextUnitLineage,
     SedsTrainingBatch,
     hash_seds_input,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "SedsReproduction",
     "SedsReproductionError",
     "SedsTextBatch",
+    "SedsTextUnitLineage",
     "SedsTrainingBatch",
     "SedsVideoBatch",
     "normalize_seds_text_mask",

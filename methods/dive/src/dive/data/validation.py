@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from collections import Counter, defaultdict
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -99,9 +100,7 @@ def validate_prepared_data(
     id_overlaps = validate_split_disjoint(records, allow_overlap=allow_overlap)
     source_overlaps = _source_overlaps(records)
     if source_overlaps and not allow_overlap:
-        raise DataValidationError(
-            "SPLIT_SOURCE_OVERLAP: " + ", ".join(sorted(source_overlaps))
-        )
+        raise DataValidationError("SPLIT_SOURCE_OVERLAP: " + ", ".join(sorted(source_overlaps)))
 
     video_root = _required_path(data.get("video_root"), "data.video_root")
     pose_root = _required_path(data.get("pose_root"), "data.pose_root")
@@ -123,13 +122,10 @@ def validate_prepared_data(
         missing_rgb = [
             record.sample_id
             for record in split_records
-            if record.rgb_feature_key is None
-            or not (rgb_root / record.rgb_feature_key).is_file()
+            if record.rgb_feature_key is None or not (rgb_root / record.rgb_feature_key).is_file()
         ]
         if missing_rgb:
-            raise DataValidationError(
-                f"MISSING_RGB_FEATURE: {split}: {len(missing_rgb)} records"
-            )
+            raise DataValidationError(f"MISSING_RGB_FEATURE: {split}: {len(missing_rgb)} records")
 
     frame_maps_dir = configured_or_prepared("frame_maps_dir", "frame_maps_dir")
     if not frame_maps_dir.is_dir():
@@ -184,7 +180,9 @@ def validate_prepared_data(
         )
         translation_digest = hashlib.sha256(translation_path.read_bytes()).hexdigest()
         if any(record.translation_artifact_hash != translation_digest for record in translated):
-            raise DataValidationError("TRANSLATION_HASH_MISMATCH: manifest translation provenance differs")
+            raise DataValidationError(
+                "TRANSLATION_HASH_MISMATCH: manifest translation provenance differs"
+            )
     elif any(
         record.translation_artifact_hash is not None
         for split_records in records.values()
@@ -210,6 +208,7 @@ def validate_prepared_data(
 
     native_input_audit: dict[str, Any] | None = None
     native_frame_maps_dir: Path | None = None
+    text_unit_maps_dir: Path | None = None
     baseline = config.get("baseline")
     if (
         data.get("dataset") == "how2sign"
@@ -237,6 +236,7 @@ def validate_prepared_data(
                     "UNVERIFIED_TEXT_MAPPING: configured tokenizer differs from native SEDS"
                 )
             native_frame_maps_dir = resolver.output_path("shared", "native_frame_maps")
+            text_unit_maps_dir = resolver.output_path("shared", "text_unit_maps")
             split_audits: dict[str, Any] = {}
             for split, split_records in records.items():
                 maps_by_id = {item.sample_id: item for item in compact_maps[split]}
@@ -273,9 +273,7 @@ def validate_prepared_data(
                                 "selected_pose_step_count": len(selected),
                                 "valid_clip_count": valid_count,
                                 "clip_starts_in_selected_pose_steps": starts,
-                                "pose_sha256": hash_seds_input(
-                                    pose_root / str(record.pose_path)
-                                ),
+                                "pose_sha256": hash_seds_input(pose_root / str(record.pose_path)),
                                 "rgb_sha256": hash_seds_input(
                                     rgb_root / str(record.rgb_feature_key)
                                 ),
@@ -287,6 +285,35 @@ def validate_prepared_data(
                         )
                 native_path = native_frame_maps_dir / f"{split}.jsonl"
                 _atomic_jsonl(native_path, native_rows)
+                unique_text_records: dict[str, Any] = {}
+                for record in split_records:
+                    previous = unique_text_records.setdefault(record.text_id, record)
+                    if previous.text_model != record.text_model:
+                        raise DataValidationError(
+                            f"NATIVE_SEDS_INPUT_INVALID: inconsistent text ID {record.text_id}"
+                        )
+                unit_rows: list[Mapping[str, Any]] = []
+                text_values = tuple(unique_text_records.values())
+                for start in range(0, len(text_values), 256):
+                    for lineage in builder.build_text_unit_lineage(
+                        text_values[start : start + 256]
+                    ):
+                        unit_rows.append(
+                            {
+                                "schema_version": "seds_text_unit_map.v1",
+                                "text_id": lineage.text_id,
+                                "text_model": lineage.text_model,
+                                "token_ids": list(lineage.token_ids),
+                                "token_offsets": [
+                                    None if value is None else list(value)
+                                    for value in lineage.token_offsets
+                                ],
+                                "units": [asdict(item) for item in lineage.units],
+                                "unit_mapping_sha256": lineage.unit_mapping_sha256,
+                            }
+                        )
+                unit_path = text_unit_maps_dir / f"{split}.jsonl"
+                _atomic_jsonl(unit_path, unit_rows)
                 split_audits[split] = {
                     "record_count": len(native_rows),
                     "sha256": hashlib.sha256(native_path.read_bytes()).hexdigest(),
@@ -298,6 +325,18 @@ def validate_prepared_data(
                     ),
                     "valid_clip_min": min(row["valid_clip_count"] for row in native_rows),
                     "valid_clip_max": max(row["valid_clip_count"] for row in native_rows),
+                    "text_unit_record_count": len(unit_rows),
+                    "text_unit_maps_sha256": hashlib.sha256(unit_path.read_bytes()).hexdigest(),
+                    "complete_text_unit_count": sum(
+                        unit["complete_after_truncation"]
+                        for row in unit_rows
+                        for unit in row["units"]
+                    ),
+                    "incomplete_text_unit_count": sum(
+                        not unit["complete_after_truncation"]
+                        for row in unit_rows
+                        for unit in row["units"]
+                    ),
                 }
             native_input_audit = {
                 "schema_version": "seds_native_input_audit.v1",
@@ -305,6 +344,7 @@ def validate_prepared_data(
                 "reproduction_config": str(reproduction_config.resolve()),
                 "tokenizer_artifact": str(tokenizer_artifact.resolve()),
                 "native_frame_maps_dir": str(native_frame_maps_dir),
+                "text_unit_maps_dir": str(text_unit_maps_dir),
                 "splits": split_audits,
                 "rgb_pose_clip_counts_equal": True,
                 "all_rgb_features_finite": True,
@@ -376,6 +416,8 @@ def validate_prepared_data(
     outputs = {"audit": output}
     if native_frame_maps_dir is not None:
         outputs["native_frame_maps_dir"] = native_frame_maps_dir
+    if text_unit_maps_dir is not None:
+        outputs["text_unit_maps_dir"] = text_unit_maps_dir
     resolver.record_stage(
         "validate_data",
         outputs,

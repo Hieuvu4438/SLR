@@ -19,7 +19,7 @@ from dive.config import config_hash
 
 from .manifest import SampleRecord
 from .temporal import CompactFrameMap
-from .text_units import normalize_text
+from .text_units import SEDS_CLIP_NORMALIZATION_VERSION, normalize_text
 
 
 class PreparationError(ValueError):
@@ -31,7 +31,8 @@ class _SourceItem:
     split: str
     sentence_id: str
     video_stem: str
-    text: str
+    text_original: str
+    text_model: str
     source_video_id: str
     source_start_sec: float | None
     source_end_sec: float | None
@@ -131,6 +132,7 @@ def _load_seds_split(
     *,
     split: str,
     timings: Mapping[str, Mapping[str, Any]] | None,
+    normalization_version: str = SEDS_CLIP_NORMALIZATION_VERSION,
 ) -> list[_SourceItem]:
     captions = _load_pickle_mapping(path)
     result: list[_SourceItem] = []
@@ -143,29 +145,46 @@ def _load_seds_split(
                 raise PreparationError(f"invalid SEDS {split} video record")
             text = raw.get("text")
             stem = raw.get("new_video_name")
-            if not isinstance(text, str) or not text.strip() or not isinstance(stem, str) or not stem:
+            if (
+                not isinstance(text, str)
+                or not text.strip()
+                or not isinstance(stem, str)
+                or not stem
+            ):
                 raise PreparationError(f"incomplete SEDS {split} video record")
-            normalized = normalize_text(text)
-            if expected_text is not None and normalized != expected_text:
+            original = normalize_text(text)
+            model_text = normalize_text(text, normalization_version)
+            if expected_text is not None and model_text != expected_text:
                 raise PreparationError(f"SEDS sentence {sentence_id} maps to inconsistent captions")
-            expected_text = normalized
+            expected_text = model_text
             timing = None if timings is None else timings.get(stem)
             if timings is not None and timing is None:
                 raise PreparationError(f"missing train timing record for SEDS item {stem}")
             source_id = (
-                str(timing["video_id"])
-                if timing is not None
-                else sentence_id.rsplit("_", 1)[0]
+                str(timing["video_id"]) if timing is not None else sentence_id.rsplit("_", 1)[0]
             )
             start = None if timing is None else float(timing["start_time"])
             end = None if timing is None else float(timing["end_time"])
             result.append(
-                _SourceItem(split, sentence_id, stem, normalized, source_id, start, end)
+                _SourceItem(
+                    split,
+                    sentence_id,
+                    stem,
+                    original,
+                    model_text,
+                    source_id,
+                    start,
+                    end,
+                )
             )
     return result
 
 
-def _load_dev(path: Path) -> list[_SourceItem]:
+def _load_dev(
+    path: Path,
+    *,
+    normalization_version: str = SEDS_CLIP_NORMALIZATION_VERSION,
+) -> list[_SourceItem]:
     try:
         captions = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -187,6 +206,7 @@ def _load_dev(path: Path) -> list[_SourceItem]:
                 sentence_id,
                 stem,
                 normalize_text(text),
+                normalize_text(text, normalization_version),
                 source_id,
                 float(raw["start_time"]),
                 float(raw["end_time"]),
@@ -283,8 +303,8 @@ def _manifest_record(
         sign_language="ase",
         text_language_original="en",
         text_language_model="en",
-        text_original=item.text,
-        text_model=item.text,
+        text_original=item.text_original,
+        text_model=item.text_model,
         source_video_id=item.source_video_id,
         signer_id=None,
         source_start_sec=item.source_start_sec,
@@ -315,7 +335,7 @@ def _excluded_negative_rows(items: list[_SourceItem]) -> list[dict[str, Any]]:
     source_groups: dict[str, list[_SourceItem]] = defaultdict(list)
     videos_by_text: dict[str, list[str]] = defaultdict(list)
     for item in items:
-        text_groups[item.text].add(item.sentence_id)
+        text_groups[item.text_model].add(item.sentence_id)
         source_groups[item.source_video_id].append(item)
         videos_by_text[item.sentence_id].append(item.video_stem)
     reasons: dict[tuple[str, str], set[str]] = defaultdict(set)
@@ -355,6 +375,14 @@ def prepare_how2sign_data(
         or data.get("preparation_protocol") != "seds_how2sign_controlled_v1"
     ):
         raise PreparationError("prepare-data supports only seds_how2sign_controlled_v1")
+    text_config = config.get("text")
+    if not isinstance(text_config, Mapping):
+        raise PreparationError("text config must be a mapping")
+    normalization_version = text_config.get("normalization_version")
+    if normalization_version != SEDS_CLIP_NORMALIZATION_VERSION:
+        raise PreparationError(
+            f"controlled How2Sign text normalization must be {SEDS_CLIP_NORMALIZATION_VERSION}"
+        )
 
     def required(field: str, *, directory: bool = False) -> Path:
         value = data.get(field)
@@ -386,10 +414,18 @@ def prepare_how2sign_data(
     timings = _load_train_timing(annotations["train_timing"])
     source_items = {
         "train": _load_seds_split(
-            annotations["train"], split="train", timings=timings
+            annotations["train"],
+            split="train",
+            timings=timings,
+            normalization_version=normalization_version,
         ),
-        "dev": _load_dev(annotations["dev"]),
-        "test": _load_seds_split(annotations["test"], split="test", timings=None),
+        "dev": _load_dev(annotations["dev"], normalization_version=normalization_version),
+        "test": _load_seds_split(
+            annotations["test"],
+            split="test",
+            timings=None,
+            normalization_version=normalization_version,
+        ),
     }
     all_items = [item for split in ("train", "dev", "test") for item in source_items[split]]
     sample_ids = [item.video_stem for item in all_items]
@@ -418,7 +454,8 @@ def prepare_how2sign_data(
     provenance = {
         split: (
             f"seds_how2sign_controlled_v1:{commit}:"
-            f"{_sha256(annotations['train' if split == 'train' else split])}"
+            f"{_sha256(annotations['train' if split == 'train' else split])}:"
+            f"{normalization_version}"
         )
         for split in ("train", "dev", "test")
     }
@@ -453,7 +490,7 @@ def prepare_how2sign_data(
             "video_count": len({item.video_stem for item in items}),
             "text_count": len({item.sentence_id for item in items}),
             "source_video_count": len(source_sets[split]),
-            "duplicate_text_string_count": len(items) - len({item.text for item in items}),
+            "duplicate_text_string_count": len(items) - len({item.text_model for item in items}),
             "manifest_sha256": _sha256(manifest_path),
             "frame_maps_sha256": _sha256(frame_path),
             "relevance_sha256": _sha256(relevance_path),
@@ -466,14 +503,14 @@ def prepare_how2sign_data(
         "ready": True,
         "config_sha256": config_hash(config),
         "protocol": data["preparation_protocol"],
+        "text_normalization_version": normalization_version,
         "upstream": {
             "root": str(upstream),
             "commit": commit,
             "clean": True,
         },
         "annotations": {
-            name: {"path": str(path), "sha256": _sha256(path)}
-            for name, path in annotations.items()
+            name: {"path": str(path), "sha256": _sha256(path)} for name, path in annotations.items()
         },
         "splits": split_reports,
         "excluded_negative_count": len(exclusion_rows),

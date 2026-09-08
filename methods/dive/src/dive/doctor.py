@@ -39,6 +39,8 @@ _STAGE_PARENT_ARTIFACTS = {
     ),
     "warmup": (
         ("validate_data", "audit", "shared"),
+        ("validate_data", "native_frame_maps_dir", "shared"),
+        ("validate_data", "text_unit_maps_dir", "shared"),
         ("baseline_validate", "report", "shared"),
     ),
     "mine_finalize": (

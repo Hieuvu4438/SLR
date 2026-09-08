@@ -24,6 +24,13 @@ def test_fixture_config_is_strict_and_hash_is_canonical():
         validate_config(broken)
 
 
+def test_how2sign_seds_requires_native_text_normalization():
+    config = load_config(HERE / "configs" / "how2sign_base.yaml")
+    config["text"]["normalization_version"] = "text_norm_v1"
+    with pytest.raises(ConfigError, match="seds_clip_text_norm_v1"):
+        validate_config(config)
+
+
 @pytest.mark.parametrize(
     ("path", "value", "message"),
     [

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import unicodedata
 from dataclasses import asdict, dataclass
 from typing import Sequence
 
 import regex
+import ftfy
 
 
 class TextUnitError(ValueError):
@@ -14,6 +16,7 @@ class TextUnitError(ValueError):
 
 
 NORMALIZATION_VERSION = "text_norm_v1"
+SEDS_CLIP_NORMALIZATION_VERSION = "seds_clip_text_norm_v1"
 UNITIZER_VERSION = "word_numeric_v1"
 
 _UNIT_PATTERN = regex.compile(
@@ -44,11 +47,17 @@ class MappedTextUnit:
 
 
 def normalize_text(text: str, version: str = NORMALIZATION_VERSION) -> str:
-    if version != NORMALIZATION_VERSION:
-        raise TextUnitError(f"unknown normalization version: {version}")
     if not isinstance(text, str):
         raise TextUnitError("text must be a string")
-    return " ".join(unicodedata.normalize("NFC", text).split())
+    if version == NORMALIZATION_VERSION:
+        return " ".join(unicodedata.normalize("NFC", text).split())
+    if version == SEDS_CLIP_NORMALIZATION_VERSION:
+        # Exact text entering the pinned CLIP regex/BPE path: basic_clean,
+        # whitespace_clean, then lowercase in SimpleTokenizer.tokenize().
+        cleaned = ftfy.fix_text(text)
+        cleaned = html.unescape(html.unescape(cleaned))
+        return regex.sub(r"\s+", " ", cleaned).strip().lower()
+    raise TextUnitError(f"unknown normalization version: {version}")
 
 
 def unitize(text_model: str, version: str = UNITIZER_VERSION) -> tuple[TextUnit, ...]:
@@ -84,14 +93,16 @@ def map_units_to_subwords(
     """
     if len(token_ids) != len(token_offsets):
         raise TextUnitError("token_ids and token_offsets must have the same length")
-    previous_end = 0
+    previous_start = 0
     for offset in token_offsets:
         if offset is None:
             continue
         start, end = offset
-        if start < 0 or end <= start or start < previous_end:
+        # Byte-level BPE can split one Unicode code point, in which case two pieces
+        # legitimately share the same covering character span.
+        if start < 0 or end <= start or start < previous_start:
             raise TextUnitError("token offsets must be positive, ordered, half-open spans")
-        previous_end = end
+        previous_start = start
     mapped: list[MappedTextUnit] = []
     for unit in units:
         indices = tuple(
@@ -113,7 +124,9 @@ def map_units_to_subwords(
                 subword_indices=indices,
                 token_ids=tuple(int(token_ids[index]) for index in indices),
                 complete_after_truncation=bool(indices)
-                and all(flag or char.isspace() for flag, char in zip(covered, unit.text, strict=True)),
+                and all(
+                    flag or char.isspace() for flag, char in zip(covered, unit.text, strict=True)
+                ),
             )
         )
     return tuple(mapped)

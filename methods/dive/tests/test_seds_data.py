@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pickle
 import random
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -85,9 +86,7 @@ def _builder(tmp_path: Path) -> SedsManifestInputBuilder:
 def test_manifest_builder_preserves_native_shapes_masks_ids_and_rng(tmp_path):
     builder = _builder(tmp_path)
     state = random.getstate()
-    video = builder.build_video_batch(
-        [_record()], raw_frame_counts=[20], frames_per_second=[25.0]
-    )
+    video = builder.build_video_batch([_record()], raw_frame_counts=[20], frames_per_second=[25.0])
     assert random.getstate() == state
     assert video.sample_ids == ("sample",)
     assert video.right_pose.shape == (1, 20, 21, 2)
@@ -171,3 +170,26 @@ def test_training_batch_uses_explicit_deterministic_random_swap(tmp_path):
     assert first.augmented_strings != (_record().text_model,)
     assert first.augmented_text.text_ids == first.text.text_ids == ("sentence",)
     assert not torch.equal(first.augmented_text.input_ids, first.text.input_ids)
+
+
+def test_text_unit_lineage_round_trips_native_ids_and_marks_truncation(tmp_path):
+    builder = _builder(tmp_path)
+    text = " ".join(["uncharacteristically"] * 40)
+    record = replace(_record(), text_original=text, text_model=text)
+    lineage = builder.build_text_unit_lineage([record])[0]
+    native = builder.build_text_batch([record])
+    assert lineage.token_ids == tuple(native.input_ids[0].tolist())
+    assert lineage.text_id == record.text_id
+    assert len(lineage.unit_mapping_sha256) == 64
+    assert any(not item.complete_after_truncation for item in lineage.units)
+
+
+def test_manifest_builder_rejects_text_before_native_normalization(tmp_path):
+    builder = _builder(tmp_path)
+    record = replace(
+        _record(),
+        text_original="Clean &amp; Clear",
+        text_model="Clean &amp; Clear",
+    )
+    with pytest.raises(SedsDataError, match="native SEDS normalization"):
+        builder.build_text_batch([record])

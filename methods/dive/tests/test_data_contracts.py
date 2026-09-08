@@ -19,6 +19,7 @@ from dive.data.temporal import (
     require_distinct_views,
 )
 from dive.data.text_units import (
+    SEDS_CLIP_NORMALIZATION_VERSION,
     TextUnitError,
     map_units_to_subwords,
     normalize_text,
@@ -85,13 +86,23 @@ def test_unit_offsets_round_trip_and_partial_target_rejection():
     mapping = map_units_to_subwords(units, token_ids, offsets)
     target = require_target(mapping, 3)
     assert target.subword_indices == (4, 5)
-    assert "".join(text[left:right] for left, right in (offsets[i] for i in target.subword_indices)) == "12meters"
+    assert (
+        "".join(text[left:right] for left, right in (offsets[i] for i in target.subword_indices))
+        == "12meters"
+    )
     partial = map_units_to_subwords(units, token_ids[:-2], offsets[:-2])
     assert partial[3].complete_after_truncation is False
     with pytest.raises(TextUnitError, match="incomplete after truncation"):
         require_target(partial, 3)
     with pytest.raises(TextUnitError, match="out of range"):
         require_target(mapping, 99)
+
+
+def test_seds_clip_normalization_matches_native_cleaning_contract():
+    assert (
+        normalize_text("  Clean &amp; Clear   isnâ€™t bad  ", SEDS_CLIP_NORMALIZATION_VERSION)
+        == "clean & clear isn't bad"
+    )
 
 
 def test_pair_relations_keep_positives_and_exclude_ambiguous_negatives():

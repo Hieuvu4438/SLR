@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -141,9 +142,7 @@ def test_relevance_requires_exact_bidirectional_coverage(tmp_path):
         path,
         [{"schema_version": "relevance.v1", "video_id": "v0", "positive_text_ids": ["t0"]}],
     )
-    assert load_relevance(path, video_ids=["v0"], text_ids=["t0"]) == {
-        "v0": frozenset({"t0"})
-    }
+    assert load_relevance(path, video_ids=["v0"], text_ids=["t0"]) == {"v0": frozenset({"t0"})}
     with pytest.raises(RelevanceError, match="no positive video"):
         load_relevance(path, video_ids=["v0"], text_ids=["t0", "t1"])
 
@@ -229,14 +228,26 @@ def test_how2sign_validation_registers_native_seds_frame_lineage(tmp_path, monke
                 pose_raw_frame_indices=tuple((0,) for _ in split_records),
             )
 
+        def build_text_unit_lineage(self, split_records):
+            return tuple(
+                SimpleNamespace(
+                    text_id=record.text_id,
+                    text_model=record.text_model,
+                    token_ids=(49406, 49407),
+                    token_offsets=(None, None),
+                    units=(),
+                    unit_mapping_sha256="0" * 64,
+                )
+                for record in split_records
+            )
+
     monkeypatch.setattr("dive.data.validation.SedsManifestInputBuilder", FakeBuilder)
     report = validate_prepared_data(config)
     assert report["native_seds_inputs"]["rgb_pose_clip_counts_equal"] is True
     root = Path(config["run"]["output_root"]) / "shared" / "seed17"
     native = root / "native_frame_maps" / "train.jsonl"
     rows = [json.loads(line) for line in native.read_text(encoding="utf-8").splitlines()]
-    assert [row["sample_id"] for row in rows] == [
-        record.sample_id for record in records["train"]
-    ]
+    assert [row["sample_id"] for row in rows] == [record.sample_id for record in records["train"]]
     state = json.loads((root / "run_state.json").read_text(encoding="utf-8"))
     assert "native_frame_maps_dir" in state["stages"]["validate_data"]["outputs"]
+    assert "text_unit_maps_dir" in state["stages"]["validate_data"]["outputs"]

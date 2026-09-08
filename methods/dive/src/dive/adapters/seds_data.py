@@ -14,6 +14,14 @@ import numpy as np
 import torch
 
 from dive.data.manifest import SampleRecord
+from dive.data.text_units import (
+    SEDS_CLIP_NORMALIZATION_VERSION,
+    MappedTextUnit,
+    map_units_to_subwords,
+    normalize_text,
+    unit_mapping_hash,
+    unitize,
+)
 
 from .seds import SedsTextBatch, SedsVideoBatch
 from .seds_reproduction import load_seds_reproduction, verify_seds_checkout
@@ -46,6 +54,16 @@ class SedsTrainingBatch:
     augmented: tuple[bool, ...]
 
 
+@dataclass(frozen=True)
+class SedsTextUnitLineage:
+    text_id: str
+    text_model: str
+    token_ids: tuple[int, ...]
+    token_offsets: tuple[tuple[int, int] | None, ...]
+    units: tuple[MappedTextUnit, ...]
+    unit_mapping_sha256: str
+
+
 def _random_swap(sentence: str, generator: random.Random) -> str:
     # Exact n=1 textaugment.EDA.random_swap/swap_word algorithm called by SEDS,
     # expressed against a caller-owned RNG so epochs and resumes are reproducible.
@@ -62,6 +80,41 @@ def _random_swap(sentence: str, generator: random.Random) -> str:
             return " ".join(words)
     words[first], words[second] = words[second], words[first]
     return " ".join(words)
+
+
+def _bpe_offsets(
+    lexical: str,
+    pieces: Sequence[str],
+    *,
+    char_start: int,
+    byte_decoder: Mapping[str, int],
+) -> tuple[tuple[int, int], ...]:
+    """Map byte-level BPE pieces back to covering Unicode character spans."""
+    boundaries = [0]
+    for character in lexical:
+        boundaries.append(boundaries[-1] + len(character.encode("utf-8")))
+    raw_pieces: list[bytes] = []
+    for piece in pieces:
+        core = piece.removesuffix("</w>")
+        try:
+            raw_pieces.append(bytes(byte_decoder[character] for character in core))
+        except KeyError as exc:
+            raise SedsDataError("native SEDS BPE piece contains an unknown byte symbol") from exc
+    if b"".join(raw_pieces) != lexical.encode("utf-8"):
+        raise SedsDataError("native SEDS BPE pieces do not round-trip their lexical token")
+    offsets: list[tuple[int, int]] = []
+    cursor = 0
+    for piece in raw_pieces:
+        end = cursor + len(piece)
+        left = next(index for index in range(len(lexical)) if boundaries[index + 1] > cursor)
+        right = next(
+            index + 1
+            for index in range(len(lexical))
+            if boundaries[index] < end <= boundaries[index + 1]
+        )
+        offsets.append((char_start + left, char_start + right))
+        cursor = end
+    return tuple(offsets)
 
 
 def _load_source_module(path: Path, name: str) -> ModuleType:
@@ -115,7 +168,9 @@ class SedsManifestInputBuilder:
         try:
             self._tokenizer = tokenizer_module.SimpleTokenizer(str(tokenizer_path))
         except Exception as exc:
-            raise SedsDataError(f"cannot initialize pinned SEDS tokenizer: {tokenizer_path}") from exc
+            raise SedsDataError(
+                f"cannot initialize pinned SEDS tokenizer: {tokenizer_path}"
+            ) from exc
 
     def _helper(self, record: SampleRecord, *, require_features: bool) -> Any:
         arguments = self.reproduction.published_eval_arguments
@@ -142,6 +197,11 @@ class SedsManifestInputBuilder:
             "UNK_TOKEN": "[UNK]",
             "PAD_TOKEN": "[PAD]",
         }
+        expected_model_text = normalize_text(record.text_original, SEDS_CLIP_NORMALIZATION_VERSION)
+        if record.text_model != expected_model_text:
+            raise SedsDataError(
+                f"manifest text_model differs from native SEDS normalization: {record.text_id}"
+            )
         helper.sentences_dict = {record.text_id: record.text_model}
         if not require_features:
             return helper
@@ -153,7 +213,9 @@ class SedsManifestInputBuilder:
             pose_path.relative_to(self.pose_root)
             rgb_path.relative_to(self.rgb_root)
         except ValueError as exc:
-            raise SedsDataError(f"manifest feature path escapes its root: {record.sample_id}") from exc
+            raise SedsDataError(
+                f"manifest feature path escapes its root: {record.sample_id}"
+            ) from exc
         if not pose_path.is_file():
             raise SedsDataError(f"missing SEDS pose feature: {pose_path}")
         if not rgb_path.is_file():
@@ -251,9 +313,7 @@ class SedsManifestInputBuilder:
         pose_raw_frame_indices = tuple(item[1] for item in prepared)
         if any(
             indices[-1] >= raw_count
-            for indices, raw_count in zip(
-                pose_raw_frame_indices, raw_frame_counts, strict=True
-            )
+            for indices, raw_count in zip(pose_raw_frame_indices, raw_frame_counts, strict=True)
         ):
             raise SedsDataError("native selected pose frame exceeds recorded raw frame count")
         try:
@@ -335,11 +395,103 @@ class SedsManifestInputBuilder:
         return SedsTextBatch(
             text_ids=tuple(record.text_id for record in records),
             input_ids=torch.cat([value["pairs_text"] for value in encoded], dim=0).long(),
-            token_type_ids=torch.cat(
-                [value["pairs_segment"] for value in encoded], dim=0
-            ).long(),
+            token_type_ids=torch.cat([value["pairs_segment"] for value in encoded], dim=0).long(),
             attention_mask=torch.cat([value["pairs_mask"] for value in encoded], dim=0).long(),
         )
+
+    def build_text_unit_lineage(
+        self, records: Sequence[SampleRecord]
+    ) -> tuple[SedsTextUnitLineage, ...]:
+        """Instrument the pinned regex/BPE/token selection path and bind exact unit indices."""
+        native = self.build_text_batch(records)
+        maximum = int(self.reproduction.published_eval_arguments["max_words"])
+        result: list[SedsTextUnitLineage] = []
+        for row, record in enumerate(records):
+            full_pieces: list[tuple[str, tuple[int, int] | None, int]] = [
+                ("<|startoftext|>", None, 0)
+            ]
+            for match in self._tokenizer.pat.finditer(record.text_model):
+                lexical = match.group(0)
+                encoded = "".join(
+                    self._tokenizer.byte_encoder[value] for value in lexical.encode("utf-8")
+                )
+                bpe_pieces = self._tokenizer.bpe(encoded).split(" ")
+                bpe_offsets = _bpe_offsets(
+                    lexical,
+                    bpe_pieces,
+                    char_start=match.start(),
+                    byte_decoder=self._tokenizer.byte_decoder,
+                )
+                first_index = len(full_pieces)
+                full_pieces.extend(
+                    (piece, offset, first_index + index)
+                    for index, (piece, offset) in enumerate(
+                        zip(bpe_pieces, bpe_offsets, strict=True)
+                    )
+                )
+            if [piece for piece, _, _ in full_pieces[1:]] != self._tokenizer.tokenize(
+                record.text_model
+            ):
+                raise SedsDataError("instrumented SEDS BPE pieces differ from native tokenizer")
+            total_with_cls = maximum - 1
+            selected_indices = list(range(len(full_pieces)))
+            if len(full_pieces) > total_with_cls:
+                selected_indices = [0]
+                selected_indices.extend(
+                    int(value)
+                    for value in np.linspace(
+                        1,
+                        len(full_pieces) - 1,
+                        total_with_cls - 1,
+                        dtype=int,
+                    )
+                )
+            pieces = [full_pieces[index] for index in selected_indices]
+            pieces.append(("<|endoftext|>", None, -1))
+            token_ids = self._tokenizer.convert_tokens_to_ids([piece for piece, _, _ in pieces])
+            offsets = [offset for _, offset, _ in pieces]
+            mask = [1] * len(token_ids)
+            while len(token_ids) < maximum:
+                token_ids.append(0)
+                offsets.append(None)
+                mask.append(0)
+            if len(token_ids) != maximum or len(offsets) != maximum:
+                raise SedsDataError("instrumented SEDS token sequence exceeds native maximum")
+            if (
+                token_ids != native.input_ids[row].tolist()
+                or mask != native.attention_mask[row].tolist()
+            ):
+                raise SedsDataError("instrumented token IDs/mask differ from native SEDS loader")
+            preliminary = map_units_to_subwords(unitize(record.text_model), token_ids, offsets)
+            selected_set = set(selected_indices)
+            mapped: tuple[MappedTextUnit, ...] = tuple(
+                replace(
+                    item,
+                    complete_after_truncation=(
+                        item.complete_after_truncation
+                        and {
+                            original_index
+                            for _, offset, original_index in full_pieces
+                            if offset is not None
+                            and offset[0] < item.unit.char_end
+                            and offset[1] > item.unit.char_start
+                        }
+                        <= selected_set
+                    ),
+                )
+                for item in preliminary
+            )
+            result.append(
+                SedsTextUnitLineage(
+                    text_id=record.text_id,
+                    text_model=record.text_model,
+                    token_ids=tuple(token_ids),
+                    token_offsets=tuple(offsets),
+                    units=mapped,
+                    unit_mapping_sha256=unit_mapping_hash(mapped),
+                )
+            )
+        return tuple(result)
 
     def build_training_batch(
         self,
@@ -364,13 +516,11 @@ class SedsManifestInputBuilder:
         for record in records:
             should_augment = generator.random() > 0.5
             value = (
-                _random_swap(record.text_model, generator)
-                if should_augment
-                else record.text_model
+                _random_swap(record.text_model, generator) if should_augment else record.text_model
             )
             augmented_strings.append(value)
             flags.append(should_augment and value != record.text_model)
-            augmented_records.append(replace(record, text_model=value))
+            augmented_records.append(replace(record, text_original=value, text_model=value))
         augmented_text = self.build_text_batch(augmented_records)
         return SedsTrainingBatch(
             video=video,
