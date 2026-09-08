@@ -14,6 +14,14 @@ Every epoch must yield exactly its planned step count. Selection uses only full-
 `E_local` retrieval, with the earliest optimizer step winning exact endpoint ties; both the selected
 reference and its source checkpoint have SHA-256 provenance.
 
+Tensor caches use a versioned full-provenance fingerprint rather than filenames or shapes. The
+artifact-specific fingerprint contracts include grid/view, tokenizer/unit mapping, reference or
+student weights, preprocessing, precision and scoring policy as applicable. Writers publish each
+CPU-contiguous tensor shard atomically, record its checksum and shape/dtype schema, then publish the
+index last. Readers verify the namespace, complete fingerprint, checksum, shard/index schema,
+ordered sample IDs, masks and timestamps before returning tensors. Train/dev/test namespaces and
+requested manifest order are explicit; correctness reference caches reject non-FP32 precision.
+
 Run `bash methods/dive/scripts/setup_seds.sh` to create or verify the ignored official SEDS
 worktree. The script refuses a dirty/non-Git target and enforces detached commit
 `434e3f714fcb6a7d1f4001fb9a246bbd93ec0246`.

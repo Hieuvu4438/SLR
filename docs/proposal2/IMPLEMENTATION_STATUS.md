@@ -60,3 +60,6 @@ are never counted as a benchmark replication.
 - `pytest -q methods/dive/tests`: 71 passed after the evidence warm-up runner, optimizer ownership,
   schedule, dev-selection and reference-export contracts.
 - `pytest -q`: 195 passed; no ELSC/shared regression.
+- `pytest -q methods/dive/tests`: 78 passed after versioned tensor-cache fingerprints, atomic
+  checksummed shards, explicit ID/mask/timestamp loading and T06 invalidation coverage.
+- `pytest -q`: 202 passed; no ELSC/shared regression.
