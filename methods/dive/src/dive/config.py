@@ -303,6 +303,14 @@ def required_resource_paths(config: Mapping[str, Any], stage: str) -> dict[str, 
     requirements: dict[str, dict[str, str | None]] = {
         "fixture": {},
         "prepare": common_data,
+        "validate_data": {
+            **common_data,
+            "data.train_manifest": data.get("train_manifest"),
+            "data.dev_manifest": data.get("dev_manifest"),
+            "data.test_manifest": data.get("test_manifest"),
+            "data.train_relations": data.get("train_relations"),
+            "data.relevance_dir": data.get("relevance_dir"),
+        },
         "baseline_train": {
             **common_data,
             "data.train_manifest": data.get("train_manifest"),

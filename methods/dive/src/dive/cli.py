@@ -6,7 +6,12 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from .artifacts import ArtifactError
 from .config import ConfigError, dump_resolved, load_config
+from .data.manifest import ManifestError
+from .data.relations import RelationError
+from .data.relevance import RelevanceError
+from .data.validation import DataValidationError, validate_prepared_data
 from .doctor import inspect_environment, write_report
 from .smoke import run_fixture_smoke
 
@@ -23,7 +28,7 @@ def _parser() -> argparse.ArgumentParser:
         required=True,
         choices=(
             "fixture", "prepare", "baseline_train", "baseline_validate", "warmup",
-            "mine_finalize", "evaluate_test",
+            "validate_data", "mine_finalize", "evaluate_test",
         ),
     )
     doctor.add_argument("--output", default="doctor.json")
@@ -31,6 +36,12 @@ def _parser() -> argparse.ArgumentParser:
     config = subparsers.add_parser("config", help="validate and resolve a YAML config")
     config.add_argument("--config", required=True)
     config.add_argument("--output")
+
+    validate_data = subparsers.add_parser(
+        "validate-data", help="validate prepared manifests, relevance, relations, and assets"
+    )
+    validate_data.add_argument("--config", required=True)
+    validate_data.add_argument("--output")
 
     smoke = subparsers.add_parser("smoke", help="run fixture-only end-to-end correctness smoke")
     smoke.add_argument("--config", required=True)
@@ -51,6 +62,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             digest = dump_resolved(config, args.output) if args.output else None
             print(digest or json.dumps(config, sort_keys=True))
             return 0
+        if args.command == "validate-data":
+            report = validate_prepared_data(config, output_path=args.output)
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return 0
         if args.command == "smoke":
             root = Path(__file__).resolve().parents[4]
             report = run_fixture_smoke(config, args.output_dir, repository_root=root)
@@ -58,6 +73,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
     except ConfigError as exc:
         print(f"CONFIG_ERROR: {exc}", file=sys.stderr)
+        return 2
+    except (ArtifactError, DataValidationError, ManifestError, RelevanceError, RelationError) as exc:
+        print(f"DATA_ERROR: {exc}", file=sys.stderr)
         return 2
     return 2
 

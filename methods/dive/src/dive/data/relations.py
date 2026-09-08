@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Iterable, Mapping, Sequence
+import hashlib
+import json
+from dataclasses import dataclass, fields
+from pathlib import Path
+from typing import Any, Iterable, Mapping, Sequence
 
 import torch
 from torch import Tensor
@@ -17,6 +20,76 @@ class PairRelations:
     candidates: Tensor
     video_rows: dict[str, int]
     text_columns: dict[str, int]
+
+
+@dataclass(frozen=True)
+class ExcludedNegativeRecord:
+    schema_version: str
+    video_id: str
+    text_id: str
+    reason: str
+    provenance: str
+
+    @classmethod
+    def from_mapping(cls, raw: Mapping[str, Any]) -> "ExcludedNegativeRecord":
+        allowed = {item.name for item in fields(cls)}
+        unknown = sorted(set(raw) - allowed)
+        missing = sorted(allowed - set(raw))
+        if unknown:
+            raise RelationError("unknown excluded-negative fields: " + ", ".join(unknown))
+        if missing:
+            raise RelationError("missing excluded-negative fields: " + ", ".join(missing))
+        try:
+            record = cls(**dict(raw))
+        except TypeError as exc:
+            raise RelationError("invalid excluded-negative record") from exc
+        if record.schema_version != "excluded_negative.v1":
+            raise RelationError("schema_version must be excluded_negative.v1")
+        for name in ("video_id", "text_id", "reason", "provenance"):
+            if not isinstance(getattr(record, name), str) or not getattr(record, name).strip():
+                raise RelationError(f"{name} must be a nonempty string")
+        return record
+
+
+def load_excluded_negatives(
+    path: str | Path,
+    *,
+    video_ids: Iterable[str],
+    text_ids: Iterable[str],
+    positives_by_video: Mapping[str, Iterable[str]],
+) -> tuple[ExcludedNegativeRecord, ...]:
+    source = Path(path)
+    if not source.is_file():
+        raise RelationError(f"excluded-negative artifact does not exist: {source}")
+    records: list[ExcludedNegativeRecord] = []
+    for line_number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            raw = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise RelationError(f"invalid JSON at {source}:{line_number}: {exc}") from exc
+        if not isinstance(raw, Mapping):
+            raise RelationError(f"record at {source}:{line_number} must be an object")
+        try:
+            records.append(ExcludedNegativeRecord.from_mapping(raw))
+        except RelationError as exc:
+            raise RelationError(f"{source}:{line_number}: {exc}") from exc
+    videos = set(map(str, video_ids))
+    texts = set(map(str, text_ids))
+    pairs = [(record.video_id, record.text_id) for record in records]
+    if len(pairs) != len(set(pairs)):
+        raise RelationError("excluded-negative artifact contains duplicate pairs")
+    for video_id, text_id in pairs:
+        if video_id not in videos or text_id not in texts:
+            raise RelationError(f"excluded negative references unknown IDs: {(video_id, text_id)}")
+        if text_id in set(map(str, positives_by_video.get(video_id, ()))):
+            raise RelationError(f"known positive cannot be an excluded negative: {(video_id, text_id)}")
+    return tuple(records)
+
+
+def relations_hash(path: str | Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def build_pair_relations(

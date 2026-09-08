@@ -25,3 +25,15 @@ __all__ = [
     "unitize",
     "validate_split_disjoint",
 ]
+from .relevance import RelevanceError, RelevanceRecord, load_relevance, relevance_hash
+from .relations import ExcludedNegativeRecord, load_excluded_negatives, relations_hash
+
+__all__ = [
+    "ExcludedNegativeRecord",
+    "RelevanceError",
+    "RelevanceRecord",
+    "load_excluded_negatives",
+    "load_relevance",
+    "relations_hash",
+    "relevance_hash",
+]

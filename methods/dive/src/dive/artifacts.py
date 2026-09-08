@@ -142,6 +142,10 @@ class ArtifactResolver:
             raise ArtifactError("artifact output path components must be safe nonempty names")
         return self.root(scope).joinpath(*parts)
 
+    def owned_path(self, scope: ArtifactScope, path: str | Path) -> Path:
+        """Return a canonical path only when it remains inside the selected run scope."""
+        return self._relative_owned_path(scope, path)[0]
+
     def _empty_state(self, scope: ArtifactScope) -> dict[str, Any]:
         layout: dict[str, Any] = {
             "scope": scope,

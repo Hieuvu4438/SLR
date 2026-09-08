@@ -29,6 +29,8 @@ def test_run_layout_separates_shared_and_variant_outputs(tmp_path):
     ).resolve()
     with pytest.raises(ArtifactError, match="safe"):
         resolver.output_path("shared", "..", "escaped.pt")
+    with pytest.raises(ArtifactError, match="escapes"):
+        resolver.owned_path("shared", tmp_path / "outside.pt")
 
 
 def test_stage_record_is_atomic_idempotent_and_resolvable(tmp_path):
