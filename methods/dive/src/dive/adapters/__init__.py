@@ -10,6 +10,7 @@ from .seds import (
     normalize_seds_video_mask,
     seds_prelogit_fusion_scores,
 )
+from .seds_data import SedsDataError, SedsManifestInputBuilder
 from .seds_reproduction import (
     SedsReproduction,
     SedsReproductionError,
@@ -24,7 +25,9 @@ __all__ = [
     "PrelogitScores",
     "SedsAdapter",
     "SedsAdapterError",
+    "SedsDataError",
     "SedsLocalPoseEncoder",
+    "SedsManifestInputBuilder",
     "SedsReproduction",
     "SedsReproductionError",
     "SedsTextBatch",

@@ -35,6 +35,10 @@ Implemented adapter-level corrections and taps:
   cloned `gcn_emb -> fixed window -> sign_conv -> mean` local pose path;
 - accepts synchronized right/left/body pose trees in the shared evidence warm-up/student runners and
   records conservative half-open raw-frame RF intervals (nominal 16, pose bound up to 24 frames).
+- routes controlled manifest rows through a manifest-driven native input builder that reuses the
+  pinned loader's pose, RGB, tokenizer and collate methods without its hard-wired split lookup;
+  validates feature roots, IDs, synchronized grids, masks and layouts, restores its unused RNG draw,
+  and executes source in memory so Python caches do not dirty the pinned checkout.
 
 The pinned `modeling.py` reads `task_config.freeze_exfusion`, although the pinned CLI parser never
 defines that argument. The checked contract records `freeze_exfusion=false` as an explicit

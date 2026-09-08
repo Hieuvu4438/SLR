@@ -23,6 +23,13 @@ records the missing-upstream-parser `freeze_exfusion=false` compatibility value.
 cover score orientation, prelogit scaling, padding behavior, feature-tap layouts and three-stream
 pose flow, but do not constitute released-checkpoint parity.
 
+Controlled manifests feed the native model through `SedsManifestInputBuilder`. It executes the
+verified pinned eval loader/tokenizer source in memory (so no generated files dirty the upstream
+checkout), delegates pose/RGB/text transforms and collation to those source methods, restores the
+upstream loader's otherwise-unused Python RNG draw, and rejects ID, feature-root, temporal-grid,
+mask or tensor-layout drift. This avoids inheriting the released loader's hard-wired test split
+while retaining its native preprocessing.
+
 From the repository root:
 
 ```bash

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -127,6 +128,7 @@ _EXTERNAL_ASSETS = {
     "pose_features": "How2Sign/RTMpose/Pose_all_24rates",
     "rgb_features": "How2Sign/I3D_features",
     "signbert_initialization": "ckpt/pretrain_signbert.pth",
+    "tokenizer": "modules/bpe_simple_vocab_16e6.txt.gz",
 }
 
 _CONTROLLED_PROTOCOL = {
@@ -236,3 +238,30 @@ def load_seds_reproduction(
         external_assets=external_assets,
         controlled_protocol=controlled_protocol,
     )
+
+
+def verify_seds_checkout(upstream_root: str | Path) -> Path:
+    """Require the exact clean detached SEDS source used by every native adapter path."""
+    root = Path(upstream_root).resolve()
+    if not (root / ".git").exists():
+        raise SedsReproductionError(f"SEDS checkout is not a Git worktree: {root}")
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "-C", str(root), "status", "--porcelain"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except subprocess.CalledProcessError as exc:
+        raise SedsReproductionError(f"cannot inspect SEDS checkout: {root}") from exc
+    if head != PINNED_SEDS_COMMIT:
+        raise SedsReproductionError("SEDS checkout commit differs from the pinned revision")
+    if dirty:
+        raise SedsReproductionError("SEDS checkout must be clean for controlled provenance")
+    return root

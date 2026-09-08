@@ -106,6 +106,7 @@ external_assets:
   pose_features: How2Sign/RTMpose/Pose_all_24rates
   rgb_features: How2Sign/I3D_features
   signbert_initialization: ckpt/pretrain_signbert.pth
+  tokenizer: modules/bpe_simple_vocab_16e6.txt.gz
 controlled_protocol:
   checkpoint_selection: independent_dev_only
   dev_source: local_labels.dev.json

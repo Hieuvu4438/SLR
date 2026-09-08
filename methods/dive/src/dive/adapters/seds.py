@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import hashlib
 import importlib
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +22,7 @@ from .seds_reproduction import (
     SedsReproduction,
     SedsReproductionError,
     load_seds_reproduction,
+    verify_seds_checkout,
 )
 
 
@@ -111,24 +111,10 @@ def _load_reproduction_config(path: Path, upstream_root: Path) -> SedsReproducti
 
 
 def _verify_checkout(upstream_root: Path) -> None:
-    if not (upstream_root / ".git").exists():
-        raise SedsAdapterError(f"SEDS checkout is not a Git worktree: {upstream_root}")
-    result = subprocess.run(
-        ["git", "-C", str(upstream_root), "rev-parse", "HEAD"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    if result.stdout.strip() != PINNED_SEDS_COMMIT:
-        raise SedsAdapterError("SEDS checkout commit differs from the pinned revision")
-    dirty = subprocess.run(
-        ["git", "-C", str(upstream_root), "status", "--porcelain"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    if dirty.stdout.strip():
-        raise SedsAdapterError("SEDS checkout must be clean for controlled provenance")
+    try:
+        verify_seds_checkout(upstream_root)
+    except SedsReproductionError as exc:
+        raise SedsAdapterError(str(exc)) from exc
 
 
 def _assert_binary_mask(mask: Tensor, shape: tuple[int, int], name: str) -> None:
