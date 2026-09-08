@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -187,6 +188,21 @@ def test_seds_masks_remove_only_explicit_cls_for_local_features():
     )
     with pytest.raises(SedsAdapterError, match="exactly one CLS"):
         normalize_seds_video_mask(legacy, local_length=3)
+
+
+def test_receptive_fields_follow_native_filtered_pose_to_raw_mapping():
+    adapter = SedsAdapter(FakeSeds(), upstream_root=SEDS_ROOT)
+    batch = replace(
+        _video_batch(),
+        raw_frame_counts=(64, 64),
+        pose_raw_frame_indices=(tuple(range(0, 64, 2)), tuple(range(0, 64, 2))),
+    )
+    receptive_fields = adapter.describe_receptive_field(batch, "canonical")
+    assert receptive_fields[0]["raw_frame_interval"] == [0, 39]
+    assert receptive_fields[0]["rgb_raw_frame_interval"] == [0, 31]
+    assert receptive_fields[0]["raw_mapping_policy"] == (
+        "native_seds_pose_selected_raw_frames_v1"
+    )
 
 
 def test_local_pose_clone_uses_gcn_before_fixed_windows_and_sign_conv():

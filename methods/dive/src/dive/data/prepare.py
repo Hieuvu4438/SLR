@@ -481,7 +481,10 @@ def prepare_how2sign_data(
             "sample_count": len(probes),
             "video_pose_frame_count_equal": True,
             "timing_policy": "container_fps_and_frame_count_v1",
-            "pose_video_mapping": "identity_pose_video_frames_v1",
+            "stored_pose_video_mapping": "identity_pose_video_frames_v1",
+            "native_seds_pose_selection": (
+                "captured_by_manifest_input_builder_after_subsampling_and_hand_filter"
+            ),
         },
         "released_seds_protocol_note": (
             "upstream has no dev.pkl and selects during training on test.pkl; controlled DIVE uses "

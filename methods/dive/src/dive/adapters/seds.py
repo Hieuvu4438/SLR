@@ -42,6 +42,7 @@ class SedsVideoBatch:
     grid_id: str
     raw_frame_counts: tuple[int, ...]
     frames_per_second: tuple[float, ...] | None = None
+    pose_raw_frame_indices: tuple[tuple[int, ...], ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -725,6 +726,8 @@ class SedsAdapter:
             "upstream_commit": PINNED_SEDS_COMMIT,
             "rgb_tap": "get_sign_output.rgb_final_before_clip_rgb.encode_image",
             "pose_tap": "signbert.gcn_emb_then_window_then_sign_conv_mean",
+            "pose_raw_mapping": "captured_after_native_subsampling_and_hand_filter",
+            "rgb_raw_mapping": "count_aligned_with_native_pose_clips_pending_asset_audit",
             "legacy_video_mask": "0_valid_with_one_leading_cls",
             "legacy_text_mask": "1_valid_through_eot",
             "native_score": "fusion_directional_mix_divided_by_exp_logit_scale",
@@ -746,24 +749,49 @@ class SedsAdapter:
         fps_values = video_batch.frames_per_second
         if fps_values is not None and len(fps_values) != len(video_batch.sample_ids):
             raise SedsAdapterError("frames_per_second does not match video batch")
+        raw_index_maps = video_batch.pose_raw_frame_indices
+        if raw_index_maps is not None and len(raw_index_maps) != len(video_batch.sample_ids):
+            raise SedsAdapterError("pose_raw_frame_indices does not match video batch")
         records: list[dict[str, Any]] = []
         slide_windows = int(getattr(self.model.task_config, "slide_windows", 16))
         # Two upstream temporal GCN blocks give a conservative 9-frame dependency;
         # expand the 16-frame nominal window by four frames on each side.
         for batch_index, sample_id in enumerate(video_batch.sample_ids):
             raw_frame_count = int(video_batch.raw_frame_counts[batch_index])
-            if raw_frame_count <= 0 or raw_frame_count > frame_count:
-                raise SedsAdapterError("raw frame count is invalid for padded SEDS pose input")
+            if raw_frame_count <= 0:
+                raise SedsAdapterError("raw frame count must be positive")
+            if raw_index_maps is None:
+                if raw_frame_count > frame_count:
+                    raise SedsAdapterError(
+                        "raw frame count needs a native pose-to-raw index map after preprocessing"
+                    )
+                raw_indices = tuple(range(raw_frame_count))
+                mapping_policy = "identity_pose_video_frames_v1"
+            else:
+                raw_indices = raw_index_maps[batch_index]
+                if (
+                    not raw_indices
+                    or len(raw_indices) > frame_count
+                    or raw_indices[0] < 0
+                    or raw_indices[-1] >= raw_frame_count
+                    or any(left >= right for left, right in zip(raw_indices, raw_indices[1:]))
+                ):
+                    raise SedsAdapterError("native pose-to-raw frame index map is invalid")
+                mapping_policy = "native_seds_pose_selected_raw_frames_v1"
             for clip_index, start_tensor in enumerate(video_batch.clip_starts[batch_index]):
                 if not validity[batch_index, clip_index]:
                     continue
                 start = int(start_tensor)
-                if start < 0 or start + slide_windows > frame_count:
-                    raise SedsAdapterError("valid SEDS clip start lies outside raw pose frames")
-                left = max(0, start - 4)
-                right = min(raw_frame_count, start + slide_windows + 4)
-                rgb_left = min(start, raw_frame_count - 1)
-                rgb_right = min(raw_frame_count, start + slide_windows)
+                if start < 0 or start >= len(raw_indices):
+                    raise SedsAdapterError("valid SEDS clip start lies outside processed pose frames")
+                pose_left_step = max(0, start - 4)
+                pose_right_step = min(len(raw_indices), start + slide_windows + 4)
+                rgb_left_step = start
+                rgb_right_step = min(len(raw_indices), start + slide_windows)
+                left = raw_indices[pose_left_step]
+                right = raw_indices[pose_right_step - 1] + 1
+                rgb_left = raw_indices[rgb_left_step]
+                rgb_right = raw_indices[max(rgb_left_step, rgb_right_step - 1)] + 1
                 record: dict[str, Any] = {
                     "sample_id": str(sample_id),
                     "clip_index": clip_index,
@@ -774,6 +802,8 @@ class SedsAdapter:
                     "nominal_pose_frames": slide_windows,
                     "nominal_rgb_frames": slide_windows,
                     "conservative_pose_rf_frames": right - left,
+                    "pose_input_step_interval": [pose_left_step, pose_right_step],
+                    "raw_mapping_policy": mapping_policy,
                 }
                 if fps_values is not None:
                     fps = float(fps_values[batch_index])

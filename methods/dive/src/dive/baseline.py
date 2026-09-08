@@ -92,6 +92,7 @@ def _video_to(batch: SedsVideoBatch, device: torch.device) -> SedsVideoBatch:
         grid_id=batch.grid_id,
         raw_frame_counts=batch.raw_frame_counts,
         frames_per_second=batch.frames_per_second,
+        pose_raw_frame_indices=batch.pose_raw_frame_indices,
     )
 
 

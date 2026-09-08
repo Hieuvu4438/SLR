@@ -39,6 +39,12 @@ Implemented adapter-level corrections and taps:
   pinned loader's pose, RGB, tokenizer and collate methods without its hard-wired split lookup;
   validates feature roots, IDs, synchronized grids, masks and layouts, restores its unused RNG draw,
   and executes source in memory so Python caches do not dirty the pinned checkout.
+- captures the exact raw-frame indices retained after the native `max_length_frames` subsampling and
+  union-of-valid-hand-frame filter. Clip/RF reports now traverse this non-identity map; tests cover
+  both every-other-frame subsampling and removal of a hand-invisible frame. Stored RTM pose and raw
+  video remain identity-aligned before this native selection. RGB raw-interval alignment remains
+  explicitly pending inspection of the released I3D artifacts rather than being inferred from the
+  stored pose file alone.
 
 The pinned `modeling.py` reads `task_config.freeze_exfusion`, although the pinned CLI parser never
 defines that argument. The checked contract records `freeze_exfusion=false` as an explicit

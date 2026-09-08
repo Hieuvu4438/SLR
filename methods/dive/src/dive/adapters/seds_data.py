@@ -117,12 +117,32 @@ class SedsManifestInputBuilder:
         helper.video_RGB_dict = {0: (record.text_id, str(rgb_path))}
         return helper
 
-    def _native_sample(self, record: SampleRecord) -> Mapping[str, Any]:
+    def _native_sample(self, record: SampleRecord) -> tuple[Mapping[str, Any], tuple[int, ...]]:
         helper = self._helper(record, require_features=True)
         # Pinned GetTotalFrameList consumes Python RNG even though its sampled offset is unused.
         # Restore the process state so manifest-order preprocessing has no hidden RNG side effect.
         with _RANDOM_STATE_LOCK:
             state = random.getstate()
+            raw_indices: tuple[int, ...] | None = None
+            native_total_frames = helper.GetTotalFrameList
+
+            def capture_total_frames(video_data: Mapping[str, Any], original_size: Any) -> Any:
+                nonlocal raw_indices
+                selected = native_total_frames(video_data, original_size)
+                frame_names = video_data.get("img_list")
+                if not isinstance(frame_names, list) or len(frame_names) != len(set(frame_names)):
+                    raise SedsDataError("native pose img_list must contain unique frame names")
+                index_by_name = {name: index for index, name in enumerate(frame_names)}
+                if selected is None or any(name not in index_by_name for name in selected):
+                    raise SedsDataError("native selected frames do not map to pose img_list")
+                raw_indices = tuple(index_by_name[name] for name in selected)
+                if not raw_indices or any(
+                    left >= right for left, right in zip(raw_indices, raw_indices[1:])
+                ):
+                    raise SedsDataError("native selected raw frame indices are not increasing")
+                return selected
+
+            helper.GetTotalFrameList = capture_total_frames
             try:
                 sample = helper[0]
             except Exception as exc:
@@ -133,7 +153,9 @@ class SedsManifestInputBuilder:
                 random.setstate(state)
         if not isinstance(sample, Mapping):
             raise SedsDataError("pinned SEDS loader returned a non-mapping sample")
-        return sample
+        if raw_indices is None:
+            raise SedsDataError("pinned SEDS preprocessing did not expose selected frames")
+        return sample, raw_indices
 
     def build_video_batch(
         self,
@@ -163,7 +185,16 @@ class SedsManifestInputBuilder:
         ):
             raise SedsDataError("FPS values must be positive")
 
-        samples = [self._native_sample(record) for record in records]
+        prepared = [self._native_sample(record) for record in records]
+        samples = [item[0] for item in prepared]
+        pose_raw_frame_indices = tuple(item[1] for item in prepared)
+        if any(
+            indices[-1] >= raw_count
+            for indices, raw_count in zip(
+                pose_raw_frame_indices, raw_frame_counts, strict=True
+            )
+        ):
+            raise SedsDataError("native selected pose frame exceeds recorded raw frame count")
         try:
             batch = self._collate(samples)
         except Exception as exc:
@@ -205,6 +236,7 @@ class SedsManifestInputBuilder:
                 if frames_per_second is None
                 else tuple(float(value) for value in frames_per_second)
             ),
+            pose_raw_frame_indices=pose_raw_frame_indices,
         )
 
     def build_text_batch(self, records: Sequence[SampleRecord]) -> SedsTextBatch:
