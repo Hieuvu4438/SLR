@@ -11,6 +11,7 @@ from dive.data.manifest import ManifestError, SampleRecord, load_manifest, valid
 from dive.data.pose import normalize_pose_per_step
 from dive.data.relations import RelationError, build_pair_relations
 from dive.data.temporal import (
+    CompactFrameMap,
     FrameMap,
     TemporalError,
     build_canonical_grid,
@@ -62,6 +63,17 @@ def test_manifest_split_route_and_disjoint_guards(tmp_path):
     dev = replace(train, split="dev")
     with pytest.raises(ManifestError, match="split overlap"):
         validate_split_disjoint({"train": [train], "dev": [dev]})
+
+
+def test_manifest_allows_shared_text_id_for_multi_positive_video_views(tmp_path):
+    first = _record("view_a", "test")
+    second = replace(_record("view_b", "test"), text_id=first.text_id)
+    path = tmp_path / "test.jsonl"
+    path.write_text(
+        json.dumps(first.to_dict()) + "\n" + json.dumps(second.to_dict()) + "\n",
+        encoding="utf-8",
+    )
+    assert [record.text_id for record in load_manifest(path)] == [first.text_id, first.text_id]
 
 
 def test_unit_offsets_round_trip_and_partial_target_rejection():
@@ -116,6 +128,29 @@ def test_canonical_grid_is_bounded_deterministic_and_maps_rf_to_raw_time():
     receptive_fields = pose_receptive_field_intervals(frame_map, first)
     assert receptive_fields[0] == pytest.approx((0.0, 1.56))
     assert all(right > left for left, right in receptive_fields)
+
+
+def test_compact_identity_frame_map_expands_to_exact_raw_time():
+    compact = CompactFrameMap(
+        schema_version="compact_frame_map.v1",
+        frame_map_key="map",
+        sample_id="sample",
+        video_frame_count=4,
+        pose_input_step_count=4,
+        fps=2.0,
+        duration_sec=2.0,
+        raw_frame_start=0,
+        raw_frame_stride=1,
+        mapping_policy="identity_pose_video_frames_v1",
+    )
+    expanded = compact.expand()
+    assert expanded.raw_frame_indices == (0, 1, 2, 3)
+    assert expanded.input_step_intervals_sec == (
+        (0.0, 0.5),
+        (0.5, 1.0),
+        (1.0, 1.5),
+        (1.5, 2.0),
+    )
 
 
 def test_short_video_does_not_fake_distinct_support_views():

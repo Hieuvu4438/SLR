@@ -57,6 +57,8 @@ def _prepared_config(tmp_path: Path) -> tuple[dict[str, object], dict[str, list[
     config = load_config(FIXTURE_CONFIG)
     config["run"]["output_root"] = str(tmp_path / "runs")
     assets = tmp_path / "assets"
+    rgb = tmp_path / "rgb"
+    frame_maps = tmp_path / "frame_maps"
     records = {
         "train": [_record("train", 0), _record("train", 1)],
         "dev": [_record("dev", 0)],
@@ -84,6 +86,27 @@ def _prepared_config(tmp_path: Path) -> tuple[dict[str, object], dict[str, list[
             video.parent.mkdir(parents=True, exist_ok=True)
             video.write_bytes(b"video")
             pose.write_bytes(b"pose")
+            rgb_path = rgb / str(record.rgb_feature_key)
+            rgb_path.parent.mkdir(parents=True, exist_ok=True)
+            rgb_path.write_bytes(b"rgb")
+        _write_jsonl(
+            frame_maps / f"{split}.jsonl",
+            [
+                {
+                    "schema_version": "compact_frame_map.v1",
+                    "frame_map_key": record.frame_map_key,
+                    "sample_id": record.sample_id,
+                    "video_frame_count": 1,
+                    "pose_input_step_count": 1,
+                    "fps": 1.0,
+                    "duration_sec": 1.0,
+                    "raw_frame_start": 0,
+                    "raw_frame_stride": 1,
+                    "mapping_policy": "identity_pose_video_frames_v1",
+                }
+                for record in split_records
+            ],
+        )
     relations = tmp_path / "relations" / "train_excluded_negatives.jsonl"
     _write_jsonl(
         relations,
@@ -103,6 +126,8 @@ def _prepared_config(tmp_path: Path) -> tuple[dict[str, object], dict[str, list[
             "pose_root": str(assets),
             "relevance_dir": str(relevance_dir),
             "train_relations": str(relations),
+            "rgb_cache_root": str(rgb),
+            "frame_maps_dir": str(frame_maps),
         }
     )
     return config, records

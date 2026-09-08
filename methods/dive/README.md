@@ -28,15 +28,20 @@ python -m pip install -e '.[dev]'
 bash methods/dive/scripts/setup_seds.sh
 dive doctor --config methods/dive/configs/fixture.yaml --stage fixture \
   --output artifacts/dive/doctor_fixture.json
+dive prepare-data --config methods/dive/configs/how2sign_base.yaml --workers 16
 dive validate-data --config /path/to/resolved_config.yaml
 dive smoke --config methods/dive/configs/fixture.yaml --output-dir artifacts/dive/smoke
 pytest -q methods/dive/tests
 ```
 
-`validate-data` requires real train/dev/test manifests, exact per-split relevance JSONL, the
+`prepare-data` uses the pinned SEDS train/test identities but repairs its protocol leakage by using
+the disjoint local `labels.dev.json` as dev; the upstream `test.pkl` stays reserved for final test.
+It probes every video/pose pair and records exact container-time frame maps. `validate-data`
+requires real train/dev/test manifests, exact per-split relevance JSONL, the
 train excluded-negative JSONL, and every referenced video/pose/RGB-key/frame-map binding. It also
 rejects cross-split source-video leakage and translation hash drift, then registers its audit in
-the shared seed run state. The fixture config intentionally does not pretend to supply these files.
+the shared seed run state. Prepared paths can resolve from that state, so users do not copy paths
+between commands. The fixture config intentionally does not pretend to supply these files.
 
 The main How2Sign config intentionally retains unresolved SEDS resources as `null`. The doctor
 command fails closed for a stage whose prerequisites are missing; it does not substitute the local

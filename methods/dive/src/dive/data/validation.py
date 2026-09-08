@@ -7,12 +7,13 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Mapping
 
-from dive.artifacts import ArtifactResolver
+from dive.artifacts import ArtifactError, ArtifactResolver
 from dive.config import config_hash
 
 from .manifest import load_manifest, manifest_hash, validate_assets, validate_split_disjoint
 from .relations import load_excluded_negatives, relations_hash
 from .relevance import load_relevance, relevance_hash
+from .temporal import load_compact_frame_maps
 
 
 class DataValidationError(ValueError):
@@ -55,8 +56,22 @@ def validate_prepared_data(
     data = config.get("data")
     if not isinstance(data, Mapping):
         raise DataValidationError("data config must be a mapping")
+    resolver = ArtifactResolver(config)
+
+    def configured_or_prepared(field: str, output_name: str) -> Path:
+        value = data.get(field)
+        if value is not None:
+            return _required_path(value, f"data.{field}")
+        try:
+            return resolver.resolve("prepare_data", output_name, scope="shared").path
+        except ArtifactError as exc:
+            raise DataValidationError(
+                f"MISSING_PARENT_ARTIFACT: data.{field} is null and prepare_data.{output_name} "
+                "cannot be resolved"
+            ) from exc
+
     manifests = {
-        split: _required_path(data.get(f"{split}_manifest"), f"data.{split}_manifest")
+        split: configured_or_prepared(f"{split}_manifest", f"{split}_manifest")
         for split in ("train", "dev", "test")
     }
     records = {
@@ -72,6 +87,7 @@ def validate_prepared_data(
 
     video_root = _required_path(data.get("video_root"), "data.video_root")
     pose_root = _required_path(data.get("pose_root"), "data.pose_root")
+    rgb_root = _required_path(data.get("rgb_cache_root"), "data.rgb_cache_root")
     missing_assets: dict[str, dict[str, list[str]]] = {}
     for split, split_records in records.items():
         missing = validate_assets(
@@ -86,8 +102,35 @@ def validate_prepared_data(
         if failures:
             summary = {name: len(ids) for name, ids in failures.items()}
             raise DataValidationError(f"MISSING_DATA_ASSET: {split}: {summary}")
+        missing_rgb = [
+            record.sample_id
+            for record in split_records
+            if record.rgb_feature_key is None
+            or not (rgb_root / record.rgb_feature_key).is_file()
+        ]
+        if missing_rgb:
+            raise DataValidationError(
+                f"MISSING_RGB_FEATURE: {split}: {len(missing_rgb)} records"
+            )
 
-    relevance_dir = _required_path(data.get("relevance_dir"), "data.relevance_dir")
+    frame_maps_dir = configured_or_prepared("frame_maps_dir", "frame_maps_dir")
+    if not frame_maps_dir.is_dir():
+        raise DataValidationError("data.frame_maps_dir must be a directory")
+    frame_map_hashes: dict[str, str] = {}
+    for split, split_records in records.items():
+        frame_path = frame_maps_dir / f"{split}.jsonl"
+        maps = load_compact_frame_maps(
+            frame_path, expected_sample_ids=[record.sample_id for record in split_records]
+        )
+        if [item.frame_map_key for item in maps] != [
+            record.frame_map_key for record in split_records
+        ]:
+            raise DataValidationError(
+                f"FRAME_MAP_MISMATCH: {split} manifest keys differ from frame-map artifact"
+            )
+        frame_map_hashes[split] = hashlib.sha256(frame_path.read_bytes()).hexdigest()
+
+    relevance_dir = configured_or_prepared("relevance_dir", "relevance_dir")
     if not relevance_dir.is_dir():
         raise DataValidationError("data.relevance_dir must be a directory")
     relevance_paths = {split: relevance_dir / f"{split}.jsonl" for split in records}
@@ -99,7 +142,7 @@ def validate_prepared_data(
         )
         for split, split_records in records.items()
     }
-    relations_path = _required_path(data.get("train_relations"), "data.train_relations")
+    relations_path = configured_or_prepared("train_relations", "train_relations")
     train_records = records["train"]
     excluded = load_excluded_negatives(
         relations_path,
@@ -180,7 +223,12 @@ def validate_prepared_data(
         "assets": {
             "video_root": str(video_root.resolve()),
             "pose_root": str(pose_root.resolve()),
+            "rgb_cache_root": str(rgb_root.resolve()),
             "missing": missing_assets,
+        },
+        "frame_maps": {
+            "directory": str(frame_maps_dir.resolve()),
+            "sha256_by_split": frame_map_hashes,
         },
         "split_id_overlaps": id_overlaps,
         "split_source_overlaps": source_overlaps,
@@ -191,7 +239,6 @@ def validate_prepared_data(
         else str(translation_path.resolve()),
         "test_content_used_for_tuning": False,
     }
-    resolver = ArtifactResolver(config)
     output = (
         resolver.output_path("shared", "data_validation.json")
         if output_path is None

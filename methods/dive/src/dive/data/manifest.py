@@ -107,7 +107,7 @@ def load_manifest(
         records.append(record)
     if not records:
         raise ManifestError(f"manifest is empty: {source}")
-    for field in ("sample_id", "video_id", "text_id"):
+    for field in ("sample_id", "video_id"):
         _assert_unique(records, field)
     return tuple(records)
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Mapping, Sequence
 
 
 class TemporalError(ValueError):
@@ -35,6 +37,98 @@ class FrameMap:
         starts = [interval[0] for interval in self.input_step_intervals_sec]
         if any(a >= b for a, b in zip(starts, starts[1:])):
             raise TemporalError("input-step timestamps must be strictly increasing")
+
+
+@dataclass(frozen=True)
+class CompactFrameMap:
+    """Compact identity map for frame-aligned video and pose streams."""
+
+    schema_version: str
+    frame_map_key: str
+    sample_id: str
+    video_frame_count: int
+    pose_input_step_count: int
+    fps: float
+    duration_sec: float
+    raw_frame_start: int
+    raw_frame_stride: int
+    mapping_policy: str
+
+    @classmethod
+    def from_mapping(cls, raw: Mapping[str, Any]) -> "CompactFrameMap":
+        try:
+            record = cls(**dict(raw))
+        except TypeError as exc:
+            raise TemporalError("invalid compact frame-map fields") from exc
+        record.validate()
+        return record
+
+    def validate(self) -> None:
+        if self.schema_version != "compact_frame_map.v1":
+            raise TemporalError("unsupported compact frame-map schema")
+        if not self.frame_map_key or not self.sample_id:
+            raise TemporalError("compact frame map requires keys and sample ID")
+        if self.mapping_policy != "identity_pose_video_frames_v1":
+            raise TemporalError("unsupported compact frame-map policy")
+        if (
+            self.video_frame_count <= 0
+            or self.pose_input_step_count != self.video_frame_count
+            or self.fps <= 0
+            or self.duration_sec <= 0
+            or self.raw_frame_start != 0
+            or self.raw_frame_stride != 1
+        ):
+            raise TemporalError("compact frame-map geometry is invalid")
+        expected_duration = self.video_frame_count / self.fps
+        if abs(self.duration_sec - expected_duration) > 1e-6:
+            raise TemporalError("compact frame-map duration differs from frame_count/fps")
+
+    def expand(self) -> FrameMap:
+        self.validate()
+        intervals = tuple(
+            (index / self.fps, (index + 1) / self.fps)
+            for index in range(self.pose_input_step_count)
+        )
+        result = FrameMap(
+            sample_id=self.sample_id,
+            duration_sec=self.duration_sec,
+            raw_frame_indices=tuple(
+                self.raw_frame_start + index * self.raw_frame_stride
+                for index in range(self.pose_input_step_count)
+            ),
+            input_step_intervals_sec=intervals,
+            sampling_policy=self.mapping_policy,
+        )
+        result.validate()
+        return result
+
+
+def load_compact_frame_maps(
+    path: str | Path, *, expected_sample_ids: Sequence[str] | None = None
+) -> tuple[CompactFrameMap, ...]:
+    source = Path(path)
+    if not source.is_file():
+        raise TemporalError(f"compact frame-map artifact does not exist: {source}")
+    records: list[CompactFrameMap] = []
+    for line_number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            raw = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise TemporalError(f"invalid frame-map JSON at {source}:{line_number}") from exc
+        if not isinstance(raw, Mapping):
+            raise TemporalError(f"frame-map record at {source}:{line_number} must be an object")
+        records.append(CompactFrameMap.from_mapping(raw))
+    if not records:
+        raise TemporalError(f"compact frame-map artifact is empty: {source}")
+    sample_ids = [record.sample_id for record in records]
+    keys = [record.frame_map_key for record in records]
+    if len(sample_ids) != len(set(sample_ids)) or len(keys) != len(set(keys)):
+        raise TemporalError("compact frame maps require unique sample IDs and keys")
+    if expected_sample_ids is not None and sample_ids != list(expected_sample_ids):
+        raise TemporalError("compact frame-map order/IDs differ from the manifest")
+    return tuple(records)
 
 
 @dataclass(frozen=True)

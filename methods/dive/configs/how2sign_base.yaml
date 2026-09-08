@@ -7,6 +7,12 @@ run:
   comparison_group: primary_pair
 data:
   dataset: how2sign
+  preparation_protocol: seds_how2sign_controlled_v1
+  upstream_root: third_party/SEDS
+  train_annotation: third_party/SEDS/data_h2/train.pkl
+  train_timing_annotation: /home/shared_data/sign_language/How2Sign/train/train_label/labels.train
+  dev_annotation: /home/shared_data/sign_language/How2Sign/eval/eval_label/labels.dev.json
+  test_annotation: third_party/SEDS/data_h2/test.pkl
   train_manifest: null
   dev_manifest: null
   test_manifest: null
@@ -15,6 +21,7 @@ data:
   video_root: /home/shared_data/sign_language/How2Sign
   pose_root: /home/shared_data/sign_language/How2Sign
   rgb_cache_root: null
+  frame_maps_dir: null
   translation_artifact: null
   allow_split_overlap: false
 baseline:

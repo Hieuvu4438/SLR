@@ -80,8 +80,9 @@ def load_relevance(
         raise RelevanceError(f"relevance artifact is empty: {source}")
     videos = tuple(map(str, video_ids))
     texts = tuple(map(str, text_ids))
-    if len(videos) != len(set(videos)) or len(texts) != len(set(texts)):
-        raise RelevanceError("manifest video/text IDs must be unique")
+    if len(videos) != len(set(videos)):
+        raise RelevanceError("manifest video IDs must be unique")
+    texts = tuple(dict.fromkeys(texts))
     mapping = {record.video_id: frozenset(record.positive_text_ids) for record in records}
     if len(mapping) != len(records):
         raise RelevanceError("relevance artifact contains duplicate video IDs")

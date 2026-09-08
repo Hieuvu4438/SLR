@@ -5,6 +5,15 @@ The official SEDS repository is available at the exact clean detached commit
 a side-effect-free adapter in `methods/dive/src/dive/adapters/seds.py`; real checkpoint parity and
 controlled reproduction remain blocked on the separately distributed SEDS assets.
 
+## Controlled How2Sign split routing
+
+Pinned SEDS exposes `data_h2/train.pkl` and `data_h2/test.pkl` but no `dev.pkl`. Its training loop
+evaluates and selects on the `test` dataloader. DIVE therefore treats that behavior only as the
+published/debug protocol. The controlled protocol preserves the upstream train/test identities,
+uses the disjoint local `labels.dev.json` for checkpoint selection, and reserves `test.pkl` for the
+single locked final evaluation. This is a protocol repair required by INV-02, not a change to the
+SEDS architecture or score.
+
 Implemented adapter-level corrections and taps:
 
 - validates the clean pinned checkout, complete locked checkpoint-to-model tensor equality,
@@ -26,7 +35,6 @@ Implemented adapter-level corrections and taps:
 
 Still open before a controlled B0 claim:
 
-- true train/dev/test routing and dev-only checkpoint selection;
 - score/tap parity on the actual released How2Sign checkpoint and processed I3D/RTMpose samples;
 - a complete native reproduction config plus the external `ViT-B-32.pt`, SignBERT initialization,
   processed features and locked SEDS checkpoint.

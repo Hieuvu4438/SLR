@@ -45,6 +45,8 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "dataset", "train_manifest", "dev_manifest", "test_manifest", "train_relations",
             "relevance_dir", "video_root", "pose_root", "rgb_cache_root",
             "translation_artifact", "allow_split_overlap",
+            "preparation_protocol", "upstream_root", "train_annotation", "dev_annotation",
+            "test_annotation", "train_timing_annotation", "frame_maps_dir",
         }
     ),
     "baseline": frozenset(
@@ -302,7 +304,14 @@ def required_resource_paths(config: Mapping[str, Any], stage: str) -> dict[str, 
     }
     requirements: dict[str, dict[str, str | None]] = {
         "fixture": {},
-        "prepare": common_data,
+        "prepare": {
+            **common_data,
+            "data.upstream_root": data.get("upstream_root"),
+            "data.train_annotation": data.get("train_annotation"),
+            "data.train_timing_annotation": data.get("train_timing_annotation"),
+            "data.dev_annotation": data.get("dev_annotation"),
+            "data.test_annotation": data.get("test_annotation"),
+        },
         "validate_data": {
             **common_data,
             "data.train_manifest": data.get("train_manifest"),
@@ -310,6 +319,8 @@ def required_resource_paths(config: Mapping[str, Any], stage: str) -> dict[str, 
             "data.test_manifest": data.get("test_manifest"),
             "data.train_relations": data.get("train_relations"),
             "data.relevance_dir": data.get("relevance_dir"),
+            "data.rgb_cache_root": data.get("rgb_cache_root"),
+            "data.frame_maps_dir": data.get("frame_maps_dir"),
         },
         "baseline_train": {
             **common_data,

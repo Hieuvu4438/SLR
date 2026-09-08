@@ -9,6 +9,7 @@ from typing import Sequence
 from .artifacts import ArtifactError
 from .config import ConfigError, dump_resolved, load_config
 from .data.manifest import ManifestError
+from .data.prepare import PreparationError, prepare_how2sign_data
 from .data.relations import RelationError
 from .data.relevance import RelevanceError
 from .data.validation import DataValidationError, validate_prepared_data
@@ -43,6 +44,12 @@ def _parser() -> argparse.ArgumentParser:
     validate_data.add_argument("--config", required=True)
     validate_data.add_argument("--output")
 
+    prepare_data = subparsers.add_parser(
+        "prepare-data", help="prepare controlled How2Sign manifests and temporal maps"
+    )
+    prepare_data.add_argument("--config", required=True)
+    prepare_data.add_argument("--workers", type=int)
+
     smoke = subparsers.add_parser("smoke", help="run fixture-only end-to-end correctness smoke")
     smoke.add_argument("--config", required=True)
     smoke.add_argument("--output-dir", required=True)
@@ -66,6 +73,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             report = validate_prepared_data(config, output_path=args.output)
             print(json.dumps(report, indent=2, sort_keys=True))
             return 0
+        if args.command == "prepare-data":
+            report = prepare_how2sign_data(config, workers=args.workers)
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return 0
         if args.command == "smoke":
             root = Path(__file__).resolve().parents[4]
             report = run_fixture_smoke(config, args.output_dir, repository_root=root)
@@ -74,7 +85,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ConfigError as exc:
         print(f"CONFIG_ERROR: {exc}", file=sys.stderr)
         return 2
-    except (ArtifactError, DataValidationError, ManifestError, RelevanceError, RelationError) as exc:
+    except (
+        ArtifactError,
+        DataValidationError,
+        ManifestError,
+        PreparationError,
+        RelevanceError,
+        RelationError,
+    ) as exc:
         print(f"DATA_ERROR: {exc}", file=sys.stderr)
         return 2
     return 2

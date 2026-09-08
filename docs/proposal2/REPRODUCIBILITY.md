@@ -45,3 +45,12 @@ Generated data, checkpoints, logs, caches, and bundles remain under ignored `art
 and `exports/` paths. Only small configs, schemas, tests, and documentation are committed. A fixture
 test pass proves numerical/software contracts only; real adapter parity and benchmark results are
 reported separately and cannot be inferred from it.
+
+The controlled How2Sign preparation is anchored to pinned SEDS commit
+`434e3f714fcb6a7d1f4001fb9a246bbd93ec0246`. It uses upstream `data_h2/train.pkl` and
+`data_h2/test.pkl` for released identities, but never uses the test split for checkpoint selection:
+the disjoint local `labels.dev.json` supplies dev. Preparation checks every container frame count
+against its RTM pose frame count and stores a compact, exactly expandable identity map using the
+container FPS. It retains shared text IDs when one annotated sentence has multiple video views, so
+the relevance artifact expresses the real multi-positive relation instead of manufacturing unique
+captions.
