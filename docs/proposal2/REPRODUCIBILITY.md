@@ -22,6 +22,12 @@ index last. Readers verify the namespace, complete fingerprint, checksum, shard/
 ordered sample IDs, masks and timestamps before returning tensors. Train/dev/test namespaces and
 requested manifest order are explicit; correctness reference caches reject non-FP32 precision.
 
+Run outputs are separated into `output_root/shared/seed{seed}` for shared baseline/reference/bank
+artifacts and `output_root/{comparison_group}/{variant}/seed{seed}` for experiment outputs. Each
+scope has an atomic `run_state.json`. Registered files or symlink-free directory trees receive
+content hashes and stable artifact IDs; every parent lookup recomputes the content hash. Resolution
+is by exact stage/output name only and never searches the filesystem for a plausible checkpoint.
+
 Checkpoint selection and residual calibration remain separate operations: epochs are selected on
 full dev at fixed `gamma_train`, then gamma is selected for that single locked checkpoint from the
 configured grid with the smaller value winning exact endpoint ties. The selection artifact hashes

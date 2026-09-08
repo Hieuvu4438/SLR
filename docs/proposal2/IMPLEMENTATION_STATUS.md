@@ -5,7 +5,7 @@ are never counted as a benchmark replication.
 
 | Milestone | Status | Evidence / blocker |
 |---|---|---|
-| M00 — inventory | passed | `dive doctor` records Python/PyTorch/CUDA and stage resources. RTX 5880 Ada (49,140 MiB), driver 570.195.03, PyTorch 2.11.0+cu128/CUDA 12.8 were detected. How2Sign raw video/pose roots exist. Pinned SEDS source, reproduction config, and SEDS initial/locked checkpoints are unresolved. |
+| M00 — inventory | passed | `dive doctor` records Python/PyTorch/CUDA and stage resources. RTX 5880 Ada (49,140 MiB), driver 570.195.03, PyTorch 2.11.0+cu128/CUDA 12.8 were detected. How2Sign raw video/pose roots exist and both official SEDS Baidu shares are live. Pinned SEDS source is present; reproduction config and local SEDS initial/locked checkpoints remain unresolved because current Baidu routes these >50 MB anonymous downloads through its authenticated desktop-client flow. |
 | M01 — skeleton | passed | Method-owned package/config/CLI and deterministic fixture exist under `methods/dive`; editable install and `dive --help` work. Unknown/missing keys and semantic violations fail closed. |
 | M02 — evaluator oracle | passed | ID-based `[video,text]` evaluator passes asymmetric-direction, exact-tie, duplicate-ID, multi-positive and nonfinite/full-gallery guards. |
 | M03 — score/loss core | passed | Dense/chunked masked late interaction, centered composition and retrieval/local/pair kernels pass padding, empty evidence, cosine-bound, four-margin, H-denominator, gradient and FP64 gradcheck oracles. |
@@ -16,7 +16,7 @@ are never counted as a benchmark replication.
 | M08 — mining/audit | blocked | Code is complete for bidirectional pooled shortlist, S0 four-margin reranking, deterministic dedup, exact shortlist-coverage audit, strict numeric schema, blinded audit export, train-only finalize and fingerprint/checksum bank I/O. A real accepted human audit plus SEDS train representations are required to produce the main semantic bank. |
 | M09 — support | blocked | Code is complete for differential own-minus-rival support, absolute/tiny-distance gates, raw-time rebin, JSD, concentration/RF gates, g calculation, and retaining failed records with g=0 in the bank. Actual reference features and two real shifted views are required for the main support artifact. |
 | M10 — sampler/step | passed | Dedicated-RNG plans enforce unique effective batches, unordered-pair uniqueness, endpoint quota, ordinary fill, pre-rejection H and shared-control fingerprints. The exact centered student step uses explicit ID remaps, filters g=0 before nullable fields, computes global/local/pair losses, clips gradients and detaches B0/reference/text/q/g inputs. |
-| M11 — end-to-end smoke | in_progress | `dive smoke` runs a deterministic CPU fixture through student forward, H=2/H_active=1 losses, optimizer update, checkpoint+checksum, reload parity and ID-based evaluation while emitting `benchmark_claim_allowed=false`. Tiny real SEDS integration remains blocked by checkpoint/features. |
+| M11 — end-to-end smoke | in_progress | `dive smoke` runs a deterministic CPU fixture through student forward, H=2/H_active=1 losses, optimizer update, checkpoint+checksum, reload parity and ID-based evaluation while emitting `benchmark_claim_allowed=false`. The run-state resolver now enforces checksummed shared/per-variant namespaces, immutable stage records, parent revalidation and no filesystem discovery. Tiny real SEDS integration remains blocked by checkpoint/features. |
 | M12 — primary pilot | blocked | Dev opportunity-bound code is complete for both directions, stable IDs, multi-positive best targets and the exact `2*gamma` repairability gate. Running A0/A1/A2/A3/A6 still requires the controlled B0/reference, accepted audit and real features. |
 | M13 — mechanism | blocked | Requires a successful primary pilot and support-common artifacts. |
 | M14 — final protocol | blocked | Code is complete for checkpoint-first dev gamma calibration (including gamma=0 and smaller-gamma ties), selection provenance, duplicate-query ceilings, paired query/source-cluster bootstrap and seed mean/std. Final execution still requires passed research gates, a locked experiment plan and actual resources. |
@@ -29,6 +29,12 @@ are never counted as a benchmark replication.
 - Other reusable dataset roots are present: Phoenix14T (48 GiB) and CSL-Daily (42 GiB).
 - Existing upstream checkouts are CiCo/SLRT at `38a4f7b...` and official SEDS at the required
   detached commit `434e3f7...`; both live under ignored `third_party/` paths.
+- The official SEDS model share was verified to list the 804,176,411-byte How2Sign checkpoint and
+  353,976,522-byte `ViT-B-32.pt`; the official feature share lists the 9,527,083,922-byte How2Sign
+  archive. The files are not claimed as acquired: the current anonymous web policy forces files
+  over 50 MB into the desktop client, while the current direct-link API requires account-derived
+  credentials. The 40 GiB free filesystem is sufficient for the two model files but extraction of
+  the feature archive is not attempted without a measured space plan.
 - Available `artifacts/pretrained/H2S_sota.pth` is tracked in existing provenance as CiCo.
 - GPU was idle enough at inventory time (48,519 MiB free), but no DIVE training is authorized by
   resource presence alone: the controlled SEDS baseline and correctness gates must come first.
@@ -69,3 +75,5 @@ are never counted as a benchmark replication.
 - `pytest -q methods/dive/tests`: 93 passed after the pinned SEDS adapter, mask/score/tap/RF
   contracts and synchronized three-stream pose integration.
 - `pytest -q`: 217 passed; no ELSC/shared regression.
+- `pytest -q methods/dive/tests`: 100 passed after the atomic run-state/artifact resolver, exact
+  shared/variant layout, content mutation checks and no-discovery parent resolution.
