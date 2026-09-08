@@ -140,6 +140,33 @@ _CONTROLLED_PROTOCOL = {
     "train_source": "pinned_data_h2/train.pkl",
 }
 
+_CONTROLLED_TRAINING: dict[str, Any] = {
+    "augmentation": "vendored_textaugment_eda_random_swap_n1_probability_0.5",
+    "beta1": 0.9,
+    "beta2": 0.98,
+    "checkpoint_retention": "rolling_resume_plus_earliest_best",
+    "effective_batch_size": 128,
+    "epochs": 200,
+    "epsilon": 1e-6,
+    "global_grad_clip_norm": 1.0,
+    "gradient_accumulation_steps": 1,
+    "lr_clip": 1e-5,
+    "lr_other": 1e-4,
+    "lr_signbert": 1e-4,
+    "objective": "published_seds_fusion_pose_rgb_and_pose_rgb_match",
+    "optimizer": "pinned_bertadam",
+    "optimizer_per_parameter_clip_norm": 1.0,
+    "precision": "float32",
+    "sampling_unit": "unique_text_id_uniform_video_view_each_epoch",
+    "schedule": "warmup_cosine",
+    "selection_metric": "mean_t2v_v2t_r1",
+    "selection_split": "dev",
+    "tie_break": "earliest_optimizer_step_then_epoch",
+    "warmup_fraction": 0.1,
+    "weight_decay": 0.001,
+    "world_size": 1,
+}
+
 
 class SedsReproductionError(ValueError):
     """The checked native SEDS reproduction artifact is missing or inconsistent."""
@@ -152,6 +179,7 @@ class SedsReproduction:
     published_train_arguments: Mapping[str, Any]
     external_assets: Mapping[str, str]
     controlled_protocol: Mapping[str, str]
+    controlled_training: Mapping[str, Any]
 
 
 def _sha256(path: Path) -> str:
@@ -201,6 +229,7 @@ def load_seds_reproduction(
         "model_arguments",
         "external_assets",
         "controlled_protocol",
+        "controlled_training",
     }
     if set(document) != expected_top:
         raise SedsReproductionError("SEDS reproduction config has missing or unknown sections")
@@ -216,11 +245,13 @@ def load_seds_reproduction(
     model_arguments = _mapping(document["model_arguments"], "model_arguments")
     external_assets = _mapping(document["external_assets"], "external_assets")
     controlled_protocol = _mapping(document["controlled_protocol"], "controlled_protocol")
+    controlled_training = _mapping(document["controlled_training"], "controlled_training")
     _assert_typed_exact("published_eval", published_eval, _PUBLISHED_EVAL_ARGUMENTS)
     _assert_typed_exact("published_train", published_train, _PUBLISHED_TRAIN_ARGUMENTS)
     _assert_typed_exact("model_arguments", model_arguments, _MODEL_ARGUMENTS)
     _assert_typed_exact("external_assets", external_assets, _EXTERNAL_ASSETS)
     _assert_typed_exact("controlled_protocol", controlled_protocol, _CONTROLLED_PROTOCOL)
+    _assert_typed_exact("controlled_training", controlled_training, _CONTROLLED_TRAINING)
 
     if upstream_root is not None:
         root = Path(upstream_root).resolve()
@@ -237,6 +268,7 @@ def load_seds_reproduction(
         published_train_arguments=published_train,
         external_assets=external_assets,
         controlled_protocol=controlled_protocol,
+        controlled_training=controlled_training,
     )
 
 

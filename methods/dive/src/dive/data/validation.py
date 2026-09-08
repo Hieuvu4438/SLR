@@ -7,7 +7,12 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Mapping
 
-from dive.adapters import SedsDataError, SedsManifestInputBuilder, SedsReproductionError
+from dive.adapters import (
+    SedsDataError,
+    SedsManifestInputBuilder,
+    SedsReproductionError,
+    hash_seds_input,
+)
 from dive.artifacts import ArtifactError, ArtifactResolver
 from dive.config import config_hash
 
@@ -268,6 +273,12 @@ def validate_prepared_data(
                                 "selected_pose_step_count": len(selected),
                                 "valid_clip_count": valid_count,
                                 "clip_starts_in_selected_pose_steps": starts,
+                                "pose_sha256": hash_seds_input(
+                                    pose_root / str(record.pose_path)
+                                ),
+                                "rgb_sha256": hash_seds_input(
+                                    rgb_root / str(record.rgb_feature_key)
+                                ),
                                 "mapping_policy": "native_seds_pose_selected_raw_frames_v1",
                                 "rgb_alignment_status": (
                                     "native_count_equal_pose_clips_raw_intervals_pending_asset_audit"

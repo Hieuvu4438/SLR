@@ -118,6 +118,78 @@ def _verify_checkout(upstream_root: Path) -> None:
         raise SedsAdapterError(str(exc)) from exc
 
 
+def _official_task_config(
+    reproduction: SedsReproduction,
+    baseline: Mapping[str, Any],
+    root: Path,
+    *,
+    init_sign_model: Path | None,
+) -> SimpleNamespace:
+    model_arguments = dict(reproduction.model_arguments)
+    model_arguments.update(
+        {
+            "cache_dir": str(root / ".cache"),
+            "distributed": False,
+            "dual_mix": float(baseline.get("dual_mix", -1)),
+            "init_sign_model": None if init_sign_model is None else str(init_sign_model),
+            "local_rank": 0,
+        }
+    )
+    return SimpleNamespace(**model_arguments)
+
+
+def _construct_official_model(
+    root: Path,
+    task_config: SimpleNamespace,
+    *,
+    state: Mapping[str, Tensor] | None,
+    device: torch.device,
+) -> nn.Module:
+    existing_modules = sys.modules.get("modules")
+    if existing_modules is not None:
+        module_file = Path(getattr(existing_modules, "__file__", "")).resolve()
+        if root not in module_file.parents:
+            raise SedsAdapterError("a conflicting top-level 'modules' package is already imported")
+    sys.path.insert(0, str(root))
+    previous_bytecode_policy = sys.dont_write_bytecode
+    previous_cuda_device = torch.cuda.current_device()
+    sys.dont_write_bytecode = True
+    try:
+        modeling = importlib.import_module("modules.modeling")
+        torch.cuda.set_device(device)
+        model = modeling.CLIP4Clip.from_pretrained(
+            task_config.cross_model,
+            cache_dir=task_config.cache_dir,
+            distributed=False,
+            state_dict=state,
+            task_config=task_config,
+        )
+    except Exception as exc:
+        raise SedsAdapterError("official pinned SEDS model construction failed") from exc
+    finally:
+        sys.dont_write_bytecode = previous_bytecode_policy
+        torch.cuda.set_device(previous_cuda_device)
+        if sys.path and sys.path[0] == str(root):
+            sys.path.pop(0)
+    # The correctness profile is explicitly FP32; upstream convert_weights() casts many CLIP
+    # tensors to fp16 even without AMP, so undo that implicit precision change here.
+    return model.to(device).float()
+
+
+def _validate_baseline_identity(
+    baseline: Mapping[str, Any], reproduction: SedsReproduction, data: Mapping[str, Any]
+) -> None:
+    if (
+        baseline.get("family") != "seds"
+        or baseline.get("upstream_commit") != PINNED_SEDS_COMMIT
+        or baseline.get("score_branch") != "fusion"
+        or baseline.get("score_scale") != "prelogit"
+        or float(baseline.get("dual_mix", -1)) != 0.5
+        or data.get("preparation_protocol") != reproduction.controlled_protocol["name"]
+    ):
+        raise SedsAdapterError("resolved config differs from the controlled SEDS identity")
+
+
 def _assert_binary_mask(mask: Tensor, shape: tuple[int, int], name: str) -> None:
     if mask.shape != shape or mask.ndim != 2:
         raise SedsAdapterError(f"{name} must have shape {shape}")
@@ -331,6 +403,10 @@ class SedsAdapter:
         if not reproduction_path or not Path(reproduction_path).is_file():
             raise SedsAdapterError("controlled SEDS reproduction config is missing")
         reproduction = _load_reproduction_config(Path(reproduction_path), root)
+        data = resolved_config.get("data", {})
+        if not isinstance(data, Mapping):
+            raise SedsAdapterError("resolved data config must be a mapping")
+        _validate_baseline_identity(baseline, reproduction, data)
         clip_weights = root / reproduction.external_assets["clip_initialization"]
         if not clip_weights.is_file():
             raise SedsAdapterError(f"official SEDS CLIP initialization is missing: {clip_weights}")
@@ -345,39 +421,12 @@ class SedsAdapter:
         state = dict(_checkpoint_state(checkpoint))
         if not any(name.startswith("signbert.") for name in state):
             raise SedsAdapterError("locked SEDS checkpoint does not contain the SignBERT branch")
-        existing_modules = sys.modules.get("modules")
-        if existing_modules is not None:
-            module_file = Path(getattr(existing_modules, "__file__", "")).resolve()
-            if root not in module_file.parents:
-                raise SedsAdapterError("a conflicting top-level 'modules' package is already imported")
-        model_arguments = dict(reproduction.model_arguments)
-        model_arguments.update(
-            {
-                "cache_dir": str(root / ".cache"),
-                "distributed": False,
-                "dual_mix": float(baseline.get("dual_mix", -1)),
-                "init_sign_model": None,
-                "local_rank": 0,
-            }
+        task_config = _official_task_config(
+            reproduction, baseline, root, init_sign_model=None
         )
-        task_config = SimpleNamespace(**model_arguments)
-        sys.path.insert(0, str(root))
-        try:
-            modeling = importlib.import_module("modules.modeling")
-            torch.cuda.set_device(target_device)
-            model = modeling.CLIP4Clip.from_pretrained(
-                task_config.cross_model,
-                cache_dir=task_config.cache_dir,
-                distributed=False,
-                state_dict=state,
-                task_config=task_config,
-            )
-        except Exception as exc:
-            raise SedsAdapterError("official pinned SEDS model construction failed") from exc
-        finally:
-            if sys.path and sys.path[0] == str(root):
-                sys.path.pop(0)
-        model.to(target_device)
+        model = _construct_official_model(
+            root, task_config, state=state, device=target_device
+        )
         adapter = cls(
             model,
             upstream_root=root,
@@ -386,6 +435,91 @@ class SedsAdapter:
         )
         adapter.load_and_validate(checkpoint, resolved_config)
         return adapter
+
+    @staticmethod
+    def build_official_training_model(
+        resolved_config: Mapping[str, Any],
+        *,
+        upstream_root: str | Path,
+        device: str | torch.device = "cuda",
+    ) -> tuple[nn.Module, Mapping[str, Any]]:
+        """Construct trainable controlled B0 from the separately released native initial assets."""
+        root = Path(upstream_root).resolve()
+        _verify_checkout(root)
+        baseline = resolved_config.get("baseline", {})
+        data = resolved_config.get("data", {})
+        if not isinstance(baseline, Mapping) or not isinstance(data, Mapping):
+            raise SedsAdapterError("resolved baseline/data configs must be mappings")
+        reproduction_path = baseline.get("reproduction_config")
+        if not reproduction_path or not Path(reproduction_path).is_file():
+            raise SedsAdapterError("controlled SEDS reproduction config is missing")
+        reproduction_file = Path(reproduction_path)
+        reproduction = _load_reproduction_config(reproduction_file, root)
+        _validate_baseline_identity(baseline, reproduction, data)
+        clip_weights = root / reproduction.external_assets["clip_initialization"]
+        configured_initial = baseline.get("initial_weights")
+        if not configured_initial:
+            raise SedsAdapterError("baseline.initial_weights is not configured")
+        signbert_weights = Path(str(configured_initial)).resolve()
+        expected_signbert = (root / reproduction.external_assets["signbert_initialization"]).resolve()
+        if signbert_weights != expected_signbert:
+            raise SedsAdapterError("SignBERT initialization path differs from reproduction contract")
+        for name, path in (
+            ("CLIP initialization", clip_weights),
+            ("SignBERT initialization", signbert_weights),
+        ):
+            if not path.is_file():
+                raise SedsAdapterError(f"official SEDS {name} is missing: {path}")
+        try:
+            initialization = torch.load(signbert_weights, map_location="cpu", weights_only=True)
+        except Exception as exc:
+            raise SedsAdapterError("SignBERT initialization cannot be loaded safely") from exc
+        if not isinstance(initialization, Mapping) or not isinstance(
+            initialization.get("state_dict"), Mapping
+        ):
+            raise SedsAdapterError("SignBERT initialization has no state_dict mapping")
+        target_device = torch.device(device)
+        if target_device.type != "cuda" or not torch.cuda.is_available():
+            raise SedsAdapterError(
+                "pinned SEDS construction requires CUDA because upstream graph buffers call .cuda()"
+            )
+        task_config = _official_task_config(
+            reproduction,
+            baseline,
+            root,
+            init_sign_model=None,
+        )
+        model = _construct_official_model(root, task_config, state=None, device=target_device)
+        raw_signbert_state = initialization["state_dict"]
+        signbert_state = (
+            raw_signbert_state["GCN_Transform"]
+            if isinstance(raw_signbert_state.get("GCN_Transform"), Mapping)
+            else raw_signbert_state
+        )
+        try:
+            incompatible = model.signbert.load_state_dict(signbert_state, strict=False)
+        except Exception as exc:
+            raise SedsAdapterError("SignBERT initialization tensors are incompatible") from exc
+        if incompatible.unexpected_keys:
+            raise SedsAdapterError(
+                f"SignBERT initialization has unexpected keys: {incompatible.unexpected_keys[:5]}"
+            )
+        model.train().requires_grad_(True)
+        metadata = {
+            "schema_version": "seds_training_initialization.v1",
+            "upstream_commit": PINNED_SEDS_COMMIT,
+            "reproduction_config_path": str(reproduction_file.resolve()),
+            "reproduction_config_sha256": _sha256(reproduction_file),
+            "clip_initialization_path": str(clip_weights.resolve()),
+            "clip_initialization_sha256": _sha256(clip_weights),
+            "signbert_initialization_path": str(signbert_weights),
+            "signbert_initialization_sha256": _sha256(signbert_weights),
+            "initial_model_state_sha256": state_hash(model),
+            "signbert_missing_keys": sorted(incompatible.missing_keys),
+            "signbert_unexpected_keys": [],
+            "device": str(target_device),
+        }
+        return model, metadata
 
     def _verify_upstream(self) -> None:
         _verify_checkout(self.upstream_root)

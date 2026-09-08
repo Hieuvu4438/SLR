@@ -319,3 +319,13 @@ def test_checked_reproduction_config_binds_flags_types_and_pinned_sources(tmp_pa
     malformed_path.write_text(yaml.safe_dump(malformed), encoding="utf-8")
     with pytest.raises(SedsReproductionError, match="values/types mismatch"):
         load_seds_reproduction(malformed_path, upstream_root=SEDS_ROOT)
+
+
+def test_training_model_factory_fails_closed_before_missing_initial_assets():
+    config = load_config(ROOT / "methods" / "dive" / "configs" / "how2sign_base.yaml")
+    with pytest.raises(SedsAdapterError, match="CLIP initialization is missing"):
+        SedsAdapter.build_official_training_model(
+            config,
+            upstream_root=SEDS_ROOT,
+            device="cuda:0",
+        )

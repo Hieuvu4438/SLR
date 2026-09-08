@@ -39,6 +39,7 @@ dive doctor --config methods/dive/configs/fixture.yaml --stage fixture \
   --output artifacts/dive/doctor_fixture.json
 dive prepare-data --config methods/dive/configs/how2sign_base.yaml --workers 16
 dive validate-data --config /path/to/resolved_config.yaml
+dive baseline train --config methods/dive/configs/how2sign_base.yaml --device cuda:0
 dive baseline validate --config methods/dive/configs/how2sign_base.yaml --split dev
 dive smoke --config methods/dive/configs/fixture.yaml --output-dir artifacts/dive/smoke
 pytest -q methods/dive/tests
@@ -62,6 +63,16 @@ The main How2Sign config names the intended SEDS resource paths even when the ex
 absent. The doctor command resolves null prepared-data fields only through checksummed
 `prepare_data` run-state outputs, rehashes those parents, and reports concrete missing SEDS/I3D
 paths. It does not discover arbitrary files or substitute the local CiCo checkpoint for SEDS.
+
+`baseline train` reproduces the native fusion/pose/RGB/rgb-pose objective in FP32 on one GPU with
+the published effective batch size and six pinned BertAdam parameter groups. Each deterministic
+epoch selects one video view per unique training text, applies the vendored one-swap EDA algorithm
+with a caller-owned RNG, and evaluates only the controlled dev gallery. It retains one rolling,
+checksummed resume checkpoint plus the earliest best mean bidirectional R@1 checkpoint. Both input
+features and native frame lineage are revalidated against the registered data audit before model
+training; `--resume` rejects changed code, config, data, initialization weights, or provenance.
+The configured `baseline.locked_checkpoint` is intentionally null so later stages can resolve only
+the registered dev-selected `baseline_train.locked_checkpoint`.
 
 `baseline validate` is a real controlled-dev runner, not a shape-only stub. It requires the
 registered data audit and native lineage, verifies and loads the locked checkpoint, replays that

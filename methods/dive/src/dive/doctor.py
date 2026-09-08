@@ -21,6 +21,13 @@ _PREPARED_PARENT_FIELDS = {
     "data.relevance_dir": "relevance_dir",
     "data.frame_maps_dir": "frame_maps_dir",
 }
+_CONFIG_PARENT_FIELDS = {
+    **{
+        field: ("prepare_data", output, "shared")
+        for field, output in _PREPARED_PARENT_FIELDS.items()
+    },
+    "baseline.locked_checkpoint": ("baseline_train", "locked_checkpoint", "shared"),
+}
 _STAGE_PARENT_ARTIFACTS = {
     "baseline_train": (
         ("validate_data", "audit", "shared"),
@@ -95,12 +102,11 @@ def inspect_environment(config: Mapping[str, Any], stage: str) -> dict[str, Any]
         resolution = "config"
         if raw_path is not None:
             value = os.path.expandvars(os.path.expanduser(str(raw_path)))
-        elif field in _PREPARED_PARENT_FIELDS:
-            resolution = f"run_state:shared/prepare_data/{_PREPARED_PARENT_FIELDS[field]}"
+        elif field in _CONFIG_PARENT_FIELDS:
+            parent_stage, parent_name, parent_scope = _CONFIG_PARENT_FIELDS[field]
+            resolution = f"run_state:{parent_scope}/{parent_stage}/{parent_name}"
             try:
-                parent = resolver.resolve(
-                    "prepare_data", _PREPARED_PARENT_FIELDS[field], scope="shared"
-                )
+                parent = resolver.resolve(parent_stage, parent_name, scope=parent_scope)
                 value = str(parent.path)
             except ArtifactError as exc:
                 detail = str(exc)

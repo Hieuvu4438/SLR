@@ -29,7 +29,7 @@ baseline:
   upstream_commit: 434e3f714fcb6a7d1f4001fb9a246bbd93ec0246
   reproduction_config: methods/dive/configs/seds_how2sign_reproduction.yaml
   initial_weights: third_party/SEDS/ckpt/pretrain_signbert.pth
-  locked_checkpoint: third_party/SEDS/ckpts/h2s_best_model.bin
+  locked_checkpoint: null
   score_branch: fusion
   dual_mix: 0.5
   score_scale: prelogit

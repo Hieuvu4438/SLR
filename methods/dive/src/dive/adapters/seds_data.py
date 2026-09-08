@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import copy
+import hashlib
 import math
 import random
 import threading
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Mapping, Sequence
 
-import torch
 import numpy as np
+import torch
 
 from dive.data.manifest import SampleRecord
 
@@ -21,6 +24,44 @@ class SedsDataError(ValueError):
 
 
 _RANDOM_STATE_LOCK = threading.Lock()
+
+
+def hash_seds_input(path: str | Path) -> str:
+    source = Path(path)
+    if source.is_symlink() or not source.is_file():
+        raise SedsDataError(f"native SEDS input is not a regular file: {source}")
+    digest = hashlib.sha256()
+    with source.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+@dataclass(frozen=True)
+class SedsTrainingBatch:
+    video: SedsVideoBatch
+    text: SedsTextBatch
+    augmented_text: SedsTextBatch
+    augmented_strings: tuple[str, ...]
+    augmented: tuple[bool, ...]
+
+
+def _random_swap(sentence: str, generator: random.Random) -> str:
+    # Exact n=1 textaugment.EDA.random_swap/swap_word algorithm called by SEDS,
+    # expressed against a caller-owned RNG so epochs and resumes are reproducible.
+    words = sentence.split()
+    if not words:
+        raise SedsDataError("SEDS text augmentation requires nonempty text")
+    first = generator.randint(0, len(words) - 1)
+    second = first
+    counter = 0
+    while second == first:
+        second = generator.randint(0, len(words) - 1)
+        counter += 1
+        if counter > 3:
+            return " ".join(words)
+    words[first], words[second] = words[second], words[first]
+    return " ".join(words)
 
 
 def _load_source_module(path: Path, name: str) -> ModuleType:
@@ -44,6 +85,7 @@ class SedsManifestInputBuilder:
         reproduction_config: str | Path,
         pose_root: str | Path,
         rgb_root: str | Path,
+        cache_video_samples: bool = False,
     ) -> None:
         self.upstream_root = verify_seds_checkout(upstream_root)
         self.reproduction = load_seds_reproduction(
@@ -51,6 +93,8 @@ class SedsManifestInputBuilder:
         )
         self.pose_root = Path(pose_root).resolve()
         self.rgb_root = Path(rgb_root).resolve()
+        self.cache_video_samples = bool(cache_video_samples)
+        self._video_cache: dict[str, tuple[Mapping[str, Any], tuple[int, ...]]] = {}
         if not self.pose_root.is_dir():
             raise SedsDataError(f"SEDS pose root does not exist: {self.pose_root}")
         if not self.rgb_root.is_dir():
@@ -119,6 +163,9 @@ class SedsManifestInputBuilder:
         return helper
 
     def _native_sample(self, record: SampleRecord) -> tuple[Mapping[str, Any], tuple[int, ...]]:
+        cached = self._video_cache.get(record.sample_id)
+        if cached is not None:
+            return cached
         helper = self._helper(record, require_features=True)
         # Pinned GetTotalFrameList consumes Python RNG even though its sampled offset is unused.
         # Restore the process state so manifest-order preprocessing has no hidden RNG side effect.
@@ -165,7 +212,10 @@ class SedsManifestInputBuilder:
             raise SedsDataError("pinned SEDS loader returned a non-mapping sample")
         if raw_indices is None:
             raise SedsDataError("pinned SEDS preprocessing did not expose selected frames")
-        return sample, raw_indices
+        result = (sample, raw_indices)
+        if self.cache_video_samples:
+            self._video_cache[record.sample_id] = result
+        return result
 
     def build_video_batch(
         self,
@@ -196,7 +246,8 @@ class SedsManifestInputBuilder:
             raise SedsDataError("FPS values must be positive")
 
         prepared = [self._native_sample(record) for record in records]
-        samples = [item[0] for item in prepared]
+        # The pinned collate mutates pose tensors to pad a batch; isolate cached samples.
+        samples = [copy.deepcopy(item[0]) for item in prepared]
         pose_raw_frame_indices = tuple(item[1] for item in prepared)
         if any(
             indices[-1] >= raw_count
@@ -288,4 +339,43 @@ class SedsManifestInputBuilder:
                 [value["pairs_segment"] for value in encoded], dim=0
             ).long(),
             attention_mask=torch.cat([value["pairs_mask"] for value in encoded], dim=0).long(),
+        )
+
+    def build_training_batch(
+        self,
+        records: Sequence[SampleRecord],
+        *,
+        raw_frame_counts: Sequence[int],
+        frames_per_second: Sequence[float] | None,
+        generator: random.Random,
+    ) -> SedsTrainingBatch:
+        """Build the published random-swap objective with an explicit caller-owned RNG."""
+        if not isinstance(generator, random.Random):
+            raise SedsDataError("training augmentation requires a dedicated random.Random")
+        video = self.build_video_batch(
+            records,
+            raw_frame_counts=raw_frame_counts,
+            frames_per_second=frames_per_second,
+        )
+        text = self.build_text_batch(records)
+        augmented_strings: list[str] = []
+        flags: list[bool] = []
+        augmented_records: list[SampleRecord] = []
+        for record in records:
+            should_augment = generator.random() > 0.5
+            value = (
+                _random_swap(record.text_model, generator)
+                if should_augment
+                else record.text_model
+            )
+            augmented_strings.append(value)
+            flags.append(should_augment and value != record.text_model)
+            augmented_records.append(replace(record, text_model=value))
+        augmented_text = self.build_text_batch(augmented_records)
+        return SedsTrainingBatch(
+            video=video,
+            text=text,
+            augmented_text=augmented_text,
+            augmented_strings=tuple(augmented_strings),
+            augmented=tuple(flags),
         )

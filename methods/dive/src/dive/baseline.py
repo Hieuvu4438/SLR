@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,7 @@ from .adapters import (
     SedsManifestInputBuilder,
     SedsTextBatch,
     SedsVideoBatch,
+    hash_seds_input,
 )
 from .artifacts import ArtifactError, ArtifactResolver, ResolvedArtifact
 from .config import config_hash
@@ -315,9 +317,15 @@ def validate_seds_baseline(
     )
     video_ids = tuple(record.video_id for record in records)
     target_device = torch.device(device)
+    # A controlled training output is resolved from checksummed run state when the
+    # user-facing config deliberately leaves locked_checkpoint null. Give the adapter
+    # that resolved path as its identity assertion without changing the run config hash.
+    adapter_config = copy.deepcopy(dict(config))
+    adapter_config["baseline"] = dict(baseline)
+    adapter_config["baseline"]["locked_checkpoint"] = str(checkpoint)
     adapter = SedsAdapter.from_official_checkpoint(
         checkpoint,
-        config,
+        adapter_config,
         upstream_root=upstream_root,
         device=target_device,
     )
@@ -348,6 +356,10 @@ def validate_seds_baseline(
                 list(selected) != audited.get("selected_pose_raw_frame_indices")
                 or native.clip_starts[index, :valid_count].tolist()
                 != audited.get("clip_starts_in_selected_pose_steps")
+                or hash_seds_input(pose_root / str(item.pose_path))
+                != audited.get("pose_sha256")
+                or hash_seds_input(rgb_root / str(item.rgb_feature_key))
+                != audited.get("rgb_sha256")
             ):
                 raise BaselineValidationError(
                     f"native SEDS frame lineage changed after data audit: {item.sample_id}"

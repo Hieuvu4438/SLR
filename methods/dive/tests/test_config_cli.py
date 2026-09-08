@@ -88,3 +88,13 @@ def test_baseline_validate_cli_requires_registered_data_audit(tmp_path, capsys):
     )
     assert result == 2
     assert "MISSING_PARENT_ARTIFACT: validate_data.audit" in capsys.readouterr().err
+
+
+def test_baseline_train_cli_requires_registered_data_audit(tmp_path, capsys):
+    config = load_config(FIXTURE_CONFIG)
+    config["run"]["output_root"] = str(tmp_path / "runs")
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    result = main(["baseline", "train", "--config", str(path), "--device", "cpu"])
+    assert result == 2
+    assert "MISSING_PARENT_ARTIFACT: validate_data.audit" in capsys.readouterr().err

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 from dive.adapters import SedsDataError, SedsManifestInputBuilder
 from dive.data.manifest import SampleRecord
@@ -149,3 +150,24 @@ def test_manifest_builder_captures_frames_removed_by_native_hand_filter(tmp_path
     video = builder.build_video_batch([_record()], raw_frame_counts=[20])
     assert video.body_pose.shape[1] == 19
     assert video.pose_raw_frame_indices == (tuple(index for index in range(20) if index != 7),)
+
+
+def test_training_batch_uses_explicit_deterministic_random_swap(tmp_path):
+    builder = _builder(tmp_path)
+    first = builder.build_training_batch(
+        [_record()],
+        raw_frame_counts=[20],
+        frames_per_second=[25.0],
+        generator=random.Random(2),
+    )
+    second = builder.build_training_batch(
+        [_record()],
+        raw_frame_counts=[20],
+        frames_per_second=[25.0],
+        generator=random.Random(2),
+    )
+    assert first.augmented == (True,)
+    assert first.augmented_strings == second.augmented_strings
+    assert first.augmented_strings != (_record().text_model,)
+    assert first.augmented_text.text_ids == first.text.text_ids == ("sentence",)
+    assert not torch.equal(first.augmented_text.input_ids, first.text.input_ids)

@@ -10,7 +10,12 @@ from .seds import (
     normalize_seds_video_mask,
     seds_prelogit_fusion_scores,
 )
-from .seds_data import SedsDataError, SedsManifestInputBuilder
+from .seds_data import (
+    SedsDataError,
+    SedsManifestInputBuilder,
+    SedsTrainingBatch,
+    hash_seds_input,
+)
 from .seds_reproduction import (
     SedsReproduction,
     SedsReproductionError,
@@ -31,9 +36,11 @@ __all__ = [
     "SedsReproduction",
     "SedsReproductionError",
     "SedsTextBatch",
+    "SedsTrainingBatch",
     "SedsVideoBatch",
     "normalize_seds_text_mask",
     "normalize_seds_video_mask",
     "load_seds_reproduction",
+    "hash_seds_input",
     "seds_prelogit_fusion_scores",
 ]

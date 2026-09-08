@@ -9,6 +9,7 @@ from typing import Sequence
 from .adapters import SedsAdapterError, SedsDataError, SedsReproductionError
 from .artifacts import ArtifactError
 from .baseline import BaselineValidationError, validate_seds_baseline
+from .baseline_training import BaselineTrainingError, train_seds_baseline
 from .config import ConfigError, dump_resolved, load_config
 from .data.manifest import ManifestError
 from .data.prepare import PreparationError, prepare_how2sign_data
@@ -61,6 +62,14 @@ def _parser() -> argparse.ArgumentParser:
     baseline_validate.add_argument("--split", choices=("dev",), default="dev")
     baseline_validate.add_argument("--batch-size", type=int, default=64)
     baseline_validate.add_argument("--device", default="cuda:0")
+    baseline_train = baseline_commands.add_parser(
+        "train", help="train and dev-select the controlled native SEDS B0"
+    )
+    baseline_train.add_argument("--config", required=True)
+    baseline_train.add_argument("--batch-size", type=int, default=128)
+    baseline_train.add_argument("--eval-batch-size", type=int, default=64)
+    baseline_train.add_argument("--device", default="cuda:0")
+    baseline_train.add_argument("--resume", action="store_true")
 
     smoke = subparsers.add_parser("smoke", help="run fixture-only end-to-end correctness smoke")
     smoke.add_argument("--config", required=True)
@@ -98,6 +107,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             print(json.dumps(report, indent=2, sort_keys=True))
             return 0
+        if args.command == "baseline" and args.baseline_command == "train":
+            report = train_seds_baseline(
+                config,
+                batch_size=args.batch_size,
+                eval_batch_size=args.eval_batch_size,
+                device=args.device,
+                resume=args.resume,
+            )
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return 0
         if args.command == "smoke":
             root = Path(__file__).resolve().parents[4]
             report = run_fixture_smoke(config, args.output_dir, repository_root=root)
@@ -108,6 +127,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     except (
         ArtifactError,
+        BaselineTrainingError,
         BaselineValidationError,
         DataValidationError,
         ManifestError,
