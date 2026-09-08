@@ -4,10 +4,12 @@ This directory is the canonical home of proposal 2. The implementation follows
 [`docs/proposal2/DIVE_SLR_End_to_End_Implementation_Spec.md`](../../docs/proposal2/DIVE_SLR_End_to_End_Implementation_Spec.md)
 and keeps method-specific code, configs, tests, and documentation separate from ELSC.
 
-The current vertical slice provides a strict resolved config, stage-aware environment/resource
-diagnostics, an ID-based full-gallery evaluator, the exact masked late-interaction scorer, centered
-residual composition, and the core retrieval/local/pair losses. All fixture results are correctness
-checks only and must never be reported as How2Sign reproduction or benchmark metrics.
+The current vertical slice provides strict configuration and resource diagnostics; versioned data,
+text-unit, temporal and relation contracts; an ID-based full-gallery evaluator; exact centered
+scoring and loss kernels; evidence warm-up/reference export; deterministic mining, support and batch
+planning; an exact student step; and checkpoint/resume plus fixture smoke coverage. All fixture
+results are correctness checks only and must never be reported as How2Sign reproduction or benchmark
+metrics.
 
 From the repository root:
 
