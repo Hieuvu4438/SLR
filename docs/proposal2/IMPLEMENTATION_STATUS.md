@@ -13,8 +13,8 @@ are never counted as a benchmark replication.
 | M05 — SEDS adapter | in_progress | Official source is reproducibly checked out at pinned commit `434e3f7...` by `methods/dive/scripts/setup_seds.sh`; typed adapter protocol exists. Compatible SEDS checkpoint/features and real score/tap parity remain unresolved. |
 | M06 — B0 reproduction | blocked | No controlled SEDS How2Sign reproduction config/checkpoint has been verified. Existing `H2S_sota.pth` is a CiCo checkpoint and is not relabeled as SEDS. |
 | M07 — evidence/reference | in_progress | Pointwise local RGB+pose projector, frozen BN mode/affine, deep-copied reference/student, state hash including buffers, storage independence, identity score, nonzero student gradient and raw-window locality tests pass. Warm-up stage runner/checkpoint artifacts remain. |
-| M08 — mining/audit | in_progress | Strict numeric measurement validation enforces one changed atomic slot, matching unit/type, ambiguity exclusions and audit states; pending/rejected schemas receive zero weight. Shortlist/reranking, audit export and bank serialization remain. |
-| M09 — support | in_progress | Differential own-minus-rival support, absolute gate, tiny-distance abstention, raw-time rebin, JSD stability, floor concentration cap, retained mass, RF union and identical-view rejection pass CPU oracles. Pair-bank serialization remains. |
+| M08 — mining/audit | blocked | Code is complete for bidirectional pooled shortlist, S0 four-margin reranking, deterministic dedup, exact shortlist-coverage audit, strict numeric schema, blinded audit export, train-only finalize and fingerprint/checksum bank I/O. A real accepted human audit plus SEDS train representations are required to produce the main semantic bank. |
+| M09 — support | blocked | Code is complete for differential own-minus-rival support, absolute/tiny-distance gates, raw-time rebin, JSD, concentration/RF gates, g calculation, and retaining failed records with g=0 in the bank. Actual reference features and two real shifted views are required for the main support artifact. |
 | M10 — sampler/step | not_started | Reproducible shared plans and student step remain. |
 | M11 — end-to-end smoke | not_started | Requires M04–M10. |
 | M12 — primary pilot | blocked | Requires completed core, controlled B0/reference, accepted audit and real features. |
@@ -49,3 +49,5 @@ are never counted as a benchmark replication.
 - `pytest -q`: 159 passed; no ELSC/shared regression.
 - `pytest -q methods/dive/tests`: 50 passed after strict slot and support kernels.
 - `pytest -q`: 174 passed; no ELSC/shared regression.
+- `pytest -q methods/dive/tests`: 57 passed after neighbor/bank/audit completion.
+- `pytest -q`: 181 passed; no ELSC/shared regression.
