@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Protocol, Sequence, runtime_checkable
 
@@ -12,6 +12,8 @@ class NativeVideoFeatures:
     sample_ids: tuple[str, ...]
     pooled: Tensor
     validity: Tensor
+    streams: Mapping[str, Tensor] = field(default_factory=dict)
+    metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -20,6 +22,7 @@ class NativeTextFeatures:
     pooled: Tensor
     token_features: Tensor
     token_validity: Tensor
+    metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -28,6 +31,8 @@ class PrelogitScores:
     text_ids: tuple[str, ...]
     scores: Tensor
     logit_scale: Tensor
+    directional_scores: Mapping[str, Tensor] = field(default_factory=dict)
+    diagnostics: Mapping[str, Any] = field(default_factory=dict)
 
 
 @runtime_checkable

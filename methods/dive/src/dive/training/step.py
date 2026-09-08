@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping, Protocol, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 
 import torch
 from torch import Tensor
 
 from dive.losses import local_loss_active, pair_loss_active, retrieval_loss
-from dive.models.evidence import EvidenceEncoder
+from dive.models.evidence import EvidenceEncoder, detach_frozen_input
 from dive.models.scoring import compose_score, evidence_score_block
 
 
@@ -46,7 +46,7 @@ def run_student_step(
     student: EvidenceEncoder,
     optimizer: torch.optim.Optimizer,
     *,
-    pose: Tensor,
+    pose: Any,
     rgb_local: Tensor,
     grid: Tensor,
     video_mask: Tensor,
@@ -76,7 +76,7 @@ def run_student_step(
     frozen_text = text_units.detach()
     frozen_reference = reference_evidence.detach()
     frozen_baseline = baseline_scores.detach()
-    student_u = student(pose.detach(), rgb_local.detach(), grid, video_mask)
+    student_u = student(detach_frozen_input(pose), rgb_local.detach(), grid, video_mask)
     student_scores, pair_valid = evidence_score_block(
         student_u, frozen_text, video_mask, text_mask, tau_alignment
     )

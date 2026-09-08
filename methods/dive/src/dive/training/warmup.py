@@ -13,7 +13,7 @@ from torch import Tensor
 
 from dive.eval.metrics import RetrievalMetrics, evaluate_retrieval
 from dive.losses import retrieval_loss
-from dive.models.evidence import EvidenceEncoder, state_hash
+from dive.models.evidence import EvidenceEncoder, detach_frozen_input, state_hash
 from dive.models.scoring import evidence_score_block
 from dive.training.optimizer import (
     build_evidence_optimizer,
@@ -30,7 +30,7 @@ class WarmupContractError(ValueError):
 
 @dataclass(frozen=True)
 class WarmupBatch:
-    pose: Tensor
+    pose: Any
     rgb_local: Tensor
     grid: Tensor
     video_mask: Tensor
@@ -60,7 +60,7 @@ class WarmupResult:
 
 
 def _validate_batch(batch: WarmupBatch) -> None:
-    num_videos = batch.pose.shape[0]
+    num_videos = batch.rgb_local.shape[0]
     num_texts = batch.text_units.shape[0]
     if batch.rgb_local.shape[:2] != batch.video_mask.shape:
         raise WarmupContractError("RGB features and video mask disagree")
@@ -94,7 +94,7 @@ def run_warmup_step(
     model.enforce_frozen_batch_norm()
     optimizer.zero_grad(set_to_none=True)
     local = model(
-        batch.pose.detach(),
+        detach_frozen_input(batch.pose),
         batch.rgb_local.detach(),
         batch.grid,
         batch.video_mask,
@@ -133,7 +133,7 @@ def evaluate_warmup_gallery(
     model.eval()
     with torch.no_grad():
         local = model(
-            gallery.batch.pose.detach(),
+            detach_frozen_input(gallery.batch.pose),
             gallery.batch.rgb_local.detach(),
             gallery.batch.grid,
             gallery.batch.video_mask,

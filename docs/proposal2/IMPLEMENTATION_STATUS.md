@@ -10,7 +10,7 @@ are never counted as a benchmark replication.
 | M02 — evaluator oracle | passed | ID-based `[video,text]` evaluator passes asymmetric-direction, exact-tie, duplicate-ID, multi-positive and nonfinite/full-gallery guards. |
 | M03 — score/loss core | passed | Dense/chunked masked late interaction, centered composition and retrieval/local/pair kernels pass padding, empty evidence, cosine-bound, four-margin, H-denominator, gradient and FP64 gradcheck oracles. |
 | M04 — data contracts | passed | Versioned manifest/split guards, normalized word/numeric units, native subword offset mapping with partial-target rejection, deterministic canonical/shifted grids, raw-time RF mapping, per-step pose normalization, P/C construction and bool-mask collation have independent fixtures. |
-| M05 — SEDS adapter | in_progress | Official source is reproducibly checked out at pinned commit `434e3f7...` by `methods/dive/scripts/setup_seds.sh`; typed adapter protocol exists. Compatible SEDS checkpoint/features and real score/tap parity remain unresolved. |
+| M05 — SEDS adapter | in_progress | Code is complete for clean pinned-checkout/model-state validation, lazy official construction, native contextual encoding, prelogit fusion directional mixing, mask-before-softmax, explicit CLS/text-mask conversion, projected subword unit pooling, pre-Transformer RGB tap, cloned local GCN/sign-conv pose path and conservative raw RF metadata. Unpadded native-formula and padded-invariance fixtures pass; compatible real checkpoint/features and real score/tap parity remain unresolved. |
 | M06 — B0 reproduction | blocked | No controlled SEDS How2Sign reproduction config/checkpoint has been verified. Existing `H2S_sota.pth` is a CiCo checkpoint and is not relabeled as SEDS. |
 | M07 — evidence/reference | in_progress | Code is complete for the pointwise local RGB+pose projector, frozen BN mode/affine, audited AdamW ownership/decay groups, fixed-step warm-up/cosine schedule, symmetric `E_local` retrieval-only training, full-dev teacher evaluation, earliest-tie checkpoint selection, checksummed reference export, deep-copy independence and identity initialization. A real warm-up/reference artifact remains blocked on the SEDS checkpoint/features. |
 | M08 — mining/audit | blocked | Code is complete for bidirectional pooled shortlist, S0 four-margin reranking, deterministic dedup, exact shortlist-coverage audit, strict numeric schema, blinded audit export, train-only finalize and fingerprint/checksum bank I/O. A real accepted human audit plus SEDS train representations are required to produce the main semantic bank. |
@@ -66,3 +66,6 @@ are never counted as a benchmark replication.
 - `pytest -q methods/dive/tests`: 87 passed after opportunity, calibration, duplicate-ceiling,
   paired-bootstrap and seed-aggregation evaluation contracts.
 - `pytest -q`: 211 passed; no ELSC/shared regression.
+- `pytest -q methods/dive/tests`: 93 passed after the pinned SEDS adapter, mask/score/tap/RF
+  contracts and synchronized three-stream pose integration.
+- `pytest -q`: 217 passed; no ELSC/shared regression.

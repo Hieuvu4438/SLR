@@ -13,6 +13,12 @@ calibration, duplicate-query ceilings, paired bootstrap intervals and multi-seed
 fixture results are correctness checks only and must never be reported as How2Sign reproduction or
 benchmark metrics.
 
+The SEDS integration is an adapter around the pinned upstream model, not a forked copy of its code.
+It can construct the official model when the external SEDS checkpoint, CLIP initialization and full
+native reproduction config are supplied; it otherwise fails closed. The checked-in fixture tests
+cover score orientation, prelogit scaling, padding behavior, feature-tap layouts and three-stream
+pose flow, but do not constitute released-checkpoint parity.
+
 From the repository root:
 
 ```bash

@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Mapping, Protocol
 
 import torch
 import torch.nn.functional as F
@@ -15,7 +15,20 @@ class EvidenceError(ValueError):
 
 
 class LocalPoseEncoder(Protocol):
-    def __call__(self, pose: Tensor, grid: Tensor) -> Tensor: ...
+    def __call__(self, pose: Any, grid: Tensor) -> Tensor: ...
+
+
+def detach_frozen_input(value: Any) -> Any:
+    """Detach a tensor or a nested pose-input container without changing structure."""
+    if isinstance(value, Tensor):
+        return value.detach()
+    if isinstance(value, Mapping):
+        return {key: detach_frozen_input(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return tuple(detach_frozen_input(item) for item in value)
+    if isinstance(value, list):
+        return [detach_frozen_input(item) for item in value]
+    raise EvidenceError(f"unsupported pose input leaf: {type(value).__name__}")
 
 
 def _batch_norm_modules(module: nn.Module) -> tuple[nn.modules.batchnorm._BatchNorm, ...]:
@@ -71,7 +84,7 @@ class EvidenceEncoder(nn.Module):
 
     def forward(
         self,
-        pose: Tensor,
+        pose: Any,
         rgb_local: Tensor,
         grid: Tensor,
         valid_mask: Tensor,
