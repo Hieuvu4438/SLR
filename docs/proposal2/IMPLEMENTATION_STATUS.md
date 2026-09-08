@@ -17,9 +17,9 @@ are never counted as a benchmark replication.
 | M09 — support | blocked | Code is complete for differential own-minus-rival support, absolute/tiny-distance gates, raw-time rebin, JSD, concentration/RF gates, g calculation, and retaining failed records with g=0 in the bank. Actual reference features and two real shifted views are required for the main support artifact. |
 | M10 — sampler/step | passed | Dedicated-RNG plans enforce unique effective batches, unordered-pair uniqueness, endpoint quota, ordinary fill, pre-rejection H and shared-control fingerprints. The exact centered student step uses explicit ID remaps, filters g=0 before nullable fields, computes global/local/pair losses, clips gradients and detaches B0/reference/text/q/g inputs. |
 | M11 — end-to-end smoke | in_progress | `dive smoke` runs a deterministic CPU fixture through student forward, H=2/H_active=1 losses, optimizer update, checkpoint+checksum, reload parity and ID-based evaluation while emitting `benchmark_claim_allowed=false`. Tiny real SEDS integration remains blocked by checkpoint/features. |
-| M12 — primary pilot | blocked | Requires completed core, controlled B0/reference, accepted audit and real features. |
+| M12 — primary pilot | blocked | Dev opportunity-bound code is complete for both directions, stable IDs, multi-positive best targets and the exact `2*gamma` repairability gate. Running A0/A1/A2/A3/A6 still requires the controlled B0/reference, accepted audit and real features. |
 | M13 — mechanism | blocked | Requires a successful primary pilot and support-common artifacts. |
-| M14 — final protocol | blocked | Requires passed research gates, locked experiment plan and actual final resources. |
+| M14 — final protocol | blocked | Code is complete for checkpoint-first dev gamma calibration (including gamma=0 and smaller-gamma ties), selection provenance, duplicate-query ceilings, paired query/source-cluster bootstrap and seed mean/std. Final execution still requires passed research gates, a locked experiment plan and actual resources. |
 | M15 — optimization | not_started | Optional; core correctness remains single-process FP32. |
 
 ## Inventory details
@@ -63,3 +63,6 @@ are never counted as a benchmark replication.
 - `pytest -q methods/dive/tests`: 78 passed after versioned tensor-cache fingerprints, atomic
   checksummed shards, explicit ID/mask/timestamp loading and T06 invalidation coverage.
 - `pytest -q`: 202 passed; no ELSC/shared regression.
+- `pytest -q methods/dive/tests`: 87 passed after opportunity, calibration, duplicate-ceiling,
+  paired-bootstrap and seed-aggregation evaluation contracts.
+- `pytest -q`: 211 passed; no ELSC/shared regression.

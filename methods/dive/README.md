@@ -8,9 +8,10 @@ The current vertical slice provides strict configuration and resource diagnostic
 text-unit, temporal and relation contracts; an ID-based full-gallery evaluator; exact centered
 scoring and loss kernels; evidence warm-up/reference export; deterministic mining, support and batch
 planning; versioned checksummed tensor caches; an exact student step; and checkpoint/resume plus
-fixture smoke coverage. All fixture
-results are correctness checks only and must never be reported as How2Sign reproduction or benchmark
-metrics.
+fixture smoke coverage. The evaluation layer includes dev-only opportunity bounds and gamma
+calibration, duplicate-query ceilings, paired bootstrap intervals and multi-seed aggregation. All
+fixture results are correctness checks only and must never be reported as How2Sign reproduction or
+benchmark metrics.
 
 From the repository root:
 

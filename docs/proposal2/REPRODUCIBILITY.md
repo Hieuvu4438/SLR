@@ -22,6 +22,15 @@ index last. Readers verify the namespace, complete fingerprint, checksum, shard/
 ordered sample IDs, masks and timestamps before returning tensors. Train/dev/test namespaces and
 requested manifest order are explicit; correctness reference caches reject non-FP32 precision.
 
+Checkpoint selection and residual calibration remain separate operations: epochs are selected on
+full dev at fixed `gamma_train`, then gamma is selected for that single locked checkpoint from the
+configured grid with the smaller value winning exact endpoint ties. The selection artifact hashes
+the dev ID/relevance universe and records checkpoint/config provenance. Paired uncertainty uses
+fixed-gallery query outcomes; source IDs trigger linked source-cluster resampling across directions,
+while their absence is explicitly reported as an independent-direction query-level assumption.
+Three-seed aggregation reports the sample standard deviation separately from bootstrap confidence
+intervals.
+
 Run `bash methods/dive/scripts/setup_seds.sh` to create or verify the ignored official SEDS
 worktree. The script refuses a dirty/non-Git target and enforces detached commit
 `434e3f714fcb6a7d1f4001fb9a246bbd93ec0246`.
