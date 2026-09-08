@@ -7,7 +7,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 import torch
 from torch import Tensor
@@ -18,9 +18,10 @@ class CacheError(ValueError):
 
 
 _FINGERPRINT_SCHEMA = "dive_cache_fingerprint.v1"
-_INDEX_SCHEMA = "dive_tensor_cache_index.v1"
-_SHARD_SCHEMA = "dive_tensor_cache_shard.v1"
+_INDEX_SCHEMA = "dive_tensor_cache_index.v2"
+_SHARD_SCHEMA = "dive_tensor_cache_shard.v2"
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _REQUIRED_COMPONENTS: dict[str, frozenset[str]] = {
     "rgb_local": frozenset(
         {
@@ -197,6 +198,16 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _read_checksum(path: Path) -> str | None:
+    if path.is_symlink() or not path.is_file():
+        return None
+    try:
+        value = path.read_text(encoding="ascii").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    return value if _SHA256.fullmatch(value) else None
+
+
 def _validate_named_tensors(
     values: Mapping[str, Tensor],
     *,
@@ -266,37 +277,159 @@ def _cpu_contiguous(values: Mapping[str, Tensor]) -> dict[str, Tensor]:
     return {name: tensor.detach().cpu().contiguous() for name, tensor in values.items()}
 
 
-def write_tensor_cache(
-    output_dir: str | Path,
-    *,
-    namespace: str,
-    fingerprint: CacheFingerprint,
-    shards: Sequence[TensorShard],
-) -> Path:
-    """Atomically write checksummed shards, publishing the index only after completion."""
-    if not _SAFE_NAME.fullmatch(namespace):
-        raise CacheError(f"unsafe cache namespace: {namespace!r}")
-    _validate_fingerprint(fingerprint)
-    if not shards:
-        raise CacheError("tensor cache requires at least one shard")
-    shard_ids = [shard.shard_id for shard in shards]
-    if len(shard_ids) != len(set(shard_ids)):
-        raise CacheError("tensor cache shard IDs must be unique")
-    all_ids = [sample_id for shard in shards for sample_id in shard.ordered_ids]
-    if len(all_ids) != len(set(all_ids)):
-        raise CacheError("tensor cache sample IDs must be unique across shards")
-    output = Path(output_dir)
-    output.mkdir(parents=True, exist_ok=True)
-    index_shards: list[dict[str, Any]] = []
-    for shard in shards:
-        specs = _validate_shard(shard, fingerprint)
+class TensorCacheWriter:
+    """One-pass writer that can validate and resume atomic unpublished shards."""
+
+    def __init__(
+        self,
+        output_dir: str | Path,
+        *,
+        namespace: str,
+        fingerprint: CacheFingerprint,
+        resume: bool = False,
+    ) -> None:
+        if not _SAFE_NAME.fullmatch(namespace):
+            raise CacheError(f"unsafe cache namespace: {namespace!r}")
+        _validate_fingerprint(fingerprint)
+        self.output = Path(output_dir)
+        self.output.mkdir(parents=True, exist_ok=True)
+        self.namespace = namespace
+        self.fingerprint = fingerprint
+        self._index_path = self.output / "index.json"
+        self._index_shards: list[dict[str, Any]] = []
+        self._shard_ids: set[str] = set()
+        self._all_ids: list[str] = []
+        self._seen_ids: set[str] = set()
+        self._finalized = False
+        self._reopened_published = False
+        existing = sorted(self.output.glob("shard-*.pt"))
+        if self._index_path.exists() and not resume:
+            raise CacheError(f"tensor cache is already published: {self.output}")
+        if existing and not resume:
+            raise CacheError(f"tensor cache contains unpublished shards: {self.output}")
+        if resume:
+            for path in existing:
+                self._adopt(path)
+            if self._index_path.exists():
+                self._validate_published_index()
+                self._finalized = True
+                self._reopened_published = True
+
+    @property
+    def completed_shard_ids(self) -> frozenset[str]:
+        return frozenset(self._shard_ids)
+
+    def ordered_ids_for(self, shard_id: str) -> tuple[str, ...]:
+        for descriptor in self._index_shards:
+            if descriptor["shard_id"] == shard_id:
+                return tuple(descriptor["ordered_ids"])
+        raise CacheError(f"tensor cache has no completed shard {shard_id}")
+
+    def _check_new(self, shard: TensorShard) -> dict[str, dict[str, dict[str, Any]]]:
+        if shard.shard_id in self._shard_ids:
+            raise CacheError("tensor cache shard IDs must be unique")
+        repeated = sorted(set(shard.ordered_ids) & self._seen_ids)
+        if repeated:
+            raise CacheError(f"tensor cache sample IDs must be unique across shards: {repeated}")
+        return _validate_shard(shard, self.fingerprint)
+
+    def _record(
+        self,
+        shard: TensorShard,
+        *,
+        filename: str,
+        checksum: str,
+        specs: Mapping[str, Any],
+    ) -> None:
+        self._shard_ids.add(shard.shard_id)
+        self._seen_ids.update(shard.ordered_ids)
+        self._all_ids.extend(shard.ordered_ids)
+        self._index_shards.append(
+            {
+                "shard_id": shard.shard_id,
+                "filename": filename,
+                "record_count": len(shard.ordered_ids),
+                "ordered_ids": list(shard.ordered_ids),
+                "ordered_ids_sha256": hashlib.sha256(
+                    _canonical_json(list(shard.ordered_ids)).encode("utf-8")
+                ).hexdigest(),
+                "sha256": checksum,
+                "specs": specs,
+                "complete": True,
+            }
+        )
+
+    def _adopt(self, path: Path) -> None:
+        checksum_path = path.with_suffix(path.suffix + ".sha256")
+        expected_checksum = _read_checksum(checksum_path)
+        if expected_checksum is None:
+            raise CacheError(f"unpublished tensor shard checksum is missing: {path.name}")
+        actual_checksum = _sha256(path)
+        if actual_checksum != expected_checksum:
+            raise CacheError(f"unpublished tensor shard checksum mismatch: {path.name}")
+        try:
+            payload = torch.load(path, map_location="cpu", weights_only=True)
+        except Exception as exc:
+            raise CacheError(f"unpublished tensor shard cannot be resumed: {path.name}") from exc
+        shard_id = str(payload.get("shard_id", "")) if isinstance(payload, Mapping) else ""
+        if (
+            not isinstance(payload, Mapping)
+            or payload.get("schema_version") != _SHARD_SCHEMA
+            or payload.get("namespace") != self.namespace
+            or payload.get("fingerprint_sha256") != self.fingerprint.digest
+            or path.name != f"shard-{shard_id}.pt"
+        ):
+            raise CacheError(f"unpublished tensor shard provenance is invalid: {path.name}")
+        try:
+            shard = TensorShard(
+                shard_id=shard_id,
+                ordered_ids=tuple(payload["ordered_ids"]),
+                tensors=payload["tensors"],
+                masks=payload["masks"],
+                timestamps=payload["timestamps"],
+                metadata=payload["metadata"],
+            )
+        except KeyError as exc:
+            raise CacheError(f"unpublished tensor shard is missing {exc.args[0]}") from exc
+        specs = self._check_new(shard)
+        self._record(shard, filename=path.name, checksum=actual_checksum, specs=specs)
+
+    def _index_payload(self) -> dict[str, Any]:
+        return {
+            "schema_version": _INDEX_SCHEMA,
+            "namespace": self.namespace,
+            "fingerprint": self.fingerprint.to_dict(),
+            "record_count": len(self._all_ids),
+            "ordered_ids_sha256": hashlib.sha256(
+                _canonical_json(self._all_ids).encode("utf-8")
+            ).hexdigest(),
+            "shards": [
+                {key: value for key, value in item.items() if key != "ordered_ids"}
+                for item in self._index_shards
+            ],
+        }
+
+    def _validate_published_index(self) -> None:
+        try:
+            value = json.loads(self._index_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise CacheError("published tensor cache index is unreadable") from exc
+        if value != self._index_payload():
+            raise CacheError("CACHE_HASH_MISMATCH: published tensor cache index differs")
+
+    def add(self, shard: TensorShard) -> None:
+        if self._finalized:
+            raise CacheError("cannot append a shard after cache finalization")
+        specs = self._check_new(shard)
         filename = f"shard-{shard.shard_id}.pt"
-        destination = output / filename
+        destination = self.output / filename
+        if destination.exists():
+            raise CacheError(f"tensor cache shard already exists: {filename}")
         temporary = destination.with_suffix(destination.suffix + ".tmp")
         payload = {
             "schema_version": _SHARD_SCHEMA,
-            "namespace": namespace,
-            "fingerprint_sha256": fingerprint.digest,
+            "namespace": self.namespace,
+            "fingerprint_sha256": self.fingerprint.digest,
             "shard_id": shard.shard_id,
             "ordered_ids": list(shard.ordered_ids),
             "tensors": _cpu_contiguous(shard.tensors),
@@ -306,35 +439,46 @@ def write_tensor_cache(
         }
         torch.save(payload, temporary)
         checksum = _sha256(temporary)
+        checksum_path = destination.with_suffix(destination.suffix + ".sha256")
+        checksum_tmp = checksum_path.with_suffix(checksum_path.suffix + ".tmp")
+        checksum_tmp.write_text(checksum + "\n", encoding="ascii")
+        os.replace(checksum_tmp, checksum_path)
         os.replace(temporary, destination)
-        index_shards.append(
-            {
-                "shard_id": shard.shard_id,
-                "filename": filename,
-                "record_count": len(shard.ordered_ids),
-                "ordered_ids_sha256": hashlib.sha256(
-                    _canonical_json(list(shard.ordered_ids)).encode("utf-8")
-                ).hexdigest(),
-                "sha256": checksum,
-                "specs": specs,
-                "complete": True,
-            }
+        self._record(shard, filename=filename, checksum=checksum, specs=specs)
+
+    def finalize(self) -> Path:
+        if self._finalized:
+            if self._reopened_published:
+                return self._index_path
+            raise CacheError("tensor cache writer was already finalized")
+        if not self._index_shards:
+            raise CacheError("tensor cache requires at least one shard")
+        index_tmp = self._index_path.with_suffix(self._index_path.suffix + ".tmp")
+        index_tmp.write_text(
+            json.dumps(self._index_payload(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
         )
-    index = {
-        "schema_version": _INDEX_SCHEMA,
-        "namespace": namespace,
-        "fingerprint": fingerprint.to_dict(),
-        "record_count": len(all_ids),
-        "ordered_ids_sha256": hashlib.sha256(
-            _canonical_json(all_ids).encode("utf-8")
-        ).hexdigest(),
-        "shards": index_shards,
-    }
-    index_path = output / "index.json"
-    index_tmp = index_path.with_suffix(index_path.suffix + ".tmp")
-    index_tmp.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    os.replace(index_tmp, index_path)
-    return index_path
+        os.replace(index_tmp, self._index_path)
+        self._finalized = True
+        return self._index_path
+
+
+def write_tensor_cache(
+    output_dir: str | Path,
+    *,
+    namespace: str,
+    fingerprint: CacheFingerprint,
+    shards: Iterable[TensorShard],
+) -> Path:
+    """Atomically write checksummed shards, publishing the index only after completion."""
+    writer = TensorCacheWriter(
+        output_dir,
+        namespace=namespace,
+        fingerprint=fingerprint,
+    )
+    for shard in shards:
+        writer.add(shard)
+    return writer.finalize()
 
 
 def load_tensor_cache(
@@ -376,6 +520,9 @@ def load_tensor_cache(
         path = output / filename
         if not path.is_file() or _sha256(path) != descriptor.get("sha256"):
             raise CacheError(f"tensor cache shard checksum mismatch: {filename}")
+        sidecar = path.with_suffix(path.suffix + ".sha256")
+        if _read_checksum(sidecar) != descriptor.get("sha256"):
+            raise CacheError(f"tensor cache shard checksum sidecar mismatch: {filename}")
         try:
             payload = torch.load(path, map_location="cpu", weights_only=True)
         except Exception as exc:
@@ -411,9 +558,7 @@ def load_tensor_cache(
         actual_specs = _validate_shard(shard, expected_fingerprint)
         if actual_specs != descriptor.get("specs"):
             raise CacheError("tensor cache shard shape/dtype specs differ from index")
-        loaded.append(
-            shard
-        )
+        loaded.append(shard)
         all_ids.extend(ordered_ids)
     if len(all_ids) != len(set(all_ids)) or len(all_ids) != index.get("record_count"):
         raise CacheError("tensor cache contains duplicate IDs or wrong total count")

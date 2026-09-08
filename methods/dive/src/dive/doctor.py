@@ -43,6 +43,13 @@ _STAGE_PARENT_ARTIFACTS = {
         ("validate_data", "text_unit_maps_dir", "shared"),
         ("baseline_validate", "report", "shared"),
     ),
+    "cache_build": (
+        ("validate_data", "audit", "shared"),
+        ("validate_data", "native_frame_maps_dir", "shared"),
+        ("validate_data", "text_unit_maps_dir", "shared"),
+        ("baseline_validate", "report", "shared"),
+        ("evidence_warmup", "reference", "shared"),
+    ),
     "mine_finalize": (
         ("baseline_validate", "report", "shared"),
         ("evidence_warmup", "reference", "shared"),
@@ -185,7 +192,7 @@ def _resource_error_code(field: str) -> str:
         return "UNVERIFIED_TEXT_MAPPING"
     if "audit" in field:
         return "MISSING_SCHEMA_AUDIT"
-    if "checkpoint" in field or "weights" in field:
+    if "checkpoint" in field or "weights" in field or "initialization" in field:
         return "MISSING_BASELINE_CHECKPOINT"
     if "experiment_plan" in field:
         return "MISSING_LOCKED_EXPERIMENT_PLAN"

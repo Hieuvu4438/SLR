@@ -190,6 +190,21 @@ def test_seds_masks_remove_only_explicit_cls_for_local_features():
         normalize_seds_video_mask(legacy, local_length=3)
 
 
+def test_native_scalar_starts_convert_to_half_open_pose_windows_with_padding():
+    model = FakeSeds()
+    adapter = SedsAdapter(model, upstream_root=SEDS_ROOT)
+    batch = _video_batch()
+    padded = replace(
+        batch,
+        clip_starts=torch.tensor([[0, -1], [0, 16]]),
+        legacy_video_mask=torch.tensor([[0, 0, 1], [0, 0, 0]]),
+    )
+    assert adapter.local_pose_grid(padded, "canonical").tolist() == [
+        [[0, 16], [-1, -1]],
+        [[0, 16], [16, 32]],
+    ]
+
+
 def test_receptive_fields_follow_native_filtered_pose_to_raw_mapping():
     adapter = SedsAdapter(FakeSeds(), upstream_root=SEDS_ROOT)
     batch = replace(
@@ -298,9 +313,16 @@ def test_adapter_features_prelogit_units_rf_and_checkpoint_provenance(tmp_path):
     torch.testing.assert_close(
         torch.linalg.vector_norm(units.token_features, dim=-1), torch.ones(2, 1)
     )
+    pooled_units = adapter.pool_text_units(adapter.encode_text_native(_text_batch()), mappings)
+    torch.testing.assert_close(pooled_units.token_features, units.token_features)
+    assert torch.equal(pooled_units.token_validity, units.token_validity)
 
     rgb = adapter.rgb_local_features(_video_batch(), "canonical")
     assert rgb.streams["rgb_local"].shape == (2, 2, 4)
+    assert adapter.local_pose_grid(_video_batch(), "canonical").tolist() == [
+        [[0, 16], [16, 32]],
+        [[0, 16], [16, 32]],
+    ]
     rf = adapter.describe_receptive_field(_video_batch(), "canonical")
     assert len(rf) == 4
     assert rf[0]["interval_convention"] == "half_open"

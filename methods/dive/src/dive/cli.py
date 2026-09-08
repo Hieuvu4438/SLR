@@ -10,6 +10,8 @@ from .adapters import SedsAdapterError, SedsDataError, SedsReproductionError
 from .artifacts import ArtifactError
 from .baseline import BaselineValidationError, validate_seds_baseline
 from .baseline_training import BaselineTrainingError, train_seds_baseline
+from .cache import CacheError
+from .cache_build import CacheBuildError, build_frozen_train_cache
 from .config import ConfigError, dump_resolved, load_config
 from .data.manifest import ManifestError
 from .data.prepare import PreparationError, prepare_how2sign_data
@@ -43,6 +45,7 @@ def _parser() -> argparse.ArgumentParser:
             "baseline_train",
             "baseline_validate",
             "warmup",
+            "cache_build",
             "validate_data",
             "mine_finalize",
             "evaluate_test",
@@ -95,6 +98,14 @@ def _parser() -> argparse.ArgumentParser:
     evidence_warmup.add_argument("--eval-text-batch-size", type=int)
     evidence_warmup.add_argument("--device", default="cuda:0")
     evidence_warmup.add_argument("--resume", action="store_true")
+
+    cache = subparsers.add_parser("cache", help="build checksummed frozen tensor caches")
+    cache_commands = cache.add_subparsers(dest="cache_command", required=True)
+    cache_build = cache_commands.add_parser("build", help="build a frozen feature cache")
+    cache_build.add_argument("--config", required=True)
+    cache_build.add_argument("--kind", required=True, choices=("frozen_train",))
+    cache_build.add_argument("--batch-size", type=int, default=32)
+    cache_build.add_argument("--device", default="cuda:0")
 
     smoke = subparsers.add_parser("smoke", help="run fixture-only end-to-end correctness smoke")
     smoke.add_argument("--config", required=True)
@@ -153,6 +164,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             print(json.dumps(report, indent=2, sort_keys=True))
             return 0
+        if args.command == "cache" and args.cache_command == "build":
+            report = build_frozen_train_cache(
+                config,
+                batch_size=args.batch_size,
+                device=args.device,
+            )
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return 0
         if args.command == "smoke":
             root = Path(__file__).resolve().parents[4]
             report = run_fixture_smoke(config, args.output_dir, repository_root=root)
@@ -165,6 +184,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         ArtifactError,
         BaselineTrainingError,
         BaselineValidationError,
+        CacheBuildError,
+        CacheError,
         CheckpointError,
         DataValidationError,
         EvidenceWarmupError,

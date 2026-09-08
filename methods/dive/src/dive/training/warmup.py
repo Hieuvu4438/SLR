@@ -341,7 +341,7 @@ def _export_reference(
         "fingerprints": dict(fingerprints),
         "dtype": "float32",
         "git_revision": git_revision,
-        "torch_version": torch.__version__,
+        "torch_version": str(torch.__version__),
         "selection_split": "dev",
         "selection_metric": "mean_t2v_v2t_r1",
     }

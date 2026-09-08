@@ -42,6 +42,8 @@ dive validate-data --config /path/to/resolved_config.yaml
 dive baseline train --config methods/dive/configs/how2sign_base.yaml --device cuda:0
 dive baseline validate --config methods/dive/configs/how2sign_base.yaml --split dev
 dive evidence warmup --config methods/dive/configs/how2sign_base.yaml --device cuda:0
+dive cache build --config methods/dive/configs/how2sign_base.yaml \
+  --kind frozen_train --batch-size 32 --device cuda:0
 dive smoke --config methods/dive/configs/fixture.yaml --output-dir artifacts/dive/smoke
 pytest -q methods/dive/tests
 ```
@@ -95,3 +97,12 @@ FP32 epochs. Dev selection scores the complete gallery in bounded video/text blo
 materializes the full video-by-text-by-clip-by-unit interaction tensor. Epoch checkpoints restore
 model, optimizer, scheduler, RNG and candidate history under `--resume`; the earliest best mean
 bidirectional R@1 winner is exported and registered as an immutable FP32 reference.
+
+`cache build --kind frozen_train` converts that frozen stack into five separate sample-addressed
+caches: native B0 video, native B0 text, pre-context RGB locals, contextual text units, and FP32
+reference locals with conservative raw-time receptive fields. Shared text IDs are encoded once per
+shard and expanded back to every manifest sample, preserving the full 31,019-row multi-positive
+training pool. Fingerprints bind baseline/reference states, validated input hashes, tokenizer and
+unit lineage, grid/masks, dtype, config and implementation revision. Shards are written one at a
+time; interrupted builds reopen and validate completed shards instead of restarting, while the
+public index and run-state record remain absent until exact manifest coverage is complete.

@@ -128,3 +128,22 @@ def test_evidence_warmup_cli_requires_all_registered_parent_artifacts(tmp_path, 
     assert "MISSING_PARENT_ARTIFACT: validate_data audit/frame/unit maps" in (
         capsys.readouterr().err
     )
+
+
+def test_frozen_cache_cli_requires_registered_reference_and_data(tmp_path, capsys):
+    config = load_config(FIXTURE_CONFIG)
+    config["run"]["output_root"] = str(tmp_path / "runs")
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    result = main(
+        [
+            "cache",
+            "build",
+            "--config",
+            str(path),
+            "--kind",
+            "frozen_train",
+        ]
+    )
+    assert result == 2
+    assert "MISSING_PARENT_ARTIFACT: controlled data lineage" in capsys.readouterr().err

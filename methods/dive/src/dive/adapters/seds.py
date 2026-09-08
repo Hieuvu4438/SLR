@@ -799,6 +799,14 @@ class SedsAdapter:
         unit_mapping: Sequence[Sequence[MappedTextUnit]],
     ) -> NativeTextFeatures:
         native = self.encode_text_native(text_batch)
+        return self.pool_text_units(native, unit_mapping)
+
+    def pool_text_units(
+        self,
+        native: NativeTextFeatures,
+        unit_mapping: Sequence[Sequence[MappedTextUnit]],
+    ) -> NativeTextFeatures:
+        """Pool already-encoded native tokens without rerunning the frozen text encoder."""
         if len(unit_mapping) != len(native.text_ids):
             raise SedsAdapterError("unit mappings do not match the SEDS text batch")
         max_units = max((len(mapping) for mapping in unit_mapping), default=0)
@@ -849,6 +857,25 @@ class SedsAdapter:
             streams={"rgb_local": local},
             metadata={"grid_id": grid_id, "tap": "get_sign_output.rgb_before_clip_encode_image"},
         )
+
+    def local_pose_grid(self, video_batch: SedsVideoBatch, grid_id: str) -> Tensor:
+        """Convert native scalar starts to explicit half-open local pose windows."""
+        if grid_id != video_batch.grid_id:
+            raise SedsAdapterError("requested pose grid differs from the prepared video batch")
+        starts = video_batch.clip_starts
+        if starts.ndim != 2:
+            raise SedsAdapterError("native SEDS clip starts must have shape [B,N]")
+        validity = normalize_seds_video_mask(
+            video_batch.legacy_video_mask, local_length=starts.shape[1]
+        )
+        if not torch.equal(starts >= 0, validity):
+            raise SedsAdapterError("native SEDS clip starts disagree with local validity")
+        slide_windows = int(getattr(self.model.task_config, "slide_windows", 16))
+        ends = torch.where(validity, starts + slide_windows, torch.full_like(starts, -1))
+        grid = torch.stack((starts, ends), dim=-1)
+        if bool((ends[validity] > video_batch.body_pose.shape[1]).any()):
+            raise SedsAdapterError("native SEDS local pose window exceeds padded pose frames")
+        return grid
 
     def clone_local_pose_encoder(self) -> nn.Module:
         slide_windows = int(getattr(self.model.task_config, "slide_windows", 16))

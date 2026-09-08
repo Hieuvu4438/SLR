@@ -169,7 +169,8 @@ def _video_components(
     }
     if rgb.streams.get("rgb_local") is None:
         raise EvidenceWarmupError("SEDS adapter omitted the pre-context local RGB tap")
-    return pose, rgb.streams["rgb_local"], native.clip_starts, rgb.validity
+    grid = adapter.local_pose_grid(native, native.grid_id)
+    return pose, rgb.streams["rgb_local"], grid, rgb.validity
 
 
 def _seed_correctness(seed: int) -> None:
