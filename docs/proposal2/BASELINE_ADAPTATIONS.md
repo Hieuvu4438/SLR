@@ -59,7 +59,8 @@ Still open before a controlled B0 claim:
   checkpoint.
 
 The `dive baseline validate` stage is wired to this adapter and controlled manifest bridge. It
-requires `validate_data.audit`, performs a real unpadded parity comparison against the upstream
+requires `validate_data.audit` plus its checksummed native frame-lineage directory and rejects any
+replay difference before encoding. It performs a real unpadded parity comparison against the upstream
 `get_similarity_logits(..., is_train=True)` dispatcher after removing `exp(logit_scale)`, checks
 prelogit cosine bounds, evaluates the full ID-addressed dev gallery, and registers checksummed
 scores and metrics. The command is dev-only so its existence cannot provide an accidental test

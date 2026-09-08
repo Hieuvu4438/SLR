@@ -67,6 +67,7 @@ class SedsManifestInputBuilder:
         self._loader_class = loader_module.H2_DataLoader_pose
         self._collate = loader_module.H2_pose_collate_fn
         tokenizer_path = self.upstream_root / self.reproduction.external_assets["tokenizer"]
+        self.tokenizer_path = tokenizer_path.resolve()
         try:
             self._tokenizer = tokenizer_module.SimpleTokenizer(str(tokenizer_path))
         except Exception as exc:
@@ -144,7 +145,16 @@ class SedsManifestInputBuilder:
 
             helper.GetTotalFrameList = capture_total_frames
             try:
-                sample = helper[0]
+                video_feature, video_mask = helper._get_rawvideo(0)
+                sample, sentence_id = helper._get_pose(0)
+                if sentence_id != record.text_id:
+                    raise SedsDataError("native SEDS loader returned a different text ID")
+                sample["RGB"] = video_feature
+                # The pinned collate function requires text fields even when the caller only
+                # consumes video tensors; preserve that native contract here.
+                sample["text"] = helper._get_text(record.text_id)
+                if torch.sum(video_mask) != torch.sum(sample["right"]["pose_mask"]):
+                    raise SedsDataError("native SEDS RGB and pose masks have different lengths")
             except Exception as exc:
                 raise SedsDataError(
                     f"pinned SEDS preprocessing failed for {record.sample_id}"
@@ -221,6 +231,28 @@ class SedsManifestInputBuilder:
             raise SedsDataError("pinned SEDS body mask has an unexpected shape")
         if batch["RGB_feature"].shape != (len(records), 1024, feature_len, 1):
             raise SedsDataError("pinned SEDS RGB features have an unexpected shape")
+        if not torch.isfinite(batch["RGB_feature"]).all():
+            raise SedsDataError("pinned SEDS RGB features contain NaN/Inf")
+        valid_clip_counts = (batch["body_mask"] == 0).sum(dim=1) - 1
+        expected_clip_counts = torch.tensor(
+            [
+                min(
+                    feature_len,
+                    max(
+                        1,
+                        math.ceil(
+                            (len(indices) - self.reproduction.model_arguments["slide_windows"])
+                            / self.reproduction.model_arguments["windows_stride"]
+                        )
+                        + 1,
+                    ),
+                )
+                for indices in pose_raw_frame_indices
+            ],
+            dtype=valid_clip_counts.dtype,
+        )
+        if not torch.equal(valid_clip_counts.cpu(), expected_clip_counts):
+            raise SedsDataError("native SEDS mask count differs from selected pose geometry")
         return SedsVideoBatch(
             sample_ids=tuple(record.sample_id for record in records),
             right_pose=batch["right_pose"],

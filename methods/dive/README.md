@@ -53,13 +53,19 @@ rejects cross-split source-video leakage and translation hash drift, then regist
 the shared seed run state. Prepared paths can resolve from that state, so users do not copy paths
 between commands. The fixture config intentionally does not pretend to supply these files.
 
+For the real How2Sign/SEDS profile, validation also runs every RGB/pose pair through the pinned
+native preprocessing path. It rejects nonfinite or malformed RGB tensors and RGB/pose clip-count
+disagreement, records the exact selected raw pose frames and clip starts after native filtering,
+binds the exact native tokenizer, and registers this lineage directory alongside the audit.
+
 The main How2Sign config names the intended SEDS resource paths even when the external files are
 absent. The doctor command resolves null prepared-data fields only through checksummed
 `prepare_data` run-state outputs, rehashes those parents, and reports concrete missing SEDS/I3D
 paths. It does not discover arbitrary files or substitute the local CiCo checkpoint for SEDS.
 
 `baseline validate` is a real controlled-dev runner, not a shape-only stub. It requires the
-registered data audit, verifies and loads the locked checkpoint, encodes the full controlled dev
+registered data audit and native lineage, verifies and loads the locked checkpoint, replays that
+lineage exactly, encodes the full controlled dev
 manifest, compares a real unpadded probe against the released score dispatcher at FP32 tolerances,
 computes the complete prelogit `[video,text]` gallery with stable IDs, evaluates multi-positive
 retrieval, and registers the score archive and report under the shared run state. It permits only

@@ -225,6 +225,28 @@ def _atomic_scores(path: Path, scores: np.ndarray, video_ids: Sequence[str], tex
     os.replace(temporary, path)
 
 
+def _load_native_frame_rows(
+    path: Path, records: Sequence[SampleRecord]
+) -> dict[str, Mapping[str, Any]]:
+    rows: list[Mapping[str, Any]] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                value = json.loads(line)
+                if not isinstance(value, Mapping):
+                    raise BaselineValidationError("native frame-map row must be an object")
+                rows.append(value)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BaselineValidationError(f"native frame-map artifact is unreadable: {path}") from exc
+    ids = [row.get("sample_id") for row in rows]
+    expected = [record.sample_id for record in records]
+    if ids != expected or len(set(ids)) != len(ids):
+        raise BaselineValidationError("native frame-map order/IDs differ from manifest")
+    if any(row.get("schema_version") != "seds_native_frame_map.v1" for row in rows):
+        raise BaselineValidationError("native frame-map schema is invalid")
+    return {str(row["sample_id"]): row for row in rows}
+
+
 def validate_seds_baseline(
     config: Mapping[str, Any],
     *,
@@ -245,9 +267,13 @@ def validate_seds_baseline(
     resolver = ArtifactResolver(config)
     try:
         data_audit = resolver.resolve("validate_data", "audit", scope="shared")
+        native_frame_maps_parent = resolver.resolve(
+            "validate_data", "native_frame_maps_dir", scope="shared"
+        )
     except ArtifactError as exc:
         raise BaselineValidationError(
-            "MISSING_PARENT_ARTIFACT: validate_data.audit must pass before baseline validation"
+            "MISSING_PARENT_ARTIFACT: validate_data.audit/native_frame_maps_dir must pass "
+            "before baseline validation"
         ) from exc
     manifest_path = _configured_or_prepared(
         data, resolver, f"{split}_manifest", f"{split}_manifest"
@@ -269,6 +295,9 @@ def validate_seds_baseline(
         expected_sample_ids=[record.sample_id for record in records],
     )
     map_by_id: dict[str, CompactFrameMap] = {item.sample_id: item for item in frame_maps}
+    native_frame_rows = _load_native_frame_rows(
+        native_frame_maps_parent.path / f"{split}.jsonl", records
+    )
     relevance_path = relevance_dir / f"{split}.jsonl"
     text_records = tuple(dict.fromkeys(record.text_id for record in records))
     first_by_text: dict[str, SampleRecord] = {}
@@ -307,6 +336,22 @@ def validate_seds_baseline(
             raw_frame_counts=[map_by_id[item.sample_id].pose_input_step_count for item in part],
             frames_per_second=[map_by_id[item.sample_id].fps for item in part],
         )
+        if native.pose_raw_frame_indices is None:
+            raise BaselineValidationError("native SEDS builder omitted pose-to-raw frame maps")
+        valid_counts = (native.legacy_video_mask == 0).sum(dim=1) - 1
+        for index, (item, selected) in enumerate(
+            zip(part, native.pose_raw_frame_indices, strict=True)
+        ):
+            audited = native_frame_rows[item.sample_id]
+            valid_count = int(valid_counts[index])
+            if (
+                list(selected) != audited.get("selected_pose_raw_frame_indices")
+                or native.clip_starts[index, :valid_count].tolist()
+                != audited.get("clip_starts_in_selected_pose_steps")
+            ):
+                raise BaselineValidationError(
+                    f"native SEDS frame lineage changed after data audit: {item.sample_id}"
+                )
         video_parts.append(_cpu_video(adapter.encode_video_native(_video_to(native, target_device))))
     text_parts: list[NativeTextFeatures] = []
     for start in range(0, len(unique_text_records), batch_size):
@@ -369,7 +414,7 @@ def validate_seds_baseline(
         "metrics": metrics.to_dict(),
     }
     _atomic_json(report_path, report)
-    parents = [data_audit]
+    parents = [data_audit, native_frame_maps_parent]
     if checkpoint_parent is not None:
         parents.append(checkpoint_parent)
     registered = resolver.record_stage(

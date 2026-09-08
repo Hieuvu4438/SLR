@@ -22,8 +22,14 @@ _PREPARED_PARENT_FIELDS = {
     "data.frame_maps_dir": "frame_maps_dir",
 }
 _STAGE_PARENT_ARTIFACTS = {
-    "baseline_train": (("validate_data", "audit", "shared"),),
-    "baseline_validate": (("validate_data", "audit", "shared"),),
+    "baseline_train": (
+        ("validate_data", "audit", "shared"),
+        ("validate_data", "native_frame_maps_dir", "shared"),
+    ),
+    "baseline_validate": (
+        ("validate_data", "audit", "shared"),
+        ("validate_data", "native_frame_maps_dir", "shared"),
+    ),
     "warmup": (
         ("validate_data", "audit", "shared"),
         ("baseline_validate", "report", "shared"),

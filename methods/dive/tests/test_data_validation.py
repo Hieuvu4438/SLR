@@ -5,8 +5,10 @@ from dataclasses import asdict
 from pathlib import Path
 
 import pytest
+import torch
 import yaml
 
+from dive.adapters import SedsVideoBatch
 from dive.cli import main
 from dive.config import load_config
 from dive.data.manifest import SampleRecord
@@ -196,3 +198,45 @@ def test_validation_rejects_source_video_leakage(tmp_path):
     _write_jsonl(Path(config["data"]["dev_manifest"]), [asdict(leaked)])
     with pytest.raises(DataValidationError, match="SPLIT_SOURCE_OVERLAP"):
         validate_prepared_data(config)
+
+
+def test_how2sign_validation_registers_native_seds_frame_lineage(tmp_path, monkeypatch):
+    config, records = _prepared_config(tmp_path)
+    config["data"]["dataset"] = "how2sign"
+
+    class FakeBuilder:
+        def __init__(self, **kwargs):
+            del kwargs
+            self.tokenizer_path = Path(config["text"]["tokenizer_artifact"]).resolve()
+
+        def build_video_batch(self, split_records, *, raw_frame_counts, frames_per_second):
+            count = len(split_records)
+            mask = torch.ones(count, 65, dtype=torch.long)
+            mask[:, :2] = 0
+            starts = torch.full((count, 64), -1, dtype=torch.long)
+            starts[:, 0] = 0
+            return SedsVideoBatch(
+                sample_ids=tuple(record.sample_id for record in split_records),
+                right_pose=torch.zeros(count, 1, 21, 2),
+                left_pose=torch.zeros(count, 1, 21, 2),
+                body_pose=torch.zeros(count, 1, 7, 2),
+                clip_starts=starts,
+                legacy_video_mask=mask,
+                rgb_features=torch.zeros(count, 1024, 64, 1),
+                grid_id="canonical",
+                raw_frame_counts=tuple(raw_frame_counts),
+                frames_per_second=tuple(frames_per_second),
+                pose_raw_frame_indices=tuple((0,) for _ in split_records),
+            )
+
+    monkeypatch.setattr("dive.data.validation.SedsManifestInputBuilder", FakeBuilder)
+    report = validate_prepared_data(config)
+    assert report["native_seds_inputs"]["rgb_pose_clip_counts_equal"] is True
+    root = Path(config["run"]["output_root"]) / "shared" / "seed17"
+    native = root / "native_frame_maps" / "train.jsonl"
+    rows = [json.loads(line) for line in native.read_text(encoding="utf-8").splitlines()]
+    assert [row["sample_id"] for row in rows] == [
+        record.sample_id for record in records["train"]
+    ]
+    state = json.loads((root / "run_state.json").read_text(encoding="utf-8"))
+    assert "native_frame_maps_dir" in state["stages"]["validate_data"]["outputs"]

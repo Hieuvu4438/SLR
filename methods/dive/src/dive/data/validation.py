@@ -7,6 +7,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Mapping
 
+from dive.adapters import SedsDataError, SedsManifestInputBuilder, SedsReproductionError
 from dive.artifacts import ArtifactError, ArtifactResolver
 from dive.config import config_hash
 
@@ -49,6 +50,15 @@ def _source_overlaps(split_records: Mapping[str, tuple[Any, ...]]) -> dict[str, 
     return overlaps
 
 
+def _atomic_jsonl(path: Path, rows: list[Mapping[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + f".tmp-{os.getpid()}")
+    with temporary.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(dict(row), sort_keys=True) + "\n")
+    os.replace(temporary, path)
+
+
 def validate_prepared_data(
     config: Mapping[str, Any], *, output_path: str | Path | None = None
 ) -> dict[str, Any]:
@@ -57,13 +67,16 @@ def validate_prepared_data(
     if not isinstance(data, Mapping):
         raise DataValidationError("data config must be a mapping")
     resolver = ArtifactResolver(config)
+    prepared_parents = []
 
     def configured_or_prepared(field: str, output_name: str) -> Path:
         value = data.get(field)
         if value is not None:
             return _required_path(value, f"data.{field}")
         try:
-            return resolver.resolve("prepare_data", output_name, scope="shared").path
+            parent = resolver.resolve("prepare_data", output_name, scope="shared")
+            prepared_parents.append(parent)
+            return parent.path
         except ArtifactError as exc:
             raise DataValidationError(
                 f"MISSING_PARENT_ARTIFACT: data.{field} is null and prepare_data.{output_name} "
@@ -117,11 +130,13 @@ def validate_prepared_data(
     if not frame_maps_dir.is_dir():
         raise DataValidationError("data.frame_maps_dir must be a directory")
     frame_map_hashes: dict[str, str] = {}
+    compact_maps: dict[str, tuple[Any, ...]] = {}
     for split, split_records in records.items():
         frame_path = frame_maps_dir / f"{split}.jsonl"
         maps = load_compact_frame_maps(
             frame_path, expected_sample_ids=[record.sample_id for record in split_records]
         )
+        compact_maps[split] = maps
         if [item.frame_map_key for item in maps] != [
             record.frame_map_key for record in split_records
         ]:
@@ -188,6 +203,104 @@ def validate_prepared_data(
             "preview": repeated[:10],
         }
 
+    native_input_audit: dict[str, Any] | None = None
+    native_frame_maps_dir: Path | None = None
+    baseline = config.get("baseline")
+    if (
+        data.get("dataset") == "how2sign"
+        and isinstance(baseline, Mapping)
+        and baseline.get("family") == "seds"
+    ):
+        upstream_root = _required_path(data.get("upstream_root"), "data.upstream_root")
+        reproduction_config = _required_path(
+            baseline.get("reproduction_config"), "baseline.reproduction_config"
+        )
+        try:
+            builder = SedsManifestInputBuilder(
+                upstream_root=upstream_root,
+                reproduction_config=reproduction_config,
+                pose_root=pose_root,
+                rgb_root=rgb_root,
+            )
+            text = config.get("text")
+            tokenizer_artifact = _required_path(
+                text.get("tokenizer_artifact") if isinstance(text, Mapping) else None,
+                "text.tokenizer_artifact",
+            )
+            if tokenizer_artifact.resolve() != builder.tokenizer_path:
+                raise DataValidationError(
+                    "UNVERIFIED_TEXT_MAPPING: configured tokenizer differs from native SEDS"
+                )
+            native_frame_maps_dir = resolver.output_path("shared", "native_frame_maps")
+            split_audits: dict[str, Any] = {}
+            for split, split_records in records.items():
+                maps_by_id = {item.sample_id: item for item in compact_maps[split]}
+                native_rows: list[Mapping[str, Any]] = []
+                for start in range(0, len(split_records), 32):
+                    part = split_records[start : start + 32]
+                    native = builder.build_video_batch(
+                        part,
+                        raw_frame_counts=[
+                            maps_by_id[item.sample_id].video_frame_count for item in part
+                        ],
+                        frames_per_second=[maps_by_id[item.sample_id].fps for item in part],
+                    )
+                    if native.pose_raw_frame_indices is None:
+                        raise DataValidationError(
+                            "NATIVE_SEDS_INPUT_INVALID: selected raw-frame maps are absent"
+                        )
+                    valid_counts = (native.legacy_video_mask == 0).sum(dim=1) - 1
+                    for index, (record, selected) in enumerate(
+                        zip(part, native.pose_raw_frame_indices, strict=True)
+                    ):
+                        valid_count = int(valid_counts[index])
+                        starts = native.clip_starts[index, :valid_count].tolist()
+                        raw_map = maps_by_id[record.sample_id]
+                        native_rows.append(
+                            {
+                                "schema_version": "seds_native_frame_map.v1",
+                                "sample_id": record.sample_id,
+                                "video_id": record.video_id,
+                                "stored_frame_map_key": record.frame_map_key,
+                                "raw_frame_count": raw_map.video_frame_count,
+                                "fps": raw_map.fps,
+                                "selected_pose_raw_frame_indices": list(selected),
+                                "selected_pose_step_count": len(selected),
+                                "valid_clip_count": valid_count,
+                                "clip_starts_in_selected_pose_steps": starts,
+                                "mapping_policy": "native_seds_pose_selected_raw_frames_v1",
+                                "rgb_alignment_status": (
+                                    "native_count_equal_pose_clips_raw_intervals_pending_asset_audit"
+                                ),
+                            }
+                        )
+                native_path = native_frame_maps_dir / f"{split}.jsonl"
+                _atomic_jsonl(native_path, native_rows)
+                split_audits[split] = {
+                    "record_count": len(native_rows),
+                    "sha256": hashlib.sha256(native_path.read_bytes()).hexdigest(),
+                    "selected_pose_step_min": min(
+                        row["selected_pose_step_count"] for row in native_rows
+                    ),
+                    "selected_pose_step_max": max(
+                        row["selected_pose_step_count"] for row in native_rows
+                    ),
+                    "valid_clip_min": min(row["valid_clip_count"] for row in native_rows),
+                    "valid_clip_max": max(row["valid_clip_count"] for row in native_rows),
+                }
+            native_input_audit = {
+                "schema_version": "seds_native_input_audit.v1",
+                "upstream_root": str(upstream_root.resolve()),
+                "reproduction_config": str(reproduction_config.resolve()),
+                "tokenizer_artifact": str(tokenizer_artifact.resolve()),
+                "native_frame_maps_dir": str(native_frame_maps_dir),
+                "splits": split_audits,
+                "rgb_pose_clip_counts_equal": True,
+                "all_rgb_features_finite": True,
+            }
+        except (SedsDataError, SedsReproductionError) as exc:
+            raise DataValidationError(f"NATIVE_SEDS_INPUT_INVALID: {exc}") from exc
+
     report: dict[str, Any] = {
         "schema_version": "data_validation.v1",
         "ready": True,
@@ -230,6 +343,7 @@ def validate_prepared_data(
             "directory": str(frame_maps_dir.resolve()),
             "sha256_by_split": frame_map_hashes,
         },
+        "native_seds_inputs": native_input_audit,
         "split_id_overlaps": id_overlaps,
         "split_source_overlaps": source_overlaps,
         "duplicate_text_groups": duplicate_text,
@@ -248,5 +362,13 @@ def validate_prepared_data(
     temporary = output.with_suffix(output.suffix + f".tmp-{os.getpid()}")
     temporary.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(temporary, output)
-    resolver.record_stage("validate_data", {"audit": output}, scope="shared")
+    outputs = {"audit": output}
+    if native_frame_maps_dir is not None:
+        outputs["native_frame_maps_dir"] = native_frame_maps_dir
+    resolver.record_stage(
+        "validate_data",
+        outputs,
+        scope="shared",
+        parents=tuple(dict.fromkeys(prepared_parents)),
+    )
     return report
