@@ -60,9 +60,23 @@ _STAGE_PARENT_ARTIFACTS = {
         ("cache_frozen_train", "native_text", "shared"),
         ("cache_frozen_train", "report", "shared"),
     ),
+    "audit_export": (
+        ("validate_data", "train_manifest", "shared"),
+        ("mine_propose", "proposals", "shared"),
+        ("mine_propose", "report", "shared"),
+    ),
     "mine_finalize": (
+        ("validate_data", "audit", "shared"),
+        ("validate_data", "train_manifest", "shared"),
+        ("validate_data", "text_unit_maps_dir", "shared"),
+        ("mine_propose", "proposals", "shared"),
+        ("mine_propose", "report", "shared"),
+        ("audit_export", "annotation_template", "shared"),
+        ("audit_export", "report", "shared"),
         ("baseline_validate", "report", "shared"),
         ("evidence_warmup", "reference", "shared"),
+        ("cache_frozen_train", "reference_local", "shared"),
+        ("cache_frozen_train", "report", "shared"),
     ),
     "evaluate_test": (("validate_data", "audit", "shared"),),
 }

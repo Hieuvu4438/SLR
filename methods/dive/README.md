@@ -46,6 +46,10 @@ dive cache build --config methods/dive/configs/how2sign_base.yaml \
   --kind frozen_train --batch-size 32 --device cuda:0
 dive mine --config methods/dive/configs/how2sign_base.yaml \
   --phase propose --device cuda:0
+dive audit export --config methods/dive/configs/how2sign_base.yaml
+# After a real reviewer completes the annotation and decision files, set
+# mining.schema_audit_artifact to the completed decision path, then:
+dive mine --config /path/to/audit-resolved-config.yaml --phase finalize
 dive smoke --config methods/dive/configs/fixture.yaml --output-dir artifacts/dive/smoke
 pytest -q methods/dive/tests
 ```
@@ -116,3 +120,13 @@ anchors. Known positives, excluded negatives and the reverse cross-pair relation
 Only strict-numeric candidates with complete native unit mappings enter the blinded-audit proposal
 artifact; all semantic rejections and shortlist coverage remain separately auditable. Shortlists and
 exact pair-score chunks are checksummed and resumable, and no student/test representation is read.
+
+`audit export` deterministically samples the proposed strict-numeric pairs and emits a blinded
+annotation template with both sign-video paths plus an unfilled schema-decision template. The
+decision loader requires completed 1–5 ratings, reviewer identity, explicit UTC decision time,
+annotation checksum, immutable pair order/content and an explicit `accepted` or `rejected` status.
+It never derives acceptance from model output or ratings. `mine --phase finalize` runs only for an
+accepted decision, snapshots the human artifacts, revalidates every train caption/unit mapping,
+and writes a checksummed pre-support bank whose fingerprint binds B0, reference, timestamps,
+proposal configuration and audit content. Rejected proposals remain fully reconstructable in a
+separate artifact, and support fields remain pending until the support stage runs.

@@ -479,9 +479,8 @@ def required_resource_paths(config: Mapping[str, Any], stage: str) -> dict[str, 
             "text.tokenizer_artifact": text.get("tokenizer_artifact"),
         },
         "mine_propose": {},
+        "audit_export": {"data.video_root": data.get("video_root")},
         "mine_finalize": {
-            "data.train_manifest": data.get("train_manifest"),
-            "data.train_relations": data.get("train_relations"),
             "mining.schema_audit_artifact": mining.get("schema_audit_artifact"),
         },
         "evaluate_test": {

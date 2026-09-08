@@ -157,3 +157,24 @@ def test_mine_propose_cli_requires_registered_validated_caches(tmp_path, capsys)
     result = main(["mine", "--config", str(path), "--phase", "propose", "--device", "cpu"])
     assert result == 2
     assert "MISSING_PARENT_ARTIFACT: validated train relations" in capsys.readouterr().err
+
+
+def test_audit_export_cli_requires_registered_proposals(tmp_path, capsys):
+    config = load_config(HERE / "configs" / "how2sign_base.yaml")
+    config["run"]["output_root"] = str(tmp_path / "runs")
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    result = main(["audit", "export", "--config", str(path)])
+    assert result == 2
+    assert "MISSING_PARENT_ARTIFACT: train proposals" in capsys.readouterr().err
+
+
+def test_mine_finalize_cli_requires_all_registered_parents(tmp_path, capsys):
+    config = load_config(HERE / "configs" / "how2sign_base.yaml")
+    config["run"]["output_root"] = str(tmp_path / "runs")
+    config["mining"]["schema_audit_artifact"] = str(tmp_path / "decision.json")
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    result = main(["mine", "--config", str(path), "--phase", "finalize"])
+    assert result == 2
+    assert "MISSING_PARENT_ARTIFACT: proposal, audit export" in capsys.readouterr().err

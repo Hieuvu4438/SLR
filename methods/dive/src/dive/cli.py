@@ -22,6 +22,8 @@ from .data.text_units import TextUnitError
 from .data.validation import DataValidationError, validate_prepared_data
 from .doctor import inspect_environment, write_report
 from .evidence_warmup import EvidenceWarmupError, warmup_seds_evidence
+from .mining.audit_runner import AuditRunError, export_proposal_audit
+from .mining.finalize_runner import FinalizeRunError, finalize_train_contrasts
 from .mining.neighbors import NeighborError
 from .mining.runner import MiningRunError, propose_train_contrasts
 from .models.evidence import EvidenceError
@@ -50,6 +52,7 @@ def _parser() -> argparse.ArgumentParser:
             "cache_build",
             "validate_data",
             "mine_propose",
+            "audit_export",
             "mine_finalize",
             "evaluate_test",
         ),
@@ -112,10 +115,15 @@ def _parser() -> argparse.ArgumentParser:
 
     mine = subparsers.add_parser("mine", help="mine and validate train-only contrast pairs")
     mine.add_argument("--config", required=True)
-    mine.add_argument("--phase", required=True, choices=("propose",))
+    mine.add_argument("--phase", required=True, choices=("propose", "finalize"))
     mine.add_argument("--device", default="cuda:0")
     mine.add_argument("--pooled-query-chunk-size", type=int, default=512)
     mine.add_argument("--pair-chunk-size", type=int, default=2048)
+
+    audit = subparsers.add_parser("audit", help="export blinded human-audit materials")
+    audit_commands = audit.add_subparsers(dest="audit_command", required=True)
+    audit_export = audit_commands.add_parser("export", help="export proposal annotation templates")
+    audit_export.add_argument("--config", required=True)
 
     smoke = subparsers.add_parser("smoke", help="run fixture-only end-to-end correctness smoke")
     smoke.add_argument("--config", required=True)
@@ -191,6 +199,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             print(json.dumps(report, indent=2, sort_keys=True))
             return 0
+        if args.command == "mine" and args.phase == "finalize":
+            report = finalize_train_contrasts(config)
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return 0
+        if args.command == "audit" and args.audit_command == "export":
+            report = export_proposal_audit(config)
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return 0
         if args.command == "smoke":
             root = Path(__file__).resolve().parents[4]
             report = run_fixture_smoke(config, args.output_dir, repository_root=root)
@@ -201,6 +217,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     except (
         ArtifactError,
+        AuditRunError,
         BaselineTrainingError,
         BaselineValidationError,
         CacheBuildError,
@@ -209,6 +226,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         DataValidationError,
         EvidenceWarmupError,
         EvidenceError,
+        FinalizeRunError,
         ManifestError,
         MiningRunError,
         NeighborError,

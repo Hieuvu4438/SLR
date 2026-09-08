@@ -4,7 +4,7 @@ import hashlib
 import json
 import random
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 from .neighbors import NeighborProposal
 
@@ -16,6 +16,7 @@ def export_audit_template(
     *,
     sample_size: int,
     seed: int,
+    sample_context: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, object]:
     """Export blinded human-rating rows; never infer or prefill semantic judgments."""
     if sample_size <= 0:
@@ -28,6 +29,10 @@ def export_audit_template(
     for proposal in selected:
         if proposal.sample_i not in captions or proposal.sample_j not in captions:
             raise ValueError(f"missing audit caption for {proposal.pair_id}")
+        left_context = {} if sample_context is None else sample_context.get(proposal.sample_i)
+        right_context = {} if sample_context is None else sample_context.get(proposal.sample_j)
+        if not isinstance(left_context, Mapping) or not isinstance(right_context, Mapping):
+            raise ValueError(f"missing audit sample context for {proposal.pair_id}")
         rows.append(
             {
                 "schema_version": "contrast_audit_row.v1",
@@ -36,6 +41,10 @@ def export_audit_template(
                 "sample_j": proposal.sample_j,
                 "text_i": captions[proposal.sample_i],
                 "text_j": captions[proposal.sample_j],
+                "video_i": left_context.get("video_path"),
+                "video_j": right_context.get("video_path"),
+                "sign_language": left_context.get("sign_language"),
+                "text_language": left_context.get("text_language"),
                 "category": None,
                 "positive_i_rating": None,
                 "positive_j_rating": None,

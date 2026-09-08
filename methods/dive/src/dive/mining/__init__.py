@@ -1,4 +1,5 @@
 from .audit import export_audit_template
+from .audit_runner import AuditRunError, export_proposal_audit
 from .bank import (
     BankBuild,
     BankError,
@@ -8,6 +9,7 @@ from .bank import (
     load_bank,
     write_bank,
 )
+from .finalize_runner import FinalizeRunError, finalize_train_contrasts
 from .neighbors import (
     NeighborError,
     NeighborProposal,
@@ -39,10 +41,12 @@ from .support import (
 
 __all__ = [
     "AtomicSlotResult",
+    "AuditRunError",
     "BankBuild",
     "BankError",
     "BankRecord",
     "EndpointSupport",
+    "FinalizeRunError",
     "NeighborError",
     "NeighborProposal",
     "PairSupport",
@@ -58,7 +62,9 @@ __all__ = [
     "audit_sparse_shortlist_coverage",
     "differential_support_weights",
     "export_audit_template",
+    "export_proposal_audit",
     "finalize_numeric_bank",
+    "finalize_train_contrasts",
     "interval_union_length",
     "jsd_stability",
     "load_bank",

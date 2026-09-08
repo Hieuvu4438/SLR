@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 import torch
 
 from dive.artifacts import ArtifactResolver
@@ -12,6 +14,9 @@ from dive.config import config_hash, load_config
 from dive.data.manifest import SampleRecord
 from dive.data.text_units import MappedTextUnit, unitize
 from dive.mining.neighbors import NeighborProposal, _pair_id
+from dive.mining.audit_runner import export_proposal_audit
+from dive.mining.bank import load_bank
+from dive.mining.finalize_runner import FinalizeRunError, finalize_train_contrasts
 from dive.mining.runner import (
     _load_native_features,
     _semantic_candidates,
@@ -211,6 +216,10 @@ def test_semantic_candidates_reject_incomplete_numeric_target():
 def test_propose_runner_registers_train_only_outputs_and_is_idempotent(tmp_path, monkeypatch):
     config = load_config(Path(__file__).resolve().parents[1] / "configs" / "how2sign_base.yaml")
     config["run"]["output_root"] = str(tmp_path / "runs")
+    video_root = tmp_path / "videos"
+    video_root.mkdir()
+    (video_root / "video.mp4").write_bytes(b"fixture-video")
+    config["data"]["video_root"] = str(video_root)
     config["mining"]["shortlist_per_direction"] = 2
     config["mining"]["rerank_topk"] = 1
     config["mining"]["shortlist_audit_queries"] = 2
@@ -277,6 +286,9 @@ def test_propose_runner_registers_train_only_outputs_and_is_idempotent(tmp_path,
     cache_dir = resolver.output_path("shared", "fixture_cache")
     video_dir = cache_dir / "video"
     text_dir = cache_dir / "text"
+    reference_dir = cache_dir / "reference"
+    reference_dir.mkdir(parents=True)
+    (reference_dir / "fixture.bin").write_bytes(b"reference-local-with-timestamps")
     generator = torch.Generator().manual_seed(233)
     pooled_video = torch.nn.functional.normalize(torch.randn(4, 5, generator=generator), dim=-1)
     pooled_text = torch.nn.functional.normalize(torch.randn(4, 5, generator=generator), dim=-1)
@@ -335,23 +347,32 @@ def test_propose_runner_registers_train_only_outputs_and_is_idempotent(tmp_path,
     )
     resolver.record_stage(
         "cache_frozen_train",
-        {"native_video": video_dir, "native_text": text_dir, "report": cache_report},
+        {
+            "native_video": video_dir,
+            "native_text": text_dir,
+            "reference_local": reference_dir,
+            "report": cache_report,
+        },
         scope="shared",
     )
 
     def fake_lineages(_path, *, expected_texts):
         return {
             text_id: SimpleNamespace(
+                unit_mapping_sha256=f"mapping-{text_id}",
                 units=tuple(
                     MappedTextUnit(unit, (index,), (index,), True)
                     for index, unit in enumerate(unitize(text))
-                )
+                ),
             )
             for text_id, text in expected_texts.items()
         }
 
     monkeypatch.setattr("dive.mining.runner.load_text_unit_lineage", fake_lineages)
     monkeypatch.setattr("dive.mining.runner._repository_revision", lambda _root: "a" * 40)
+    monkeypatch.setattr("dive.mining.audit_runner._repository_revision", lambda _root: "a" * 40)
+    monkeypatch.setattr("dive.mining.finalize_runner._repository_revision", lambda _root: "a" * 40)
+    monkeypatch.setattr("dive.mining.finalize_runner.load_text_unit_lineage", fake_lineages)
     report = propose_train_contrasts(
         config,
         device="cpu",
@@ -385,3 +406,96 @@ def test_propose_runner_registers_train_only_outputs_and_is_idempotent(tmp_path,
         pair_chunk_size=2,
     )
     assert repeated == {key: value for key, value in recovered.items() if key != "artifacts"}
+    audit = export_proposal_audit(config)
+    assert audit["exported_size"] == min(2, report["eligible_proposal_count"])
+    assert audit["student_outputs_included"] is False
+    annotation_parent = resolver.resolve("audit_export", "annotation_template", scope="shared")
+    annotation_rows = [
+        json.loads(line) for line in annotation_parent.path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert all(
+        row["video_i"] == str((video_root / "video.mp4").resolve()) for row in annotation_rows
+    )
+    assert all(row["rater_id"] is None and "student" not in row for row in annotation_rows)
+    decision_parent = resolver.resolve("audit_export", "decision_template", scope="shared")
+    decision = json.loads(decision_parent.path.read_text(encoding="utf-8"))
+    assert decision["audit_status"] is None and decision["decision_author"] is None
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["stages"].pop("audit_export")
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    audit_recovered = export_proposal_audit(config)
+    assert audit_recovered["artifacts"]["annotation_template"]["sha256"]
+    assert export_proposal_audit(config) == {
+        key: value for key, value in audit_recovered.items() if key != "artifacts"
+    }
+
+    completed_annotation = tmp_path / "completed_annotation.jsonl"
+    completed_rows = []
+    for row in annotation_rows:
+        row.update(
+            {
+                "category": "strict_numeric_length",
+                "positive_i_rating": 5,
+                "positive_j_rating": 5,
+                "cross_i_j_negative_rating": 1,
+                "cross_j_i_negative_rating": 1,
+                "uncertain": False,
+                "rater_id": "human-01",
+            }
+        )
+        completed_rows.append(row)
+    completed_annotation.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in completed_rows),
+        encoding="utf-8",
+    )
+    decision.update(
+        {
+            "audit_id": "fixture-human-audit",
+            "audit_status": "accepted",
+            "annotation_path": str(completed_annotation),
+            "annotation_sha256": hashlib.sha256(completed_annotation.read_bytes()).hexdigest(),
+            "decision_author": "fixture-human",
+            "decision_date_utc": "2026-09-08T12:00:00Z",
+            "rationale": "fixture exercises the explicit human gate",
+        }
+    )
+    completed_decision = tmp_path / "completed_decision.json"
+    completed_decision.write_text(json.dumps(decision, sort_keys=True), encoding="utf-8")
+    config["mining"]["schema_audit_artifact"] = str(completed_decision)
+
+    dependency_dir = resolver.output_path("shared", "fixture_dependencies")
+    dependency_dir.mkdir()
+    baseline_report = dependency_dir / "baseline_report.json"
+    baseline_report.write_text("{}\n", encoding="utf-8")
+    reference = dependency_dir / "reference.pt"
+    reference.write_bytes(b"reference")
+    resolver.record_stage("baseline_validate", {"report": baseline_report}, scope="shared")
+    resolver.record_stage("evidence_warmup", {"reference": reference}, scope="shared")
+    finalized = finalize_train_contrasts(config)
+    assert finalized["audit_status"] == "accepted"
+    assert finalized["bank_record_count"] == audit["proposal_count"]
+    bank_parent = resolver.resolve("mine_finalize", "pre_support_bank", scope="shared")
+    assert (
+        len(load_bank(bank_parent.path, finalized["bank_fingerprint"]))
+        == finalized["bank_record_count"]
+    )
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["stages"].pop("mine_finalize")
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    finalized_recovered = finalize_train_contrasts(config)
+    assert finalized_recovered["artifacts"]["pre_support_bank"]["sha256"]
+
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["stages"].pop("mine_finalize")
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    rejection_path = (
+        Path(config["run"]["output_root"])
+        / "shared"
+        / "seed17"
+        / "mining"
+        / "finalized"
+        / "semantic_rejections.jsonl"
+    )
+    rejection_path.write_text("{}\n", encoding="utf-8")
+    with pytest.raises(FinalizeRunError, match="rejection artifact is invalid"):
+        finalize_train_contrasts(config)
