@@ -306,6 +306,51 @@ def seds_prelogit_fusion_scores(
     return mixed, i2t, t2i
 
 
+def seds_prelogit_paired_scores(
+    fusion_hidden: Tensor,
+    text_hidden: Tensor,
+    video_validity: Tensor,
+    text_validity: Tensor,
+    *,
+    dual_mix: float = 0.5,
+    temperature: float = 0.07,
+) -> tuple[Tensor, Tensor, Tensor]:
+    """Score aligned video/text pairs without materializing a Cartesian pair matrix."""
+    if fusion_hidden.ndim != 3 or text_hidden.ndim != 3:
+        raise SedsAdapterError("paired SEDS inputs must have shapes [P,N,D]")
+    if fusion_hidden.shape[0] != text_hidden.shape[0]:
+        raise SedsAdapterError("paired SEDS inputs must have the same pair count")
+    if fusion_hidden.shape[-1] != text_hidden.shape[-1]:
+        raise SedsAdapterError("paired SEDS feature dimensions differ")
+    if video_validity.shape != fusion_hidden.shape[:2] or video_validity.dtype != torch.bool:
+        raise SedsAdapterError("paired SEDS video mask is invalid")
+    if text_validity.shape != text_hidden.shape[:2] or text_validity.dtype != torch.bool:
+        raise SedsAdapterError("paired SEDS text mask is invalid")
+    if not 0 <= dual_mix <= 1 or temperature <= 0:
+        raise SedsAdapterError("paired SEDS mixing/temperature is invalid")
+    if not bool(video_validity.any(dim=1).all()) or not bool(text_validity.any(dim=1).all()):
+        raise SedsAdapterError("paired SEDS inputs contain an empty valid sequence")
+    video = _safe_normalize(fusion_hidden, video_validity, "paired SEDS fusion video")
+    text = _safe_normalize(text_hidden, text_validity, "paired SEDS native text")
+    similarities = torch.einsum("pnd,pmd->pnm", video, text)
+    text_mask = text_validity[:, None, :]
+    video_mask = video_validity[:, :, None]
+    video_to_text = torch.softmax(
+        (similarities / temperature).masked_fill(~text_mask, float("-inf")), dim=-1
+    )
+    i2t = ((video_to_text * similarities).sum(dim=-1) * video_validity).sum(dim=-1)
+    i2t = i2t / video_validity.sum(dim=-1)
+    text_to_video = torch.softmax(
+        (similarities / temperature).masked_fill(~video_mask, float("-inf")), dim=-2
+    )
+    t2i = ((text_to_video * similarities).sum(dim=-2) * text_validity).sum(dim=-1)
+    t2i = t2i / text_validity.sum(dim=-1)
+    mixed = dual_mix * i2t + (1.0 - dual_mix) * t2i
+    if not torch.isfinite(mixed).all() or bool((mixed.abs() > 1.0 + 1e-5).any()):
+        raise SedsAdapterError("paired SEDS prelogit score escaped its cosine bounds")
+    return mixed, i2t, t2i
+
+
 class SedsLocalPoseEncoder(nn.Module):
     """Clone of the SEDS GCN/sign-conv path before the global CLIP transformer."""
 
@@ -628,7 +673,11 @@ class SedsAdapter:
             sample_ids=ids,
             pooled=pooled,
             validity=validity,
-            streams={"pose_hidden": pose_hidden, "rgb_hidden": rgb_hidden},
+            streams={
+                "pose_hidden": pose_hidden,
+                "rgb_hidden": rgb_hidden,
+                "fusion_hidden": fusion,
+            },
             metadata={"grid_id": video_batch.grid_id, "legacy_mask_convention": "0_valid"},
         )
 
@@ -661,18 +710,20 @@ class SedsAdapter:
         self, video_features: NativeVideoFeatures, text_features: NativeTextFeatures
     ) -> PrelogitScores:
         required_streams = {"pose_hidden", "rgb_hidden"}
-        if set(video_features.streams) != required_streams:
+        if not required_streams <= set(video_features.streams):
             raise SedsAdapterError("SEDS video features lack exact pose/RGB contextual streams")
         self.model.eval()
         with torch.no_grad():
             # Fusion remains the locked native selected branch; scoring itself is pure and
             # masks padding before softmax rather than reproducing the upstream padding leak.
-            legacy_mask = (~video_features.validity).to(torch.long)
-            fusion = self.model.fusion(
-                video_features.streams["pose_hidden"],
-                video_features.streams["rgb_hidden"],
-                legacy_mask,
-            )
+            fusion = video_features.streams.get("fusion_hidden")
+            if fusion is None:
+                legacy_mask = (~video_features.validity).to(torch.long)
+                fusion = self.model.fusion(
+                    video_features.streams["pose_hidden"],
+                    video_features.streams["rgb_hidden"],
+                    legacy_mask,
+                )
             mixed, i2t, t2i = seds_prelogit_fusion_scores(
                 fusion,
                 text_features.token_features,
@@ -709,7 +760,7 @@ class SedsAdapter:
         """Compare DIVE to the released scorer after removing every padded position."""
         if not hasattr(self.model, "get_similarity_logits"):
             raise SedsAdapterError("SEDS model lacks the native similarity dispatcher")
-        if set(video_features.streams) != {"pose_hidden", "rgb_hidden"}:
+        if not {"pose_hidden", "rgb_hidden"} <= set(video_features.streams):
             raise SedsAdapterError("SEDS parity probe requires exact pose/RGB contextual streams")
         video_counts = video_features.validity.sum(dim=1)
         text_counts = text_features.token_validity.sum(dim=1)

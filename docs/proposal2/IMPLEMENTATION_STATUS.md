@@ -129,3 +129,8 @@ are never counted as a benchmark replication.
   `pytest -q methods/dive/tests`: 144 passed; `pytest -q`: 268 passed. The real cache doctor names
   exactly the absent I3D/CLIP/checkpoint and upstream-stage parents, and the build exits before any
   unverified output is created.
+- Sparse real-scale mining kernels now compute pooled top-K in query blocks with deterministic
+  boundary ties, require both cross-pairs to remain eligible, rerank only aligned S0 pairs, and run
+  exact full-gallery coverage only for the fixed audit anchors. The native cache stores the selected
+  fusion hidden state, and checksummed pair-score memmaps resume at completed chunk boundaries.
+  Dense-oracle, serialization, corruption and resume fixtures pass; `pytest -q`: 274 passed.

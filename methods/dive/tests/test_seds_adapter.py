@@ -21,6 +21,7 @@ from dive.adapters import (
     normalize_seds_text_mask,
     normalize_seds_video_mask,
     seds_prelogit_fusion_scores,
+    seds_prelogit_paired_scores,
     load_seds_reproduction,
 )
 from dive.config import load_config
@@ -174,6 +175,32 @@ def test_seds_score_masks_padding_before_softmax():
         torch.tensor([[True, True, False]] * 3),
     )[0]
     torch.testing.assert_close(padded, base)
+
+
+def test_aligned_pair_scorer_matches_cartesian_diagonal_with_padding():
+    generator = torch.Generator().manual_seed(223)
+    video = torch.randn(4, 3, 5, generator=generator)
+    text = torch.randn(4, 2, 5, generator=generator)
+    video_mask = torch.tensor(
+        [[True, True, True], [True, True, False], [True, False, False], [True, True, False]]
+    )
+    text_mask = torch.tensor([[True, True], [True, False], [True, True], [True, False]])
+    cartesian = seds_prelogit_fusion_scores(
+        video,
+        text,
+        video_mask,
+        text_mask,
+        dual_mix=0.3,
+    )
+    paired = seds_prelogit_paired_scores(
+        video,
+        text,
+        video_mask,
+        text_mask,
+        dual_mix=0.3,
+    )
+    for paired_values, cartesian_values in zip(paired, cartesian, strict=True):
+        torch.testing.assert_close(paired_values, cartesian_values.diagonal())
 
 
 def test_seds_masks_remove_only_explicit_cls_for_local_features():

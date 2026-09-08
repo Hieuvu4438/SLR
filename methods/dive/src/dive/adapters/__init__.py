@@ -9,6 +9,7 @@ from .seds import (
     normalize_seds_text_mask,
     normalize_seds_video_mask,
     seds_prelogit_fusion_scores,
+    seds_prelogit_paired_scores,
 )
 from .seds_data import (
     SedsDataError,
@@ -45,4 +46,5 @@ __all__ = [
     "load_seds_reproduction",
     "hash_seds_input",
     "seds_prelogit_fusion_scores",
+    "seds_prelogit_paired_scores",
 ]

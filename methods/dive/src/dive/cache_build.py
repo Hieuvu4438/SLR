@@ -556,8 +556,7 @@ def build_frozen_train_cache(
                     ordered_ids=sample_ids,
                     tensors={
                         "pooled": native_features.pooled.float(),
-                        "pose_hidden": native_features.streams["pose_hidden"].float(),
-                        "rgb_hidden": native_features.streams["rgb_hidden"].float(),
+                        "fusion_hidden": native_features.streams["fusion_hidden"].float(),
                     },
                     masks={"video": native_features.validity},
                     timestamps={},
