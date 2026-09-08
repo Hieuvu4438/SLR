@@ -9,7 +9,7 @@ are never counted as a benchmark replication.
 | M01 — skeleton | passed | Method-owned package/config/CLI and deterministic fixture exist under `methods/dive`; editable install and `dive --help` work. Unknown/missing keys and semantic violations fail closed. |
 | M02 — evaluator oracle | passed | ID-based `[video,text]` evaluator passes asymmetric-direction, exact-tie, duplicate-ID, multi-positive and nonfinite/full-gallery guards. |
 | M03 — score/loss core | passed | Dense/chunked masked late interaction, centered composition and retrieval/local/pair kernels pass padding, empty evidence, cosine-bound, four-margin, H-denominator, gradient and FP64 gradcheck oracles. |
-| M04 — data contracts | not_started | Manifest, units, temporal frame maps, pose and relation validators remain. |
+| M04 — data contracts | passed | Versioned manifest/split guards, normalized word/numeric units, native subword offset mapping with partial-target rejection, deterministic canonical/shifted grids, raw-time RF mapping, per-step pose normalization, P/C construction and bool-mask collation have independent fixtures. |
 | M05 — SEDS adapter | blocked | Requires pinned SEDS snapshot `434e3f7...` plus compatible actual checkpoint/artifacts. The typed adapter protocol is present; real parity is not. |
 | M06 — B0 reproduction | blocked | No controlled SEDS How2Sign reproduction config/checkpoint has been verified. Existing `H2S_sota.pth` is a CiCo checkpoint and is not relabeled as SEDS. |
 | M07 — evidence/reference | not_started | Evidence encoder, warm-up, copy/storage identity and RF tests remain. |
@@ -40,3 +40,5 @@ are never counted as a benchmark replication.
 - `ruff check methods/dive/src methods/dive/tests conftest.py`: all checks passed.
 - `dive doctor --config methods/dive/configs/fixture.yaml --stage fixture --output
   artifacts/dive/doctor_fixture.json`: ready=true; PyTorch CUDA and RTX 5880 Ada detected.
+- `pytest -q methods/dive/tests`: 31 passed after M04 data contracts.
+- `pytest -q`: 155 passed after M04; no ELSC/shared regression.
