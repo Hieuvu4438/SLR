@@ -12,6 +12,7 @@ from ocem.config import ConfigError, load_config
 from ocem.data.adaptation import AdaptationPlanError, build_p14t_adaptation_plan
 from ocem.data.datasets.how2sign import prepare_how2sign
 from ocem.data.datasets.phoenix import prepare_phoenix
+from ocem.data.extraction import ExtractionRunError, extract_p14t_i3d_features
 from ocem.data.features import FeatureAuditError, audit_feature_cache
 from ocem.data.pseudoclips import PseudoClipError, validate_pseudoclip_loader
 from ocem.data.pseudolabels import PseudoLabelError, generate_p14t_pseudolabel_index
@@ -215,6 +216,31 @@ def _features_adapt(args: argparse.Namespace) -> int:
     return 0 if report["status"] == "PASS" else 5
 
 
+def _features_extract(args: argparse.Namespace) -> int:
+    report = extract_p14t_i3d_features(
+        manifest_dir=args.manifest_dir,
+        video_root=args.video_root,
+        checkpoint=args.checkpoint,
+        expected_checkpoint_sha256=args.checkpoint_sha256,
+        output_root=args.output_root,
+        temporal_root=args.temporal_root,
+        shared_root=args.shared_root,
+        extractor=args.extractor,
+        expected_extractor_sha256=args.extractor_sha256,
+        upstream_i3d=args.upstream_i3d,
+        expected_upstream_i3d_sha256=args.upstream_i3d_sha256,
+        splits=args.split,
+        device=args.device,
+        batch_size=args.batch_size,
+        min_free_disk_gib=args.min_free_disk_gib,
+        min_free_gpu_gib=args.min_free_gpu_gib,
+        report_interval=args.report_interval,
+        dry_run=args.dry_run,
+    )
+    _write_json(report, args.output)
+    return 0 if report["status"] in {"PASS", "PLANNED"} else 5
+
+
 def _state_checkpoint(args: argparse.Namespace) -> int:
     state = load_implementation_state(args.state)
     checkpoint = render_checkpoint(state)
@@ -302,14 +328,34 @@ def build_parser() -> argparse.ArgumentParser:
         "features", help="Adapt, extract, and audit frozen I3D features."
     )
     feature_commands = features.add_subparsers(dest="features_command", required=True)
-    for name, help_text in (("extract", "Extract feature shards and temporal supports."),):
-        feature_parser = feature_commands.add_parser(name, help=help_text)
-        _add_output(feature_parser)
-        feature_parser.set_defaults(
-            handler=_not_implemented,
-            command_path=["features", name],
-            required_work_package="WP-04",
-        )
+    extract = feature_commands.add_parser(
+        "extract", help="Extract manifest-scoped P14T adapted I3D features."
+    )
+    extract.add_argument("--manifest-dir", required=True)
+    extract.add_argument("--video-root", required=True)
+    extract.add_argument("--checkpoint", required=True)
+    extract.add_argument("--checkpoint-sha256", required=True)
+    extract.add_argument("--output-root", required=True)
+    extract.add_argument("--temporal-root", required=True)
+    extract.add_argument("--shared-root", required=True)
+    extract.add_argument("--extractor", required=True)
+    extract.add_argument("--extractor-sha256", required=True)
+    extract.add_argument("--upstream-i3d", required=True)
+    extract.add_argument("--upstream-i3d-sha256", required=True)
+    extract.add_argument(
+        "--split",
+        action="append",
+        choices=("train", "validation", "test"),
+        required=True,
+    )
+    extract.add_argument("--device", default="cuda:0")
+    extract.add_argument("--batch-size", type=int, default=32)
+    extract.add_argument("--min-free-disk-gib", type=float, default=20.0)
+    extract.add_argument("--min-free-gpu-gib", type=float, default=12.0)
+    extract.add_argument("--report-interval", type=int, default=25)
+    extract.add_argument("--dry-run", action="store_true")
+    extract.add_argument("--output")
+    extract.set_defaults(handler=_features_extract)
     adapt = feature_commands.add_parser("adapt", help="Run locked P14T train-only adaptation.")
     adapt.add_argument("--index", required=True)
     adapt.add_argument("--index-sha256", required=True)
@@ -443,6 +489,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (
         ConfigError,
         FeatureAuditError,
+        ExtractionRunError,
         AdaptationPlanError,
         AdaptationRunError,
         I3DAdaptationError,

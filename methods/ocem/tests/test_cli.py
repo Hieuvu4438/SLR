@@ -25,11 +25,11 @@ def test_all_contract_commands_are_registered() -> None:
 
 
 def test_future_command_fails_explicitly(capsys) -> None:
-    exit_code = main(["features", "extract"])
+    exit_code = main(["train"])
     payload = json.loads(capsys.readouterr().out)
     assert exit_code == NOT_IMPLEMENTED_EXIT
     assert payload["status"] == "NOT_IMPLEMENTED"
-    assert payload["required_work_package"] == "WP-04"
+    assert payload["required_work_package"] == "WP-07"
 
 
 def test_doctor_returns_observed_report(capsys, tmp_path) -> None:
