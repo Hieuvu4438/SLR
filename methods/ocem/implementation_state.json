@@ -5,13 +5,14 @@
   "research_decision": "GO_WITH_CONDITIONS",
   "method": "OCEM",
   "seds_dependency": false,
-  "updated_at": "2026-09-10T20:22:21+07:00",
+  "updated_at": "2026-09-10T20:34:20+07:00",
   "current_work_package": "WP-04",
   "completed_work_packages": [
     "WP-00",
     "WP-01",
     "WP-02",
     "WP-03",
+    "WP-05",
     "WP-06"
   ],
   "gates": {
@@ -176,11 +177,22 @@
         "validation_test_overlap": 0,
         "ready_for_adapted_feature_extraction": true
       }
+    },
+    "baseline_adapters": {
+      "cico_phoenix2014t": {
+        "path": "methods/ocem/locks/cico_adapter_parity.phoenix2014t.json",
+        "status": "PASS",
+        "BASE_01": "PASS",
+        "BASE_02": "PASS",
+        "real_checkpoint": true,
+        "full_gallery_reproduction": false,
+        "ready_after_feature_lock": true
+      }
     }
   },
   "resource_lock_sha256": "52f27a2db04a009c5b2716a313ae3e906b8ac8e480f4a647223ade5b25ad4026",
   "feature_lock_sha256": null,
-  "last_run_id": "wp04_phoenix_adaptation_train_seed0",
+  "last_run_id": "wp05_cico_adapter_parity_phoenix2014t",
   "open_blockers": [
     "Create feature locks before promoting the P14T dataset-specific G0 gate to PASS.",
     "How2Sign train has 31,047 named MP4 files plus one valid MP4 with corrupt filename `�~`; the same corrupt entry exists in the local archive, so its sample ID must be established without guessing before H2S resource verification can pass.",

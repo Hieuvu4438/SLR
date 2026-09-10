@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
+from ocem.baselines.cico_parity import CiCoParityError, validate_cico_adapter_parity
 from ocem.config import ConfigError, load_config
 from ocem.data.adaptation import AdaptationPlanError, build_p14t_adaptation_plan
 from ocem.data.datasets.how2sign import prepare_how2sign
@@ -244,6 +245,30 @@ def _features_extract(args: argparse.Namespace) -> int:
     return 0 if report["status"] in {"PASS", "PLANNED"} else 5
 
 
+def _baseline_validate_adapter(args: argparse.Namespace) -> int:
+    report = validate_cico_adapter_parity(
+        checkpoint=args.checkpoint,
+        expected_checkpoint_sha256=args.checkpoint_sha256,
+        clip_checkpoint=args.clip_checkpoint,
+        expected_clip_sha256=args.clip_sha256,
+        upstream_root=args.upstream_root,
+        expected_source_hashes={
+            "modeling": args.modeling_sha256,
+            "module_clip": args.module_clip_sha256,
+            "tokenization": args.tokenization_sha256,
+            "metrics": args.metrics_sha256,
+        },
+        manifest=args.manifest,
+        feature_root=args.feature_root,
+        sample_ids=args.sample_id,
+        device=args.device,
+        atol=args.atol,
+        rtol=args.rtol,
+    )
+    _write_json(report, args.output)
+    return 0 if report["status"] == "PASS" else 5
+
+
 def _state_checkpoint(args: argparse.Namespace) -> int:
     state = load_implementation_state(args.state)
     checkpoint = render_checkpoint(state)
@@ -454,8 +479,33 @@ def build_parser() -> argparse.ArgumentParser:
     validate_adaptation_step.add_argument("--output", required=True)
     validate_adaptation_step.set_defaults(handler=_features_validate_adaptation_step)
     baseline = commands.add_parser("baseline", help="Operate the pinned CiCo baseline.")
-    _nested_placeholder(
-        baseline, "baseline", [("reproduce", "Run baseline reproduction.", "WP-08")]
+    baseline_commands = baseline.add_subparsers(dest="baseline_command", required=True)
+    validate_adapter = baseline_commands.add_parser(
+        "validate-adapter", help="Run real-checkpoint CiCo adapter parity."
+    )
+    validate_adapter.add_argument("--checkpoint", required=True)
+    validate_adapter.add_argument("--checkpoint-sha256", required=True)
+    validate_adapter.add_argument("--clip-checkpoint", required=True)
+    validate_adapter.add_argument("--clip-sha256", required=True)
+    validate_adapter.add_argument("--upstream-root", required=True)
+    validate_adapter.add_argument("--modeling-sha256", required=True)
+    validate_adapter.add_argument("--module-clip-sha256", required=True)
+    validate_adapter.add_argument("--tokenization-sha256", required=True)
+    validate_adapter.add_argument("--metrics-sha256", required=True)
+    validate_adapter.add_argument("--manifest", required=True)
+    validate_adapter.add_argument("--feature-root", required=True)
+    validate_adapter.add_argument("--sample-id", action="append", required=True)
+    validate_adapter.add_argument("--device", default="cuda:0")
+    validate_adapter.add_argument("--atol", type=float, default=1e-5)
+    validate_adapter.add_argument("--rtol", type=float, default=1e-4)
+    validate_adapter.add_argument("--output", required=True)
+    validate_adapter.set_defaults(handler=_baseline_validate_adapter)
+    reproduce = baseline_commands.add_parser("reproduce", help="Run baseline reproduction.")
+    _add_output(reproduce)
+    reproduce.set_defaults(
+        handler=_not_implemented,
+        command_path=["baseline", "reproduce"],
+        required_work_package="WP-08",
     )
     diagnose = commands.add_parser("diagnose", help="Run preregistered mechanism diagnostics.")
     _nested_placeholder(
@@ -498,6 +548,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return int(args.handler(args))
     except (
         ConfigError,
+        CiCoParityError,
         FeatureAuditError,
         ExtractionRunError,
         AdaptationPlanError,

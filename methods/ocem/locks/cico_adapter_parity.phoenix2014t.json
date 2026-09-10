@@ -1,0 +1,88 @@
+{
+  "schema_version": "ocem.cico_adapter_parity_lock.v1",
+  "status": "PASS",
+  "scope": "WP-05 adapter parity with the released P14T CiCo checkpoint; not full-gallery baseline reproduction and not G1",
+  "created_at": "2026-09-10T20:34:20+07:00",
+  "checkpoint": {
+    "path": "artifacts/pretrained/ph_sota.pth",
+    "sha256": "598b822aafd1b3cd767b290410ea1191f723dc87dd096775c3670e224b6e7b9f"
+  },
+  "clip_checkpoint": {
+    "path": "artifacts/pretrained/ViT-B-32.pt",
+    "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+  },
+  "pinned_upstream_sha256": {
+    "modeling": "aeaf646b720f4cf051950dcbac68347196bed4b1c856d9aa833b063ed09e9e7f",
+    "module_clip": "8fae51a298872c9d9e07e898a7f09a117cdfbd21a0fc51c2f3a608af2ee6d2d5",
+    "tokenization": "60af2eccd9d1208933213b57d24c9ac337ca4be935bc6550a7300b656a6f3bb5",
+    "metrics": "103e93090de14f55d1db61e40ecf1fbc814670975bd9b9ab1fe341d0c95f0a6f",
+    "phoenix_eval_loader": "76313d752b45a71c46e8e06043055d6c498041648364da36be2ba4b8347e7bd9",
+    "phoenix_train_loader": "76587fe31fafd16a499d857604aa707f16ce335599dcc5c6c6205e1bec990d36"
+  },
+  "fixture": {
+    "manifest": "methods/ocem/runs/wp03_phoenix/manifests/train.jsonl",
+    "manifest_sha256": "2bf9b8bc261f2734f62f6918c67ef24e5594e573b45fcb84708da8d03c9fe374",
+    "sample_ids": [
+      "11December_2009_Friday_tagesschau-3516",
+      "04May_2010_Tuesday_heute-457"
+    ],
+    "source_window_counts": [24, 250],
+    "selection_cases": ["all_then_zero_pad", "np.linspace_to_64"],
+    "canonical_equals_augmented": true,
+    "metric_cases": ["tie", "duplicate_caption_group", "different_sample_caption_order"]
+  },
+  "contract": {
+    "matrix_orientation": "[video,text]",
+    "raw_score_before_external_scale": true,
+    "internal_valid_mask": "True=valid",
+    "upstream_video_mask": "CLS=1,valid=0,padding=1",
+    "internal_softmax_temperature": 0.07,
+    "external_logit_scale": 100.00000762939453,
+    "dual_mix": 0.5,
+    "mix_design": "balance",
+    "legacy_eval_uses_same_mixed_matrix_for_both_directions": true
+  },
+  "fp32_deterministic_parity": {
+    "device": "cpu",
+    "encode_max_absolute_error": 0.0,
+    "score_max_absolute_error": 0.0000019073486328125,
+    "loss_absolute_error": 0.0000001043081283569336,
+    "gradient_max_absolute_error": 0.00000476837158203125,
+    "update_max_absolute_error": 0.000000003725290298461914,
+    "metric_exact": true,
+    "absolute_tolerance": 0.00001,
+    "relative_tolerance": 0.0001,
+    "report": {
+      "path": "methods/ocem/runs/wp05_cico/parity.phoenix2014t.json",
+      "sha256": "b162745440a5d76a31991eacacadbc0aea6fd0ed47c13e9b2c12ad5c708e0744"
+    }
+  },
+  "failed_attempts_preserved": [
+    {
+      "path": "methods/ocem/runs/wp05_cico/parity.failed_cuda_fp16.json",
+      "sha256": "10dfcb94d8a7ad878349edbd87a7267892de8c07a541ed9ecb80bd3fceabe999",
+      "diagnosis": "CUDA mixed-FP16 encode/score/loss were exact and update error was 1.96e-7, but repeated equivalent backward graphs differed by 1.95e-3, above the preregistered gradient tolerance. Tolerance was not relaxed."
+    }
+  ],
+  "upstream_execution_findings": [
+    {
+      "severity": "reproduction_relevant",
+      "finding": "The released evaluator computes dual_mix*I2T+(1-dual_mix)*T2I and passes that identical matrix to both directional metric paths.",
+      "adapter_policy": "Expose distinct raw directional matrices and a separately named legacy evaluation mix."
+    },
+    {
+      "severity": "reproduction_relevant",
+      "finding": "The P14T training loader constructs video_path_retrain from self.features_path instead of self.features_path_retrain, while the evaluation loader reads both paths correctly.",
+      "adapter_policy": "Do not silently patch the legacy reproduction; record the defect and separate legacy reproduction from matched corrected training."
+    }
+  ],
+  "BASE_01": "PASS",
+  "BASE_02": "PASS",
+  "source_sha256": {
+    "adapter": "19f2cf4e75543cc886d9ace7cb3c4a888c27928126ed18ef5958b1c24df242f4",
+    "parity_validator": "9709ee290891e65aa79b8f0785d1700b79a8a5672b16529d5243b301b223ee70",
+    "cli": "f5f18a5674e8a7c3d3bace0ecf29b4c090d618ad6d0134ce825867f88c1f7e79"
+  },
+  "tests_passed": 78,
+  "ready_for_baseline_reproduction_after_feature_lock": true
+}
