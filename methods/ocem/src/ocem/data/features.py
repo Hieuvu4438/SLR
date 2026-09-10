@@ -33,11 +33,18 @@ class _NumpyOnlyUnpickler(pickle.Unpickler):
         return super().find_class(module, name)
 
 
-def _safe_load_feature(path: Path) -> Mapping[str, Any]:
+def load_feature_payload(path: str | Path) -> Mapping[str, Any]:
+    """Load the NumPy-only cache payload without permitting arbitrary pickle globals."""
+
+    path = Path(path)
     payload = _NumpyOnlyUnpickler(io.BytesIO(path.read_bytes())).load()
     if not isinstance(payload, Mapping):
         raise FeatureAuditError("feature pickle must contain a mapping")
     return payload
+
+
+# Kept as an internal alias for callers from the original cache-audit module.
+_safe_load_feature = load_feature_payload
 
 
 def _read_json(path: Path) -> Mapping[str, Any]:
@@ -154,9 +161,7 @@ def _audit_one(
         errors.append("decoded_frame_count_manifest_mismatch")
     fps = support.get("fps")
     expected_fps = record.get("fps_num", 0) / max(record.get("fps_den", 0), 1)
-    if not isinstance(fps, (int, float)) or not np.isclose(
-        fps, expected_fps, atol=1e-9, rtol=0
-    ):
+    if not isinstance(fps, (int, float)) or not np.isclose(fps, expected_fps, atol=1e-9, rtol=0):
         errors.append("fps_manifest_mismatch")
 
     expected_windows = max(frame_count - 15, 1) if frame_count else 0
@@ -248,7 +253,9 @@ def audit_feature_cache(
             "missing_supports": sorted(expected_ids - set(support_paths)),
             "extra_supports": sorted(set(support_paths) - expected_ids),
         }
-        common = sorted(expected_ids & set(feature_paths) & set(metadata_paths) & set(support_paths))
+        common = sorted(
+            expected_ids & set(feature_paths) & set(metadata_paths) & set(support_paths)
+        )
         with ThreadPoolExecutor(max_workers=workers) as executor:
             records = list(
                 executor.map(
@@ -278,9 +285,7 @@ def audit_feature_cache(
             "feature_bytes": sum(record["feature_bytes"] for record in records),
             "recipe_sha256": sorted({record["recipe_sha256"] for record in records}),
             "inventory_errors": {key: value[:100] for key, value in inventory_errors.items()},
-            "inventory_error_counts": {
-                key: len(value) for key, value in inventory_errors.items()
-            },
+            "inventory_error_counts": {key: len(value) for key, value in inventory_errors.items()},
             "failure_count": len(failures),
             "failure_examples": failures[:100],
         }

@@ -1,0 +1,71 @@
+{
+  "schema_version": "ocem.p14t_pseudolabel_index_lock.v1",
+  "status": "PASS",
+  "scope": "P14T train-only pseudo-label indexing from audited Oxford domain-agnostic features; no adaptation training performed",
+  "created_at": "2026-09-10T19:05:37+07:00",
+  "adaptation_plan_sha256": "01d8698cfaa5cbe7a1201ef97d5b3f7adb4d2e4334284010c6470f2141ac3946",
+  "checkpoint_sha256": "6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f",
+  "source_train": {
+    "samples": 7096,
+    "windows": 720914,
+    "sample_ids_sha256": "c562eb7aee10f216735d2dc8b9c44a049e82014725e6f856f2195df6c61d1d99",
+    "validation_test_overlap_count": 0,
+    "validation_or_test_features_read": false
+  },
+  "classifier": {
+    "shape": [5383, 1024],
+    "application": "embedding @ weight.T + bias",
+    "real_clip_parity": {
+      "sample_id": "01April_2011_Friday_tagesschau-3379",
+      "embedding_cache_max_absolute_error": 0.0,
+      "model_vs_affine_logits_max_absolute_error": 0.0,
+      "model_vs_cache_affine_logits_max_absolute_error": 0.0,
+      "top1_equal": true,
+      "confidence_equal": true
+    }
+  },
+  "recipe": {
+    "confidence_predicate": "strictly greater than 0.6",
+    "clip_frames": 16,
+    "window_stride": 1,
+    "merge_start_distance_frames": 3,
+    "suppress_start_distance_frames": 24,
+    "selection": "per-class/per-video descending confidence",
+    "compatibility_note": "Ports the observed epoch_pseudo.py control flow, including merges into the first highest-confidence anchor and max(frame) as the exclusive materialization boundary."
+  },
+  "output": {
+    "path": "methods/ocem/runs/wp04_phoenix/pseudolabel_index.jsonl",
+    "sha256": "f247de98d1917dee969d71dfef971debcd57e7002425dd8313fa3f4a2c07c432",
+    "records_sha256": "c969b927d113952bbabbf5a4409a30b433138e03a1351286dde2a7e5dc26d2e4",
+    "segments": 10992,
+    "accepted_windows": 28841,
+    "samples_with_segments": 5070,
+    "classes_with_segments": 598,
+    "adaptation_train_segments": 9854,
+    "adaptation_holdout_segments": 1138
+  },
+  "numerical_checks": {
+    "dtype": "float32",
+    "device": "cuda:0",
+    "float32_matmul_precision": "highest",
+    "closest_confidence_distance_to_threshold": 2.5868415832741576e-06,
+    "batch_8192_index_sha256": "f247de98d1917dee969d71dfef971debcd57e7002425dd8313fa3f4a2c07c432",
+    "batch_4096_index_sha256": "f247de98d1917dee969d71dfef971debcd57e7002425dd8313fa3f4a2c07c432",
+    "batch_partition_invariant": true
+  },
+  "generated_reports": [
+    {
+      "path": "methods/ocem/runs/wp04_phoenix/pseudolabel_report.json",
+      "sha256": "73b3f9edc7ca31c2ad4a688982b486f279561952bbc496b3ae407be897492738"
+    },
+    {
+      "path": "methods/ocem/runs/wp04_phoenix/pseudolabel_report.batch4096.json",
+      "sha256": "ed74b80279ee4fd70fa0c761f04be286c39fc08b6086f74b5938b1be222c7850"
+    }
+  ],
+  "generator_source_sha256": "62d745e3965d5516c86fb4a7efa8451161a30df623eb1ad4c5233465b092bf82",
+  "tests_passed": 56,
+  "ready_for_loader_smoke": true,
+  "ready_for_adaptation_training": false,
+  "training_blocker": "Implement the manifest-indexed raw-frame pseudo-clip loader and pass one-batch loss/gradient/update parity."
+}

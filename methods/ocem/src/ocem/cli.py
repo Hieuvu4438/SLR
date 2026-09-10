@@ -13,6 +13,7 @@ from ocem.data.adaptation import AdaptationPlanError, build_p14t_adaptation_plan
 from ocem.data.datasets.how2sign import prepare_how2sign
 from ocem.data.datasets.phoenix import prepare_phoenix
 from ocem.data.features import FeatureAuditError, audit_feature_cache
+from ocem.data.pseudolabels import PseudoLabelError, generate_p14t_pseudolabel_index
 from ocem.doctor import collect_doctor_report
 from ocem.provenance.resources import build_resource_lock
 from ocem.provenance.state import load_implementation_state, render_checkpoint
@@ -137,6 +138,23 @@ def _features_plan_adaptation(args: argparse.Namespace) -> int:
     return 0
 
 
+def _features_pseudolabel(args: argparse.Namespace) -> int:
+    report = generate_p14t_pseudolabel_index(
+        adaptation_plan=args.adaptation_plan,
+        expected_plan_sha256=args.plan_sha256,
+        feature_dir=args.feature_dir,
+        temporal_dir=args.temporal_dir,
+        checkpoint=args.checkpoint,
+        expected_checkpoint_sha256=args.checkpoint_sha256,
+        output_index=args.output_index,
+        device=args.device,
+        batch_windows=args.batch_windows,
+        report_interval=args.report_interval,
+    )
+    _write_json(report, args.output)
+    return 0 if report["status"] == "PASS" else 4
+
+
 def _state_checkpoint(args: argparse.Namespace) -> int:
     state = load_implementation_state(args.state)
     checkpoint = render_checkpoint(state)
@@ -197,7 +215,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     config = commands.add_parser("config", help="Validate configuration contracts.")
     config_commands = config.add_subparsers(dest="config_command", required=True)
-    validate = config_commands.add_parser("validate", help="Strictly parse and validate a YAML file.")
+    validate = config_commands.add_parser(
+        "validate", help="Strictly parse and validate a YAML file."
+    )
     validate.add_argument("--kind", required=True, choices=("resources", "protocol", "experiment"))
     validate.add_argument("path")
     _add_output(validate)
@@ -218,7 +238,9 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--workers", type=int, default=8)
     prepare.add_argument("--report")
     prepare.set_defaults(handler=_data_prepare)
-    features = commands.add_parser("features", help="Adapt, extract, and audit frozen I3D features.")
+    features = commands.add_parser(
+        "features", help="Adapt, extract, and audit frozen I3D features."
+    )
     feature_commands = features.add_subparsers(dest="features_command", required=True)
     for name, help_text in (
         ("adapt", "Run train-only target-domain adaptation."),
@@ -254,8 +276,25 @@ def build_parser() -> argparse.ArgumentParser:
     plan_adaptation.add_argument("--holdout-modulus", type=int, default=10)
     plan_adaptation.add_argument("--output", required=True)
     plan_adaptation.set_defaults(handler=_features_plan_adaptation)
+    pseudolabel = feature_commands.add_parser(
+        "pseudolabel", help="Generate a train-only P14T pseudo-label segment index."
+    )
+    pseudolabel.add_argument("--adaptation-plan", required=True)
+    pseudolabel.add_argument("--plan-sha256", required=True)
+    pseudolabel.add_argument("--feature-dir", required=True)
+    pseudolabel.add_argument("--temporal-dir", required=True)
+    pseudolabel.add_argument("--checkpoint", required=True)
+    pseudolabel.add_argument("--checkpoint-sha256", required=True)
+    pseudolabel.add_argument("--output-index", required=True)
+    pseudolabel.add_argument("--device", default="cuda:0")
+    pseudolabel.add_argument("--batch-windows", type=int, default=8192)
+    pseudolabel.add_argument("--report-interval", type=int, default=250)
+    pseudolabel.add_argument("--output", required=True)
+    pseudolabel.set_defaults(handler=_features_pseudolabel)
     baseline = commands.add_parser("baseline", help="Operate the pinned CiCo baseline.")
-    _nested_placeholder(baseline, "baseline", [("reproduce", "Run baseline reproduction.", "WP-08")])
+    _nested_placeholder(
+        baseline, "baseline", [("reproduce", "Run baseline reproduction.", "WP-08")]
+    )
     diagnose = commands.add_parser("diagnose", help="Run preregistered mechanism diagnostics.")
     _nested_placeholder(
         diagnose,
@@ -264,7 +303,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     solver = commands.add_parser("solver", help="Validate the certified OCEM solver.")
     solver_commands = solver.add_subparsers(dest="solver_command", required=True)
-    solver_validate = solver_commands.add_parser("validate", help="Run solver parity and profiling.")
+    solver_validate = solver_commands.add_parser(
+        "validate", help="Run solver parity and profiling."
+    )
     solver_validate.add_argument("--reference")
     solver_validate.add_argument("--device", default="cpu")
     solver_validate.add_argument("--dtype", default="float64", choices=("float32", "float64"))
@@ -279,7 +320,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     state = commands.add_parser("state", help="Inspect or checkpoint implementation state.")
     state_commands = state.add_subparsers(dest="state_command", required=True)
-    checkpoint = state_commands.add_parser("checkpoint", help="Render a resumable Markdown checkpoint.")
+    checkpoint = state_commands.add_parser(
+        "checkpoint", help="Render a resumable Markdown checkpoint."
+    )
     checkpoint.add_argument("--state", default="implementation_state.json")
     checkpoint.add_argument("--output", required=True)
     checkpoint.set_defaults(handler=_state_checkpoint)
@@ -291,6 +334,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.handler(args))
-    except (ConfigError, FeatureAuditError, AdaptationPlanError) as error:
+    except (ConfigError, FeatureAuditError, AdaptationPlanError, PseudoLabelError) as error:
         sys.stderr.write(f"configuration error: {error}\n")
         return 2

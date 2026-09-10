@@ -5,7 +5,7 @@
   "research_decision": "GO_WITH_CONDITIONS",
   "method": "OCEM",
   "seds_dependency": false,
-  "updated_at": "2026-09-10T18:48:00+07:00",
+  "updated_at": "2026-09-10T19:05:37+07:00",
   "current_work_package": "WP-04",
   "completed_work_packages": [
     "WP-00",
@@ -127,11 +127,24 @@
         "validation_test_overlap": 0,
         "ready_for_training": false
       }
+    },
+    "pseudo_label_indexes": {
+      "phoenix2014t": {
+        "path": "methods/ocem/locks/pseudolabel_index.phoenix2014t.json",
+        "status": "PASS",
+        "source_train_ids": 7096,
+        "source_windows": 720914,
+        "accepted_windows": 28841,
+        "segments": 10992,
+        "validation_test_overlap": 0,
+        "batch_partition_invariant": true,
+        "ready_for_training": false
+      }
     }
   },
   "resource_lock_sha256": "52f27a2db04a009c5b2716a313ae3e906b8ac8e480f4a647223ade5b25ad4026",
   "feature_lock_sha256": null,
-  "last_run_id": "wp04_phoenix_adaptation_plan",
+  "last_run_id": "wp04_phoenix_pseudolabel_index",
   "open_blockers": [
     "Create feature locks before promoting the P14T dataset-specific G0 gate to PASS.",
     "How2Sign train has 31,047 named MP4 files plus one valid MP4 with corrupt filename `�~`; the same corrupt entry exists in the local archive, so its sample ID must be established without guessing before H2S resource verification can pass.",
@@ -139,5 +152,5 @@
     "The P14T Oxford domain-agnostic cache passes all 8,257 ID/hash/shape/support checks, but the P14T train-only adapted checkpoint and aligned adapted cache are missing; the H2S-transfer cache is not eligible as a substitute.",
     "Measure full-gallery seconds/query, real-shape throughput, and preprocessing amortization after a feature lock; the synthetic S6 pass is not an end-to-end latency claim."
   ],
-  "next_action": "Generate a P14T pseudo-label index from the audited agnostic train features and locked 0.6/NMS recipe, then implement the manifest-indexed pseudo-clip loader and pass one-batch loss/gradient/update parity before adaptation training."
+  "next_action": "Implement the P14T manifest-indexed raw-frame pseudo-clip loader from the locked index and pass one-batch loss/gradient/update parity before adaptation training."
 }
