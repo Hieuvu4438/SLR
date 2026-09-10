@@ -1,0 +1,64 @@
+{
+  "schema_version": "ocem.wp07_software_lock.v1",
+  "status": "PASS",
+  "scope": "WP-07 loss, mining, block scoring, and full-gallery evaluation software; synthetic tests only, not an SLRet experiment",
+  "created_at": "2026-09-10T20:48:32+07:00",
+  "contracts": {
+    "LOSS_01": {
+      "status": "PASS",
+      "evidence": [
+        "Original paired ID is the only positive.",
+        "Off-diagonal exact-caption duplicates are excluded from denominators.",
+        "Row and column candidates are mined from their declared directional matrices.",
+        "The pair union deduplicates computation but never expands an anchor denominator.",
+        "A batch anchor without a real eligible negative fails closed."
+      ]
+    },
+    "LOSS_02": {
+      "status": "PASS",
+      "evidence": [
+        "Dense and block pair scoring match in loss, token gradients, and one SGD update.",
+        "Externally scaled logits enter InfoNCE without an additional temperature.",
+        "Base and mixed two-direction losses are each composed exactly once."
+      ]
+    },
+    "EVAL_01": {
+      "status": "PASS",
+      "evidence": [
+        "Both score matrices use [video,text] orientation and remain separate.",
+        "Permuted video/text IDs map targets by ID rather than diagonal array position.",
+        "Primary exact ties sort by score descending then canonical candidate ID ascending.",
+        "Optimistic, pessimistic, and one-weight-per-query expected tie recalls are reported."
+      ]
+    },
+    "EVAL_02": {
+      "status": "PASS",
+      "evidence": [
+        "VideoIndex has no caption field or caption constructor argument.",
+        "Changing/deleting candidate-video annotation captions after index construction leaves T2V scores unchanged."
+      ]
+    },
+    "EVAL_03": {
+      "status": "PASS",
+      "evidence": [
+        "Block scorer initializes scores as missing and requires every Cartesian pair to be filled.",
+        "Missing or non-finite scores fail instead of being zero-filled.",
+        "Dense and multi-block directional matrices are identical on the fixture."
+      ]
+    }
+  },
+  "source_sha256": {
+    "contrastive": "9ea30216ff06137e99e2085b5012a3ae3cfc1d851adccca239fd0f3613d28d95",
+    "full_gallery": "acaf25c2fc9cf9a191b3d4f170b71fc4ff03319334b280d49748d3fb6b489489",
+    "full_gallery_scoring": "92a72200c5f116b77d56ccab6f983b477b0b723af78594f5bdfbfbec8d4d4868",
+    "contrastive_tests": "ef874915e30d317bee5771291e4fba162ad28f67405760c985c04ae991e38853",
+    "full_gallery_tests": "b553a9d44bccbe925e4c721d7db203f5f92944f4e99ed2f5371499a4822b8646",
+    "full_gallery_scoring_tests": "9be9cae411be06883e552cf33df710f9368afbfff0cf422c3456073177f1f226"
+  },
+  "tests_passed": 93,
+  "deferred": {
+    "DDP_01": "One-GPU MVP is locked first; gradient-preserving multi-process layout remains a WP-11 optimization and cannot be claimed yet.",
+    "neural_training": "Blocked by G0/G1/A/A2 gates; no neural OCEM training was run."
+  },
+  "ready_for_baseline_reproduction_after_feature_lock": true
+}
