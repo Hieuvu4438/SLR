@@ -11,6 +11,7 @@ from typing import Any, Sequence
 from ocem.config import ConfigError, load_config
 from ocem.data.datasets.how2sign import prepare_how2sign
 from ocem.data.datasets.phoenix import prepare_phoenix
+from ocem.data.features import FeatureAuditError, audit_feature_cache
 from ocem.doctor import collect_doctor_report
 from ocem.provenance.resources import build_resource_lock
 from ocem.provenance.state import load_implementation_state, render_checkpoint
@@ -106,6 +107,21 @@ def _solver_validate(args: argparse.Namespace) -> int:
     return 0 if report["status"] == "PASS" else 5
 
 
+def _features_audit_cache(args: argparse.Namespace) -> int:
+    if args.dataset != "phoenix2014t":
+        raise FeatureAuditError("only phoenix2014t cache auditing is implemented")
+    report = audit_feature_cache(
+        manifest_dir=args.manifest_dir,
+        feature_root=args.feature_root,
+        temporal_root=args.temporal_root,
+        expected_checkpoint_sha256=args.checkpoint_sha256,
+        split_dirs={"train": "train", "validation": "dev", "test": "test"},
+        workers=args.workers,
+    )
+    _write_json(report, args.output)
+    return 0 if report["status"] == "PASS" else 4
+
+
 def _state_checkpoint(args: argparse.Namespace) -> int:
     state = load_implementation_state(args.state)
     checkpoint = render_checkpoint(state)
@@ -187,15 +203,30 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--workers", type=int, default=8)
     prepare.add_argument("--report")
     prepare.set_defaults(handler=_data_prepare)
-    features = commands.add_parser("features", help="Adapt and extract frozen I3D features.")
-    _nested_placeholder(
-        features,
-        "features",
-        [
-            ("adapt", "Run train-only target-domain adaptation.", "WP-04"),
-            ("extract", "Extract feature shards and temporal supports.", "WP-04"),
-        ],
+    features = commands.add_parser("features", help="Adapt, extract, and audit frozen I3D features.")
+    feature_commands = features.add_subparsers(dest="features_command", required=True)
+    for name, help_text in (
+        ("adapt", "Run train-only target-domain adaptation."),
+        ("extract", "Extract feature shards and temporal supports."),
+    ):
+        feature_parser = feature_commands.add_parser(name, help=help_text)
+        _add_output(feature_parser)
+        feature_parser.set_defaults(
+            handler=_not_implemented,
+            command_path=["features", name],
+            required_work_package="WP-04",
+        )
+    audit_cache = feature_commands.add_parser(
+        "audit-cache", help="Audit an existing I3D cache against protocol manifests."
     )
+    audit_cache.add_argument("--dataset", required=True, choices=("phoenix2014t",))
+    audit_cache.add_argument("--manifest-dir", required=True)
+    audit_cache.add_argument("--feature-root", required=True)
+    audit_cache.add_argument("--temporal-root", required=True)
+    audit_cache.add_argument("--checkpoint-sha256", required=True)
+    audit_cache.add_argument("--workers", type=int, default=8)
+    audit_cache.add_argument("--output", required=True)
+    audit_cache.set_defaults(handler=_features_audit_cache)
     baseline = commands.add_parser("baseline", help="Operate the pinned CiCo baseline.")
     _nested_placeholder(baseline, "baseline", [("reproduce", "Run baseline reproduction.", "WP-08")])
     diagnose = commands.add_parser("diagnose", help="Run preregistered mechanism diagnostics.")
@@ -233,6 +264,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.handler(args))
-    except ConfigError as error:
+    except (ConfigError, FeatureAuditError) as error:
         sys.stderr.write(f"configuration error: {error}\n")
         return 2

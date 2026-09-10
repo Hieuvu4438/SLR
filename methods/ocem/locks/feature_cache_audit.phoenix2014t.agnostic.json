@@ -1,0 +1,58 @@
+{
+  "schema_version": "ocem.feature_cache_audit_lock.v1",
+  "status": "PASS",
+  "scope": "P14T Oxford domain-agnostic cache only; NOT a complete feature lock",
+  "created_at": "2026-09-10T18:39:07+07:00",
+  "checkpoint_sha256": "6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f",
+  "recipe_sha256": "50045403867d7bdbee644de13e94389b5567c67b0f7f87e7218952dcde49a571",
+  "sample_artifact_digest": "36648ce48ce9ff9cf0faa4d21984fa2b489cfc0eb29993f6976978595f355375",
+  "sample_artifact_count": 8257,
+  "total_windows": 823901,
+  "feature_bytes": 3376876288,
+  "splits": {
+    "train": {
+      "samples": 7096,
+      "windows": 720914,
+      "feature_bytes": 2954736519,
+      "missing_or_extra_artifacts": 0,
+      "failed_samples": 0
+    },
+    "validation": {
+      "samples": 519,
+      "windows": 47990,
+      "feature_bytes": 196703097,
+      "missing_or_extra_artifacts": 0,
+      "failed_samples": 0
+    },
+    "test": {
+      "samples": 642,
+      "windows": 54997,
+      "feature_bytes": 225436672,
+      "missing_or_extra_artifacts": 0,
+      "failed_samples": 0
+    }
+  },
+  "checks": [
+    "manifest ID equality",
+    "restricted NumPy-only pickle load",
+    "feature file SHA-256",
+    "float32 [M,1024] shape and finite values",
+    "checkpoint and recipe hashes",
+    "source path and byte size",
+    "manifest frame count and rational FPS",
+    "stride-1 half-open 16-frame supports",
+    "one-to-one feature/support window counts"
+  ],
+  "raw_content_rehashed": false,
+  "raw_verification_basis": "Manifest path/size/frame-count/FPS plus extractor-recorded video SHA-256; raw video bytes were not rehashed by this audit.",
+  "generated_report": {
+    "path": "methods/ocem/runs/wp04_phoenix/agnostic_cache_audit.json",
+    "sha256": "bc33fc3f5d4ed339edbcb0fcc099b2162abec9057b7ec2c9707a9b136e810042"
+  },
+  "auditor_source_sha256": "0cf41de1dfd864b5b6eff4ec89c2b46dd9551621c32d376800a7812d82f1f4e2",
+  "feature_lock_eligible": false,
+  "blockers": [
+    "A P14T train-only adapted checkpoint and aligned adapted feature stream do not yet exist.",
+    "The existing ph_domain_aware_h2s_transfer_gpu stream uses the H2S-adapted checkpoint and cannot satisfy P14T target-adaptation provenance."
+  ]
+}

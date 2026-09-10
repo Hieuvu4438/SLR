@@ -5,7 +5,7 @@
   "research_decision": "GO_WITH_CONDITIONS",
   "method": "OCEM",
   "seds_dependency": false,
-  "updated_at": "2026-09-10T18:24:27+07:00",
+  "updated_at": "2026-09-10T18:39:07+07:00",
   "current_work_package": "WP-04",
   "completed_work_packages": [
     "WP-00",
@@ -106,17 +106,27 @@
       "tests_passed": 44,
       "cuda_float32_profile_pairs": 64,
       "fallback_count": 0
+    },
+    "feature_cache_audits": {
+      "phoenix2014t_domain_agnostic": {
+        "path": "methods/ocem/locks/feature_cache_audit.phoenix2014t.agnostic.json",
+        "status": "PASS",
+        "samples": 8257,
+        "windows": 823901,
+        "feature_lock_eligible": false,
+        "reason": "P14T train-only adapted checkpoint and aligned adapted stream remain missing."
+      }
     }
   },
   "resource_lock_sha256": "52f27a2db04a009c5b2716a313ae3e906b8ac8e480f4a647223ade5b25ad4026",
   "feature_lock_sha256": null,
-  "last_run_id": "wp03_how2sign",
+  "last_run_id": "wp04_phoenix_agnostic_audit",
   "open_blockers": [
     "Create feature locks before promoting the P14T dataset-specific G0 gate to PASS.",
     "How2Sign train has 31,047 named MP4 files plus one valid MP4 with corrupt filename `�~`; the same corrupt entry exists in the local archive, so its sample ID must be established without guessing before H2S resource verification can pass.",
     "Reconcile How2Sign annotation, recut-video and published CiCo gallery counts by sample ID; do not infer exclusions from counts.",
-    "Verify that any reused I3D feature cache preserves local 16-frame supports and matches the selected manifests before issuing a feature lock.",
+    "The P14T Oxford domain-agnostic cache passes all 8,257 ID/hash/shape/support checks, but the P14T train-only adapted checkpoint and aligned adapted cache are missing; the H2S-transfer cache is not eligible as a substitute.",
     "Measure full-gallery seconds/query, real-shape throughput, and preprocessing amortization after a feature lock; the synthetic S6 pass is not an end-to-end latency claim."
   ],
-  "next_action": "Implement the P14T slice of WP-04: validate existing independently extracted I3D streams and temporal sidecars against the P14T protocol manifest, then emit deterministic feature shards/lock or an exact mismatch report before any new extraction."
+  "next_action": "Implement a manifest-scoped P14T adaptation input builder from exactly the 7,096 locked train IDs, pin vocabulary/threshold/sampling/optimizer fields, assert zero validation/test leakage, and run loader/model one-batch parity before scheduling adaptation training."
 }
