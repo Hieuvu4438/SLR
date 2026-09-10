@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from ocem.baselines.cico_parity import CiCoParityError, validate_cico_adapter_parity
+from ocem.baselines.cico_reproduction import (
+    CiCoReproductionError,
+    reproduce_cico_phoenix2014t,
+)
 from ocem.config import ConfigError, load_config
 from ocem.data.adaptation import AdaptationPlanError, build_p14t_adaptation_plan
 from ocem.data.datasets.how2sign import prepare_how2sign
@@ -269,6 +273,36 @@ def _baseline_validate_adapter(args: argparse.Namespace) -> int:
     return 0 if report["status"] == "PASS" else 5
 
 
+def _baseline_reproduce(args: argparse.Namespace) -> int:
+    report = reproduce_cico_phoenix2014t(
+        checkpoint=args.checkpoint,
+        expected_checkpoint_sha256=args.checkpoint_sha256,
+        clip_checkpoint=args.clip_checkpoint,
+        expected_clip_sha256=args.clip_sha256,
+        upstream_root=args.upstream_root,
+        expected_source_hashes={
+            "modeling": args.modeling_sha256,
+            "module_clip": args.module_clip_sha256,
+            "tokenization": args.tokenization_sha256,
+            "metrics": args.metrics_sha256,
+        },
+        protocol_lock=args.protocol_lock,
+        expected_protocol_lock_sha256=args.protocol_lock_sha256,
+        feature_lock=args.feature_lock,
+        expected_feature_lock_sha256=args.feature_lock_sha256,
+        test_manifest=args.test_manifest,
+        cico_test_data=args.cico_test_data,
+        expected_cico_test_data_sha256=args.cico_test_data_sha256,
+        output_dir=args.output_dir,
+        device=args.device,
+        encode_batch_size=args.encode_batch_size,
+        score_block_size=args.score_block_size,
+        alpha=args.alpha,
+    )
+    _write_json(report, args.output)
+    return 0 if report["status"] == "PASS" else 6
+
+
 def _state_checkpoint(args: argparse.Namespace) -> int:
     state = load_implementation_state(args.state)
     checkpoint = render_checkpoint(state)
@@ -500,13 +534,30 @@ def build_parser() -> argparse.ArgumentParser:
     validate_adapter.add_argument("--rtol", type=float, default=1e-4)
     validate_adapter.add_argument("--output", required=True)
     validate_adapter.set_defaults(handler=_baseline_validate_adapter)
-    reproduce = baseline_commands.add_parser("reproduce", help="Run baseline reproduction.")
-    _add_output(reproduce)
-    reproduce.set_defaults(
-        handler=_not_implemented,
-        command_path=["baseline", "reproduce"],
-        required_work_package="WP-08",
-    )
+    reproduce = baseline_commands.add_parser("reproduce", help="Run locked P14T reproduction.")
+    reproduce.add_argument("--checkpoint", required=True)
+    reproduce.add_argument("--checkpoint-sha256", required=True)
+    reproduce.add_argument("--clip-checkpoint", required=True)
+    reproduce.add_argument("--clip-sha256", required=True)
+    reproduce.add_argument("--upstream-root", required=True)
+    reproduce.add_argument("--modeling-sha256", required=True)
+    reproduce.add_argument("--module-clip-sha256", required=True)
+    reproduce.add_argument("--tokenization-sha256", required=True)
+    reproduce.add_argument("--metrics-sha256", required=True)
+    reproduce.add_argument("--protocol-lock", required=True)
+    reproduce.add_argument("--protocol-lock-sha256", required=True)
+    reproduce.add_argument("--feature-lock", required=True)
+    reproduce.add_argument("--feature-lock-sha256", required=True)
+    reproduce.add_argument("--test-manifest", required=True)
+    reproduce.add_argument("--cico-test-data", required=True)
+    reproduce.add_argument("--cico-test-data-sha256", required=True)
+    reproduce.add_argument("--output-dir", required=True)
+    reproduce.add_argument("--device", default="cuda:0")
+    reproduce.add_argument("--encode-batch-size", type=int, default=256)
+    reproduce.add_argument("--score-block-size", type=int, default=128)
+    reproduce.add_argument("--alpha", type=float, default=0.9)
+    reproduce.add_argument("--output", required=True)
+    reproduce.set_defaults(handler=_baseline_reproduce)
     diagnose = commands.add_parser("diagnose", help="Run preregistered mechanism diagnostics.")
     _nested_placeholder(
         diagnose,
@@ -549,6 +600,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (
         ConfigError,
         CiCoParityError,
+        CiCoReproductionError,
         FeatureAuditError,
         ExtractionRunError,
         AdaptationPlanError,
