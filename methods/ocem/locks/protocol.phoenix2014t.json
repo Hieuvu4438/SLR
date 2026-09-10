@@ -8,7 +8,7 @@
     "reproduction_tolerance_pp": 1.0,
     "score_contract": "directional_raw_before_external_logit_scale"
   },
-  "baseline_reproduction_status": "NOT_RUN",
+  "baseline_reproduction_status": "PASS",
   "dataset": "phoenix2014t",
   "evaluation": {
     "full_gallery": true,
@@ -27,7 +27,7 @@
     "t2v": "paired_official_split",
     "v2t": "paired_official_split"
   },
-  "lock_sha256": "a7798864dfede128a420a4d5910296182081904ee7ecec90de9fdf87fd41b8d7",
+  "lock_sha256": "216cd5dda968a62ad6d8ee30e317cea27f345df7db5f265217aef398d7dbe6e7",
   "preprocessing": {
     "crop": 224,
     "fps_policy": "preserve_source_cfr",

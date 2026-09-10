@@ -5,8 +5,8 @@
   "research_decision": "GO_WITH_CONDITIONS",
   "method": "OCEM",
   "seds_dependency": false,
-  "updated_at": "2026-09-10T21:28:51+07:00",
-  "current_work_package": "WP-08",
+  "updated_at": "2026-09-10T21:37:03+07:00",
+  "current_work_package": "WP-09",
   "completed_work_packages": [
     "WP-00",
     "WP-01",
@@ -15,7 +15,8 @@
     "WP-04",
     "WP-05",
     "WP-06",
-    "WP-07"
+    "WP-07",
+    "WP-08"
   ],
   "gates": {
     "software_ready": "PASS",
@@ -24,7 +25,7 @@
     "protocol_how2sign": "BLOCKED_RESOURCE",
     "resources_phoenix2014t": "PASS",
     "resources_how2sign": "NOT_RUN",
-    "baseline_phoenix2014t": "NOT_RUN",
+    "baseline_phoenix2014t": "PASS",
     "baseline_how2sign": "NOT_RUN",
     "solver_gpu": "PASS",
     "failure_A": "NOT_RUN",
@@ -100,8 +101,9 @@
     "protocol_locks": {
       "phoenix2014t": {
         "path": "methods/ocem/locks/protocol.phoenix2014t.json",
-        "sha256": "a7798864dfede128a420a4d5910296182081904ee7ecec90de9fdf87fd41b8d7",
+        "sha256": "216cd5dda968a62ad6d8ee30e317cea27f345df7db5f265217aef398d7dbe6e7",
         "feature_lock_sha256": "bfdb1aa7c5ea2713214b86ef6928147cc35414fb90c296d25993bdf660fcb07f",
+        "baseline_reproduction_status": "PASS",
         "status": "PASS",
         "counts": {"train": 7096, "validation": 519, "test": 642}
       },
@@ -221,8 +223,25 @@
         "BASE_01": "PASS",
         "BASE_02": "PASS",
         "real_checkpoint": true,
-        "full_gallery_reproduction": false,
-        "ready_after_feature_lock": true
+        "full_gallery_reproduction": true,
+        "G1": "PASS",
+        "legacy_T2V_R1": 69.78193146417445,
+        "legacy_V2T_R1": 70.56074523925781,
+        "ready_for_stage_A": true
+      }
+    },
+    "baseline_reproductions": {
+      "cico_phoenix2014t": {
+        "path": "methods/ocem/locks/baseline_reproduction.phoenix2014t.json",
+        "status": "PASS",
+        "G1": "PASS",
+        "gallery_pairs_per_direction": 412164,
+        "coverage": 1.0,
+        "difference_from_published_pp": {
+          "T2V": 0.28193146417444837,
+          "V2T": 0.36074523925780966
+        },
+        "saved_score_revalidation": "PASS"
       }
     },
     "software_modules": {
@@ -240,11 +259,11 @@
   },
   "resource_lock_sha256": "c594dcc4ce3f6bbd2d0b50f6056888246a5db43b9dcd3e82a0c50f3b8a6b4d9e",
   "feature_lock_sha256": "bfdb1aa7c5ea2713214b86ef6928147cc35414fb90c296d25993bdf660fcb07f",
-  "last_run_id": "wp04_p14t_feature_lock",
+  "last_run_id": "wp08_cico_phoenix2014t_reproduction",
   "open_blockers": [
     "How2Sign train has 31,047 named MP4 files plus one valid MP4 with corrupt filename `�~`; the same corrupt entry exists in the local archive, so its sample ID must be established without guessing before H2S resource verification can pass.",
     "Reconcile How2Sign annotation, recut-video and published CiCo gallery counts by sample ID; do not infer exclusions from counts.",
-    "Measure full-gallery seconds/query, real-shape throughput, and preprocessing amortization after a feature lock; the synthetic S6 pass is not an end-to-end latency claim."
+    "Add CUDA synchronization and phase-level model-load/feature-load/encode/score timings before making an end-to-end latency or preprocessing-amortization claim; the current G1 elapsed field is not sufficient for that claim."
   ],
-  "next_action": "Run the released CiCo P14T checkpoint on the locked 642-pair full gallery and require both legacy R@1 directions within 1 percentage point before promoting G1."
+  "next_action": "Implement and run WP-09 duplicate controls plus frozen Stage A/A2 diagnostics on the locked P14T baseline scores; require the preregistered G2/G3 evidence before any OCEM pilot training."
 }
