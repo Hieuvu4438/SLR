@@ -5,7 +5,7 @@
   "research_decision": "GO_WITH_CONDITIONS",
   "method": "OCEM",
   "seds_dependency": false,
-  "updated_at": "2026-09-10T20:48:32+07:00",
+  "updated_at": "2026-09-10T20:59:29+07:00",
   "current_work_package": "WP-04",
   "completed_work_packages": [
     "WP-00",
@@ -66,7 +66,17 @@
         "dev": 519,
         "test": 642
       },
-      "status": "RAW_VIDEO_AND_OFFICIAL_ANNOTATIONS_PRESENT_UNVERIFIED_BY_OCEM"
+      "status": "RAW_VIDEO_AND_OFFICIAL_ANNOTATIONS_PRESENT_UNVERIFIED_BY_OCEM",
+      "cico_english_text_resources": {
+        "train_path": "third_party/SLRT/CiCo/CLCL/data_ph/train.pkl",
+        "train_sha256": "b35ae6f90136b3c936182355c439374ae209bb42046f9f1eb8f9746a8b2c29e2",
+        "test_path": "third_party/SLRT/CiCo/CLCL/data_ph/test.pkl",
+        "test_sha256": "2e5172db53d85eb6762e3da37f4b10f9c233d3f0e32dc901d3968e4370af4b5e",
+        "ids_and_ori_text_match_manifests": true,
+        "test_exact_duplicate_groups": 6,
+        "test_exact_duplicate_rows": 18,
+        "status": "PASS"
+      }
     },
     "how2sign": {
       "root": "/home/shared_data/sign_language/How2Sign",
@@ -203,7 +213,7 @@
       }
     }
   },
-  "resource_lock_sha256": "52f27a2db04a009c5b2716a313ae3e906b8ac8e480f4a647223ade5b25ad4026",
+  "resource_lock_sha256": "c594dcc4ce3f6bbd2d0b50f6056888246a5db43b9dcd3e82a0c50f3b8a6b4d9e",
   "feature_lock_sha256": null,
   "last_run_id": "wp07_loss_evaluation_software_lock",
   "open_blockers": [

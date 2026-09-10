@@ -93,6 +93,30 @@ resources:
     excluded_dependency: false
     loader: {kind: delimited_text, delimiter: "|", expected_rows: 642, header_contains: [name, translation]}
 
+  - id: cico_phoenix_train_text
+    kind: derived_annotation
+    required: true
+    source_url: https://github.com/FangyunWei/SLRT/tree/38a4f7b00da7a858d59b7fabe5093876a84db8e0/CiCo/CLCL/data_ph
+    local_path: ${OCEM_PROJECT_ROOT}/../../third_party/SLRT/CiCo/CLCL/data_ph/train.pkl
+    expected_sha256: b35ae6f90136b3c936182355c439374ae209bb42046f9f1eb8f9746a8b2c29e2
+    expected_bytes: 1820322
+    access_status: full_hash_match
+    excluded_dependency: false
+    loader: {kind: file}
+    notes: CiCo English translation field used by the P14T retrieval baseline; IDs and ori_text match the official train manifest.
+
+  - id: cico_phoenix_test_text
+    kind: derived_annotation
+    required: true
+    source_url: https://github.com/FangyunWei/SLRT/tree/38a4f7b00da7a858d59b7fabe5093876a84db8e0/CiCo/CLCL/data_ph
+    local_path: ${OCEM_PROJECT_ROOT}/../../third_party/SLRT/CiCo/CLCL/data_ph/test.pkl
+    expected_sha256: 2e5172db53d85eb6762e3da37f4b10f9c233d3f0e32dc901d3968e4370af4b5e
+    expected_bytes: 152139
+    access_status: full_hash_match
+    excluded_dependency: false
+    loader: {kind: file}
+    notes: CiCo English translation field used by the official 642-pair P14T evaluation gallery; IDs/order and ori_text match the manifest.
+
   - id: how2sign_raw
     kind: dataset_directory
     required: true
@@ -195,4 +219,3 @@ resources:
     access_status: excluded
     excluded_dependency: true
     notes: OCEM must never resolve or load SEDS/Baidu features or checkpoints.
-

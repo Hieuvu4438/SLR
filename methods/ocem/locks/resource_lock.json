@@ -3,8 +3,8 @@
     "how2sign_raw"
   ],
   "config_path": "/home/haipd/SLR/methods/ocem/configs/resources.yaml",
-  "config_sha256": "c185729b8b9a277330da89a33f078cb2eb421cf0689d0f02435f06e68cca0737",
-  "lock_sha256": "52f27a2db04a009c5b2716a313ae3e906b8ac8e480f4a647223ade5b25ad4026",
+  "config_sha256": "2ec8757af5ae6084977e1af6d651e5121c65c0dc525476878815a47b35c61e0a",
+  "lock_sha256": "c594dcc4ce3f6bbd2d0b50f6056888246a5db43b9dcd3e82a0c50f3b8a6b4d9e",
   "note": "This lock verifies registered files/content. Dataset protocol and feature locks remain separate G0 requirements.",
   "resources": [
     {
@@ -206,6 +206,44 @@
       "path_type": "file",
       "required": true,
       "source_url": "https://www-i6.informatik.rwth-aachen.de/~koller/RWTH-PHOENIX-2014-T/",
+      "status": "PASS"
+    },
+    {
+      "bytes": 1820322,
+      "configured_access_status": "full_hash_match",
+      "content": {
+        "status": "PASS"
+      },
+      "excluded_dependency": false,
+      "expected_bytes": 1820322,
+      "expected_sha256": "b35ae6f90136b3c936182355c439374ae209bb42046f9f1eb8f9746a8b2c29e2",
+      "id": "cico_phoenix_train_text",
+      "kind": "derived_annotation",
+      "loaded": false,
+      "local_path": "/home/haipd/SLR/third_party/SLRT/CiCo/CLCL/data_ph/train.pkl",
+      "path_type": "file",
+      "required": true,
+      "sha256": "b35ae6f90136b3c936182355c439374ae209bb42046f9f1eb8f9746a8b2c29e2",
+      "source_url": "https://github.com/FangyunWei/SLRT/tree/38a4f7b00da7a858d59b7fabe5093876a84db8e0/CiCo/CLCL/data_ph",
+      "status": "PASS"
+    },
+    {
+      "bytes": 152139,
+      "configured_access_status": "full_hash_match",
+      "content": {
+        "status": "PASS"
+      },
+      "excluded_dependency": false,
+      "expected_bytes": 152139,
+      "expected_sha256": "2e5172db53d85eb6762e3da37f4b10f9c233d3f0e32dc901d3968e4370af4b5e",
+      "id": "cico_phoenix_test_text",
+      "kind": "derived_annotation",
+      "loaded": false,
+      "local_path": "/home/haipd/SLR/third_party/SLRT/CiCo/CLCL/data_ph/test.pkl",
+      "path_type": "file",
+      "required": true,
+      "sha256": "2e5172db53d85eb6762e3da37f4b10f9c233d3f0e32dc901d3968e4370af4b5e",
+      "source_url": "https://github.com/FangyunWei/SLRT/tree/38a4f7b00da7a858d59b7fabe5093876a84db8e0/CiCo/CLCL/data_ph",
       "status": "PASS"
     },
     {
