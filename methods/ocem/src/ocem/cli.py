@@ -19,6 +19,7 @@ from ocem.doctor import collect_doctor_report
 from ocem.provenance.resources import build_resource_lock
 from ocem.provenance.state import load_implementation_state, render_checkpoint
 from ocem.scoring.validation import profile_solver, validate_solver
+from ocem.training.adaptation_run import AdaptationRunError, run_p14t_i3d_adaptation
 from ocem.training.i3d_adaptation import (
     I3DAdaptationError,
     validate_one_batch_adaptation_parity,
@@ -192,6 +193,28 @@ def _features_validate_adaptation_step(args: argparse.Namespace) -> int:
     return 0 if report["status"] == "PASS" else 5
 
 
+def _features_adapt(args: argparse.Namespace) -> int:
+    report = run_p14t_i3d_adaptation(
+        index=args.index,
+        expected_index_sha256=args.index_sha256,
+        checkpoint=args.checkpoint,
+        expected_checkpoint_sha256=args.checkpoint_sha256,
+        implementation=args.implementation,
+        expected_implementation_sha256=args.implementation_sha256,
+        output_dir=args.output_dir,
+        device=args.device,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        workers=args.workers,
+        seed=args.seed,
+        snapshot_interval=args.snapshot_interval,
+        log_interval=args.log_interval,
+        resume=args.resume,
+    )
+    _write_json(report, args.output)
+    return 0 if report["status"] == "PASS" else 5
+
+
 def _state_checkpoint(args: argparse.Namespace) -> int:
     state = load_implementation_state(args.state)
     checkpoint = render_checkpoint(state)
@@ -279,10 +302,7 @@ def build_parser() -> argparse.ArgumentParser:
         "features", help="Adapt, extract, and audit frozen I3D features."
     )
     feature_commands = features.add_subparsers(dest="features_command", required=True)
-    for name, help_text in (
-        ("adapt", "Run train-only target-domain adaptation."),
-        ("extract", "Extract feature shards and temporal supports."),
-    ):
+    for name, help_text in (("extract", "Extract feature shards and temporal supports."),):
         feature_parser = feature_commands.add_parser(name, help=help_text)
         _add_output(feature_parser)
         feature_parser.set_defaults(
@@ -290,6 +310,24 @@ def build_parser() -> argparse.ArgumentParser:
             command_path=["features", name],
             required_work_package="WP-04",
         )
+    adapt = feature_commands.add_parser("adapt", help="Run locked P14T train-only adaptation.")
+    adapt.add_argument("--index", required=True)
+    adapt.add_argument("--index-sha256", required=True)
+    adapt.add_argument("--checkpoint", required=True)
+    adapt.add_argument("--checkpoint-sha256", required=True)
+    adapt.add_argument("--implementation", required=True)
+    adapt.add_argument("--implementation-sha256", required=True)
+    adapt.add_argument("--output-dir", required=True)
+    adapt.add_argument("--device", default="cuda:0")
+    adapt.add_argument("--epochs", type=int, default=15)
+    adapt.add_argument("--batch-size", type=int, default=4)
+    adapt.add_argument("--workers", type=int, default=4)
+    adapt.add_argument("--seed", type=int, default=0)
+    adapt.add_argument("--snapshot-interval", type=int, default=5)
+    adapt.add_argument("--log-interval", type=int, default=100)
+    adapt.add_argument("--resume", action="store_true")
+    adapt.add_argument("--output")
+    adapt.set_defaults(handler=_features_adapt)
     audit_cache = feature_commands.add_parser(
         "audit-cache", help="Audit an existing I3D cache against protocol manifests."
     )
@@ -406,6 +444,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ConfigError,
         FeatureAuditError,
         AdaptationPlanError,
+        AdaptationRunError,
         I3DAdaptationError,
         PseudoClipError,
         PseudoLabelError,

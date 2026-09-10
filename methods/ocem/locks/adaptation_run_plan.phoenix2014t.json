@@ -1,0 +1,51 @@
+{
+  "schema_version": "ocem.p14t_i3d_adaptation_run_plan.v1",
+  "status": "PASS",
+  "scope": "A priori execution plan for P14T train-only I3D adaptation; not a completed training result",
+  "created_at": "2026-09-10T19:52:25+07:00",
+  "inputs": {
+    "pseudo_label_index_sha256": "f247de98d1917dee969d71dfef971debcd57e7002425dd8313fa3f4a2c07c432",
+    "initial_checkpoint_sha256": "6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f",
+    "i3d_implementation_sha256": "293b629125be89d2e643cf0d0383784e97b40cc002246de4fbf3a7be5b315a49",
+    "train_pseudo_clips": 9854,
+    "train_derived_holdout_pseudo_clips": 1138
+  },
+  "recipe": {
+    "epochs": 15,
+    "batch_size": 4,
+    "workers": 4,
+    "seed": 0,
+    "optimizer": "SGD",
+    "learning_rate": 0.01,
+    "encoder_lr_coefficient": 1.0,
+    "momentum": 0.9,
+    "weight_decay": 0.0,
+    "schedule_epochs": [20, 40],
+    "schedule_gamma": 0.1,
+    "effective_lr_schedule": "constant_0.01_for_all_15_epochs",
+    "snapshot_interval": 5,
+    "checkpoint_selection": "fixed_final_epoch_15",
+    "holdout_role": "monitor_only",
+    "codec_roundtrip": false,
+    "config_sha256": "5ddeaef2bcf5121f15b39a909c4cb238da076323149f950ce6083f17f9580171"
+  },
+  "data_policy": {
+    "optimizer_source": "adaptation_split=train only",
+    "holdout_used_for_optimizer": false,
+    "holdout_used_for_checkpoint_selection": false,
+    "validation_or_test_used": false
+  },
+  "throughput_probe": {
+    "scope": "80 real train pseudo clips and 20 optimizer steps per worker setting; not an adaptation result",
+    "workers_0_examples_per_second": 18.14837310625422,
+    "workers_4_examples_per_second": 75.78425216844788,
+    "selected_workers": 4,
+    "selection_basis": "throughput only"
+  },
+  "cuda_determinism_limit": "torch 2.11 avg_pool3d_backward_cuda has no deterministic implementation; ordering and RNG are checkpointed, but bitwise rerun identity is not claimed.",
+  "output_dir": "methods/ocem/runs/wp04_phoenix/adaptation_train_seed0",
+  "runner_source_sha256": "e987851a89518c9a8e608d18025d86882491b51c77ca772d87b0415dff5ac362",
+  "loader_source_sha256": "0369f56ec9e718df94f1f285422ef7e0e9849d7723e3a8c5da045b11c1127e19",
+  "tests_passed": 67,
+  "ready_to_run": true
+}

@@ -25,7 +25,7 @@ def test_all_contract_commands_are_registered() -> None:
 
 
 def test_future_command_fails_explicitly(capsys) -> None:
-    exit_code = main(["features", "adapt"])
+    exit_code = main(["features", "extract"])
     payload = json.loads(capsys.readouterr().out)
     assert exit_code == NOT_IMPLEMENTED_EXIT
     assert payload["status"] == "NOT_IMPLEMENTED"

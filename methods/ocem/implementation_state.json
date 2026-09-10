@@ -5,7 +5,7 @@
   "research_decision": "GO_WITH_CONDITIONS",
   "method": "OCEM",
   "seds_dependency": false,
-  "updated_at": "2026-09-10T19:26:16+07:00",
+  "updated_at": "2026-09-10T19:52:25+07:00",
   "current_work_package": "WP-04",
   "completed_work_packages": [
     "WP-00",
@@ -152,11 +152,23 @@
         "validation_test_overlap": 0,
         "ready_for_training": true
       }
+    },
+    "adaptation_run_plans": {
+      "phoenix2014t": {
+        "path": "methods/ocem/locks/adaptation_run_plan.phoenix2014t.json",
+        "status": "PASS",
+        "fixed_final_epoch": 15,
+        "workers": 4,
+        "train_pseudo_clips": 9854,
+        "holdout_pseudo_clips": 1138,
+        "validation_test_overlap": 0,
+        "ready_to_run": true
+      }
     }
   },
   "resource_lock_sha256": "52f27a2db04a009c5b2716a313ae3e906b8ac8e480f4a647223ade5b25ad4026",
   "feature_lock_sha256": null,
-  "last_run_id": "wp04_phoenix_adaptation_loader_parity",
+  "last_run_id": "wp04_phoenix_adaptation_run_plan",
   "open_blockers": [
     "Create feature locks before promoting the P14T dataset-specific G0 gate to PASS.",
     "How2Sign train has 31,047 named MP4 files plus one valid MP4 with corrupt filename `�~`; the same corrupt entry exists in the local archive, so its sample ID must be established without guessing before H2S resource verification can pass.",

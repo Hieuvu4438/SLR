@@ -233,18 +233,33 @@ class PseudoClipDataset:
         *,
         training: bool,
         rng: random.Random | None = None,
+        seed: int | None = None,
+        epoch: int = 0,
     ) -> None:
         if not records:
             raise PseudoClipError("PseudoClipDataset requires at least one record")
+        if rng is not None and seed is not None:
+            raise PseudoClipError("provide either a stateful rng or deterministic seed, not both")
+        if seed is not None and (seed < 0 or epoch < 0):
+            raise PseudoClipError("dataset seed and epoch must be nonnegative")
         self.records = [dict(record) for record in records]
         self.training = training
         self.rng = rng
+        self.seed = seed
+        self.epoch = epoch
 
     def __len__(self) -> int:
         return len(self.records)
 
     def __getitem__(self, index: int) -> dict[str, Any]:
-        return decode_pseudoclip(self.records[index], training=self.training, rng=self.rng)
+        rng = self.rng
+        if self.training and self.seed is not None:
+            pseudo_id = str(self.records[index]["pseudo_id"])
+            digest = hashlib.sha256(
+                f"ocem-pseudoclip-sampling-v1\0{self.seed}\0{self.epoch}\0{pseudo_id}".encode()
+            ).digest()
+            rng = random.Random(int.from_bytes(digest[:8], "big"))
+        return decode_pseudoclip(self.records[index], training=self.training, rng=rng)
 
 
 def validate_pseudoclip_loader(
