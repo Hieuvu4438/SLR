@@ -22,6 +22,12 @@ solver = [
   "scipy==1.17.1",
   "torch==2.11.0",
 ]
+adaptation = [
+  "numpy==2.5.3",
+  "opencv-python==4.13.0.92",
+  "Pillow==12.2.0",
+  "torch==2.11.0",
+]
 
 [project.scripts]
 ocem = "ocem.cli:main"

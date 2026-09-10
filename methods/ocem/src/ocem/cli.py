@@ -13,11 +13,16 @@ from ocem.data.adaptation import AdaptationPlanError, build_p14t_adaptation_plan
 from ocem.data.datasets.how2sign import prepare_how2sign
 from ocem.data.datasets.phoenix import prepare_phoenix
 from ocem.data.features import FeatureAuditError, audit_feature_cache
+from ocem.data.pseudoclips import PseudoClipError, validate_pseudoclip_loader
 from ocem.data.pseudolabels import PseudoLabelError, generate_p14t_pseudolabel_index
 from ocem.doctor import collect_doctor_report
 from ocem.provenance.resources import build_resource_lock
 from ocem.provenance.state import load_implementation_state, render_checkpoint
 from ocem.scoring.validation import profile_solver, validate_solver
+from ocem.training.i3d_adaptation import (
+    I3DAdaptationError,
+    validate_one_batch_adaptation_parity,
+)
 
 
 NOT_IMPLEMENTED_EXIT = 3
@@ -153,6 +158,38 @@ def _features_pseudolabel(args: argparse.Namespace) -> int:
     )
     _write_json(report, args.output)
     return 0 if report["status"] == "PASS" else 4
+
+
+def _features_validate_pseudoclips(args: argparse.Namespace) -> int:
+    report = validate_pseudoclip_loader(
+        index=args.index,
+        expected_index_sha256=args.index_sha256,
+        adaptation_split=args.adaptation_split,
+        samples=args.samples,
+        seed=args.seed,
+    )
+    _write_json(report, args.output)
+    return 0 if report["status"] == "PASS" else 4
+
+
+def _features_validate_adaptation_step(args: argparse.Namespace) -> int:
+    report = validate_one_batch_adaptation_parity(
+        index=args.index,
+        expected_index_sha256=args.index_sha256,
+        checkpoint=args.checkpoint,
+        expected_checkpoint_sha256=args.checkpoint_sha256,
+        implementation=args.implementation,
+        expected_implementation_sha256=args.implementation_sha256,
+        trainer_root=args.trainer_root,
+        expected_transforms_sha256=args.transforms_sha256,
+        device=args.device,
+        batch_size=args.batch_size,
+        seed=args.seed,
+        absolute_tolerance=args.atol,
+        relative_tolerance=args.rtol,
+    )
+    _write_json(report, args.output)
+    return 0 if report["status"] == "PASS" else 5
 
 
 def _state_checkpoint(args: argparse.Namespace) -> int:
@@ -291,6 +328,37 @@ def build_parser() -> argparse.ArgumentParser:
     pseudolabel.add_argument("--report-interval", type=int, default=250)
     pseudolabel.add_argument("--output", required=True)
     pseudolabel.set_defaults(handler=_features_pseudolabel)
+    validate_pseudoclips = feature_commands.add_parser(
+        "validate-pseudoclips", help="Smoke-test raw-frame pseudo clips from a locked index."
+    )
+    validate_pseudoclips.add_argument("--index", required=True)
+    validate_pseudoclips.add_argument("--index-sha256", required=True)
+    validate_pseudoclips.add_argument(
+        "--adaptation-split", required=True, choices=("train", "holdout")
+    )
+    validate_pseudoclips.add_argument("--samples", type=int, default=4)
+    validate_pseudoclips.add_argument("--seed", type=int, default=0)
+    validate_pseudoclips.add_argument("--output", required=True)
+    validate_pseudoclips.set_defaults(handler=_features_validate_pseudoclips)
+    validate_adaptation_step = feature_commands.add_parser(
+        "validate-adaptation-step",
+        help="Compare one P14T I3D SGD update with the pinned CiCo path.",
+    )
+    validate_adaptation_step.add_argument("--index", required=True)
+    validate_adaptation_step.add_argument("--index-sha256", required=True)
+    validate_adaptation_step.add_argument("--checkpoint", required=True)
+    validate_adaptation_step.add_argument("--checkpoint-sha256", required=True)
+    validate_adaptation_step.add_argument("--implementation", required=True)
+    validate_adaptation_step.add_argument("--implementation-sha256", required=True)
+    validate_adaptation_step.add_argument("--trainer-root", required=True)
+    validate_adaptation_step.add_argument("--transforms-sha256", required=True)
+    validate_adaptation_step.add_argument("--device", default="cuda:0")
+    validate_adaptation_step.add_argument("--batch-size", type=int, default=4)
+    validate_adaptation_step.add_argument("--seed", type=int, default=0)
+    validate_adaptation_step.add_argument("--atol", type=float, default=1e-5)
+    validate_adaptation_step.add_argument("--rtol", type=float, default=1e-4)
+    validate_adaptation_step.add_argument("--output", required=True)
+    validate_adaptation_step.set_defaults(handler=_features_validate_adaptation_step)
     baseline = commands.add_parser("baseline", help="Operate the pinned CiCo baseline.")
     _nested_placeholder(
         baseline, "baseline", [("reproduce", "Run baseline reproduction.", "WP-08")]
@@ -334,6 +402,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.handler(args))
-    except (ConfigError, FeatureAuditError, AdaptationPlanError, PseudoLabelError) as error:
+    except (
+        ConfigError,
+        FeatureAuditError,
+        AdaptationPlanError,
+        I3DAdaptationError,
+        PseudoClipError,
+        PseudoLabelError,
+    ) as error:
         sys.stderr.write(f"configuration error: {error}\n")
         return 2

@@ -1,0 +1,78 @@
+{
+  "schema_version": "ocem.p14t_adaptation_loader_parity_lock.v1",
+  "status": "PASS",
+  "scope": "P14T manifest-indexed pseudo-clip loading and one-batch I3D adaptation parity; no multi-epoch adaptation performed",
+  "created_at": "2026-09-10T19:26:16+07:00",
+  "pseudo_label_index": {
+    "path": "methods/ocem/runs/wp04_phoenix/pseudolabel_index.jsonl",
+    "sha256": "f247de98d1917dee969d71dfef971debcd57e7002425dd8313fa3f4a2c07c432",
+    "train_records": 9854,
+    "holdout_records": 1138
+  },
+  "loader": {
+    "tensor_contract": [4, 3, 16, 224, 224],
+    "dtype": "float32",
+    "range_before_augmentation": [0.0, 1.0],
+    "train_seek_equals_sequential": true,
+    "holdout_seek_equals_sequential": true,
+    "padding_observed_on_holdout": true,
+    "frame_selection_compatibility": "CiCo pseudo-MP4 interval sampling and last-frame padding",
+    "intentional_difference": "The raw-frame loader removes CiCo's lossy mp4v pseudo-video encode/decode round trip.",
+    "train_report": {
+      "path": "methods/ocem/runs/wp04_phoenix/pseudoclip_loader.train.json",
+      "sha256": "03324fdcce220964216c1cbeaf59e107f644e4004dd4ff4db2d02266c8927793"
+    },
+    "holdout_report": {
+      "path": "methods/ocem/runs/wp04_phoenix/pseudoclip_loader.holdout.json",
+      "sha256": "e412eb9fdd1cb396ded9646b544069d208bf56a2bc801353a71b9791f0cc6ccd"
+    }
+  },
+  "pinned_upstream": {
+    "i3d_implementation_sha256": "293b629125be89d2e643cf0d0383784e97b40cc002246de4fbf3a7be5b315a49",
+    "transforms_sha256": "874faf581c0f161f2b7ce3a8bacaf3ecf1a04f2a09c197647ab896ee1a9d92d5",
+    "video_dataset_sha256": "2fcce2f8eec5a37cba8553bbe8dc3d6a001dfd4b976f640933b086017d6558fa"
+  },
+  "one_batch_parity": {
+    "device": "cpu",
+    "reason": "CUDA avg_pool3d backward has no deterministic implementation in torch 2.11.0; deterministic CPU parity avoids accepting kernel-repeatability noise as adapter error.",
+    "batch_size": 4,
+    "real_raw_clips": true,
+    "loss_absolute_error": 0.0,
+    "gradient_max_absolute_error": 0.0,
+    "update_state_max_absolute_error": 0.0,
+    "gradient_parameter_count": 173,
+    "post_update_float_state_count": 287,
+    "encoder_gradient_nonzero": true,
+    "classifier_gradient_nonzero": true,
+    "absolute_tolerance": 0.00001,
+    "relative_tolerance": 0.0001,
+    "report": {
+      "path": "methods/ocem/runs/wp04_phoenix/adaptation_step_parity.cpu.json",
+      "sha256": "be40480604874f5489ba8632616def6831b470fc59fec48764c917e1ebfd2dc4"
+    }
+  },
+  "failed_attempts_preserved": [
+    {
+      "path": "methods/ocem/runs/wp04_phoenix/adaptation_step_parity.failed_dtype.json",
+      "sha256": "2e2bf24bb3e04066eb0529044caa76f0fb794a596c842aaa39a6d57db65e357f",
+      "diagnosis": "Premature float32 cast in NumPy crop-scale arithmetic; augmentation max error 2.70e-5."
+    },
+    {
+      "path": "methods/ocem/runs/wp04_phoenix/adaptation_step_parity.failed_absolute_only.json",
+      "sha256": "c0f127e94324d1c0c13f2fe2a6490af090df502dd58e6a7f53501f66853775f1",
+      "diagnosis": "Validator omitted the preregistered rtol=1e-4 component."
+    },
+    {
+      "path": "methods/ocem/runs/wp04_phoenix/adaptation_step_parity.json",
+      "sha256": "f83d10a21a1a81781957bf2a45d03f815b88c3c54baa1d9148cadb35c68b462c",
+      "diagnosis": "GPU parameter-gradient repeatability exceeded tolerance because avg_pool3d_backward_cuda is nondeterministic; augmentation/loss were exact and update allclose."
+    }
+  ],
+  "source_sha256": {
+    "loader": "9726ccb84acd605f4587ca4c3e0a2ee396928db556599c2eb1b3854be82ed596",
+    "adaptation_step": "8a30f1ea3752cc6d5ad340503309c065e32b0f76e092e4d7ced67cb8a7154c34"
+  },
+  "tests_passed": 63,
+  "validation_or_test_used": false,
+  "ready_for_adaptation_training": true
+}
