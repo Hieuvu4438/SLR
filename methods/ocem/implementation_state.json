@@ -5,7 +5,7 @@
   "research_decision": "GO_WITH_CONDITIONS",
   "method": "OCEM",
   "seds_dependency": false,
-  "updated_at": "2026-09-10T19:52:25+07:00",
+  "updated_at": "2026-09-10T20:22:21+07:00",
   "current_work_package": "WP-04",
   "completed_work_packages": [
     "WP-00",
@@ -164,17 +164,29 @@
         "validation_test_overlap": 0,
         "ready_to_run": true
       }
+    },
+    "adaptation_runs": {
+      "phoenix2014t": {
+        "path": "methods/ocem/locks/adaptation_run.phoenix2014t.json",
+        "status": "PASS",
+        "fixed_final_epoch": 15,
+        "final_checkpoint_sha256": "79da4389f1e62526028e882c269f8b3fba822e3d6331032e3443526128e2774a",
+        "train_pseudo_clips": 9854,
+        "train_derived_holdout_pseudo_clips": 1138,
+        "validation_test_overlap": 0,
+        "ready_for_adapted_feature_extraction": true
+      }
     }
   },
   "resource_lock_sha256": "52f27a2db04a009c5b2716a313ae3e906b8ac8e480f4a647223ade5b25ad4026",
   "feature_lock_sha256": null,
-  "last_run_id": "wp04_phoenix_adaptation_run_plan",
+  "last_run_id": "wp04_phoenix_adaptation_train_seed0",
   "open_blockers": [
     "Create feature locks before promoting the P14T dataset-specific G0 gate to PASS.",
     "How2Sign train has 31,047 named MP4 files plus one valid MP4 with corrupt filename `�~`; the same corrupt entry exists in the local archive, so its sample ID must be established without guessing before H2S resource verification can pass.",
     "Reconcile How2Sign annotation, recut-video and published CiCo gallery counts by sample ID; do not infer exclusions from counts.",
-    "The P14T Oxford domain-agnostic cache passes all 8,257 ID/hash/shape/support checks, but the P14T train-only adapted checkpoint and aligned adapted cache are missing; the H2S-transfer cache is not eligible as a substitute.",
+    "The P14T Oxford domain-agnostic cache passes all 8,257 ID/hash/shape/support checks and the train-only adapted checkpoint is locked, but the aligned P14T adapted cache is not yet extracted; the H2S-transfer cache is not eligible as a substitute.",
     "Measure full-gallery seconds/query, real-shape throughput, and preprocessing amortization after a feature lock; the synthetic S6 pass is not an end-to-end latency claim."
   ],
-  "next_action": "Run the locked 15-epoch P14T I3D adaptation on 9,854 train pseudo clips, monitor the 1,138 train-derived holdout clips without checkpoint selection, and preserve epoch/checkpoint provenance."
+  "next_action": "Dry-run, extract, and audit the manifest-scoped P14T domain-adapted feature stream from the locked epoch-15 checkpoint; do not promote G0 until both feature streams are aligned and locked."
 }

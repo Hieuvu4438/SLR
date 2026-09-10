@@ -1,0 +1,80 @@
+{
+  "schema_version": "ocem.p14t_i3d_adaptation_run_lock.v1",
+  "status": "PASS",
+  "scope": "Completed P14T train-only I3D adaptation; this is an encoder-training result, not an SLRet baseline or OCEM result",
+  "created_at": "2026-09-10T20:22:21+07:00",
+  "inputs": {
+    "pseudo_label_index_sha256": "f247de98d1917dee969d71dfef971debcd57e7002425dd8313fa3f4a2c07c432",
+    "initial_checkpoint_sha256": "6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f",
+    "i3d_implementation_sha256": "293b629125be89d2e643cf0d0383784e97b40cc002246de4fbf3a7be5b315a49",
+    "adaptation_run_plan_sha256": "20b5099d4d703579c5858f5ccae480dd9e2befdae24780f71ebce64bc04d8e2d",
+    "train_pseudo_clips": 9854,
+    "train_derived_holdout_pseudo_clips": 1138,
+    "validation_test_overlap": 0
+  },
+  "recipe": {
+    "config_sha256": "5ddeaef2bcf5121f15b39a909c4cb238da076323149f950ce6083f17f9580171",
+    "fixed_final_epoch": 15,
+    "batch_size": 4,
+    "workers": 4,
+    "seed": 0,
+    "optimizer": "SGD",
+    "learning_rate": 0.01,
+    "encoder_lr_coefficient": 1.0,
+    "momentum": 0.9,
+    "weight_decay": 0.0,
+    "effective_lr_schedule": "constant_0.01_for_all_15_epochs",
+    "checkpoint_selection": "fixed_final_epoch_15",
+    "codec_roundtrip": false
+  },
+  "outputs": {
+    "run_report": {
+      "path": "methods/ocem/runs/wp04_phoenix/adaptation_train_seed0/run_report.json",
+      "sha256": "23fe77c970046fb3c71c03f08e5a9a6628901ea201178c825faded5db156fd64"
+    },
+    "epoch_metrics": {
+      "path": "methods/ocem/runs/wp04_phoenix/adaptation_train_seed0/epoch_metrics.jsonl",
+      "sha256": "17e5cd82fb60d7aeda2e2ab30819a82769feb86dd49e54ea0c9f7fd185ece6ed",
+      "epochs": 15,
+      "all_finite": true
+    },
+    "final_checkpoint": {
+      "path": "methods/ocem/runs/wp04_phoenix/adaptation_train_seed0/checkpoint_final.pt",
+      "sha256": "79da4389f1e62526028e882c269f8b3fba822e3d6331032e3443526128e2774a",
+      "bytes": 142680986,
+      "epoch": 15,
+      "state_tensors": 344,
+      "optimizer_slots": 173,
+      "identical_to_latest_and_epoch_15_snapshot": true
+    }
+  },
+  "metrics_summary": {
+    "epoch_1_train_loss": 1.2193671285658878,
+    "epoch_1_holdout_loss": 0.5043339262927615,
+    "epoch_15_train_loss": 0.17620752222549096,
+    "epoch_15_train_top1": 0.9480414045057844,
+    "epoch_15_holdout_loss": 0.6658496814629815,
+    "epoch_15_holdout_top1": 0.8523725834797891,
+    "minimum_holdout_loss": 0.46963938241840875,
+    "minimum_holdout_loss_epoch": 3,
+    "interpretation": "Holdout loss worsened after its early minimum, indicating overfit risk; it was monitor-only and did not change the preregistered epoch-15 checkpoint."
+  },
+  "data_policy": {
+    "optimizer_source": "adaptation_split=train only",
+    "holdout_used_for_optimizer": false,
+    "holdout_used_for_checkpoint_selection": false,
+    "validation_or_test_used": false
+  },
+  "determinism": {
+    "ordering_and_rng_checkpointed": true,
+    "bitwise_cuda_rerun_claimed": false,
+    "limitation": "torch 2.11 avg_pool3d_backward_cuda has no deterministic implementation"
+  },
+  "source_sha256": {
+    "runner": "e987851a89518c9a8e608d18025d86882491b51c77ca772d87b0415dff5ac362",
+    "adaptation_step": "8a30f1ea3752cc6d5ad340503309c065e32b0f76e092e4d7ced67cb8a7154c34",
+    "pseudo_clip_loader": "0369f56ec9e718df94f1f285422ef7e0e9849d7723e3a8c5da045b11c1127e19"
+  },
+  "tests_passed": 77,
+  "ready_for_adapted_feature_extraction": true
+}
