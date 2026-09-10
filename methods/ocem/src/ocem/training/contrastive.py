@@ -25,6 +25,13 @@ class CandidateSets:
     column_random_counts: tuple[int, ...]
 
 
+@dataclass(frozen=True)
+class MatchedLoss:
+    total: torch.Tensor
+    base: torch.Tensor
+    mixed: torch.Tensor
+
+
 def exact_duplicate_negative_mask(
     sample_ids: Sequence[str], caption_hashes: Sequence[str]
 ) -> torch.Tensor:
@@ -98,6 +105,42 @@ def symmetric_candidate_loss(
         for column, candidates in enumerate(columns)
     ]
     return (torch.stack(row_losses).mean() + torch.stack(column_losses).mean()) / 2
+
+
+def matched_ocem_loss(
+    base_t2v_logits: torch.Tensor,
+    base_v2t_logits: torch.Tensor,
+    mixed_t2v_logits: torch.Tensor,
+    mixed_v2t_logits: torch.Tensor,
+    *,
+    allowed_mask: torch.Tensor,
+    row_candidates: Sequence[Sequence[int]],
+    column_candidates: Sequence[Sequence[int]],
+    mixed_weight: float = 1.0,
+) -> MatchedLoss:
+    """Apply the locked two-direction base-plus-mixed factorization exactly once."""
+
+    if mixed_weight < 0:
+        raise ContrastiveContractError("mixed_weight must be nonnegative")
+    base = 0.5 * (
+        symmetric_candidate_loss(base_t2v_logits, allowed_mask=allowed_mask)
+        + symmetric_candidate_loss(base_v2t_logits, allowed_mask=allowed_mask)
+    )
+    mixed = 0.5 * (
+        symmetric_candidate_loss(
+            mixed_t2v_logits,
+            allowed_mask=allowed_mask,
+            row_candidates=row_candidates,
+            column_candidates=column_candidates,
+        )
+        + symmetric_candidate_loss(
+            mixed_v2t_logits,
+            allowed_mask=allowed_mask,
+            row_candidates=row_candidates,
+            column_candidates=column_candidates,
+        )
+    )
+    return MatchedLoss(total=base + mixed_weight * mixed, base=base, mixed=mixed)
 
 
 def _anchor_rng(seed: int, direction: str, anchor_id: str) -> random.Random:

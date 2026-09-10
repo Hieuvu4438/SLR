@@ -6,6 +6,7 @@ import torch
 from ocem.training.contrastive import (
     ContrastiveContractError,
     exact_duplicate_negative_mask,
+    matched_ocem_loss,
     score_pair_union_in_blocks,
     select_mixed_candidates,
     symmetric_candidate_loss,
@@ -132,3 +133,33 @@ def test_batch_without_real_negative_fails_closed() -> None:
             sample_ids=["a", "b"],
             seed=0,
         )
+
+
+def test_matched_loss_adds_base_and_mixed_once_without_an_extra_temperature() -> None:
+    base_t2v = torch.tensor([[4.0, 1.0], [2.0, 4.0]])
+    base_v2t = torch.tensor([[3.0, 2.0], [1.0, 3.0]])
+    mixed_t2v = torch.tensor([[5.0, 0.0], [1.0, 5.0]])
+    mixed_v2t = torch.tensor([[2.0, 1.0], [0.0, 2.0]])
+    allowed = torch.ones(2, 2, dtype=torch.bool)
+    candidates = ((0, 1), (1, 0))
+    result = matched_ocem_loss(
+        base_t2v,
+        base_v2t,
+        mixed_t2v,
+        mixed_v2t,
+        allowed_mask=allowed,
+        row_candidates=candidates,
+        column_candidates=candidates,
+        mixed_weight=0.7,
+    )
+    expected_base = 0.5 * (
+        symmetric_candidate_loss(base_t2v, allowed_mask=allowed)
+        + symmetric_candidate_loss(base_v2t, allowed_mask=allowed)
+    )
+    expected_mixed = 0.5 * (
+        symmetric_candidate_loss(mixed_t2v, allowed_mask=allowed)
+        + symmetric_candidate_loss(mixed_v2t, allowed_mask=allowed)
+    )
+    assert torch.equal(result.base, expected_base)
+    assert torch.equal(result.mixed, expected_mixed)
+    assert torch.equal(result.total, expected_base + 0.7 * expected_mixed)
