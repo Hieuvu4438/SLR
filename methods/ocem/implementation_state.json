@@ -1,0 +1,90 @@
+{
+  "schema_version": "ocem.implementation_state.v1",
+  "spec_version": "1.0",
+  "research_checkpoint": "8",
+  "research_decision": "GO_WITH_CONDITIONS",
+  "method": "OCEM",
+  "seds_dependency": false,
+  "updated_at": "2026-09-10T15:19:39+07:00",
+  "current_work_package": "WP-01",
+  "completed_work_packages": [
+    "WP-00"
+  ],
+  "gates": {
+    "resources_phoenix2014t": "NOT_RUN",
+    "resources_how2sign": "NOT_RUN",
+    "baseline_phoenix2014t": "NOT_RUN",
+    "baseline_how2sign": "NOT_RUN",
+    "solver_gpu": "NOT_RUN",
+    "failure_A": "NOT_RUN",
+    "failure_A2": "NOT_RUN",
+    "minimal_pilot": "NOT_RUN"
+  },
+  "workspace_observations": {
+    "python": "3.13.5",
+    "torch": "2.11.0+cu128",
+    "torchvision": "0.26.0+cu128",
+    "cuda_available": true,
+    "gpu": "NVIDIA RTX 5880 Ada Generation",
+    "gpu_memory_bytes": 50875793408,
+    "disk_free_bytes": 65498251264,
+    "cico_source": {
+      "path": "third_party/SLRT/CiCo",
+      "commit": "38a4f7b00da7a858d59b7fabe5093876a84db8e0",
+      "status": "PINNED_SOURCE_PRESENT_WITH_LOCAL_CHANGES"
+    },
+    "oxford_i3d": {
+      "path": "artifacts/pretrained/bsl5k.pth.tar",
+      "bytes": 142594302,
+      "sha256": "6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f",
+      "transfer_status": "FULL_HASH_MATCH",
+      "load_status": "NOT_RUN"
+    },
+    "openai_clip": {
+      "discovered_path": "third_party/SEDS/modules/ViT-B-32.pt",
+      "bytes": 353976522,
+      "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+      "transfer_status": "FULL_HASH_MATCH",
+      "usable_as_dependency": false,
+      "reason": "The bytes match the official OpenAI checksum, but OCEM may not depend on a path inside the excluded SEDS tree. WP-02 must place or reference an independently governed canonical resource and record provenance before load/parity."
+    },
+    "phoenix2014t": {
+      "root": "/home/dongvk/datasets/phoenix14T",
+      "video_counts": {
+        "train": 7096,
+        "dev": 519,
+        "test": 642
+      },
+      "status": "RAW_VIDEO_AND_OFFICIAL_ANNOTATIONS_PRESENT_UNVERIFIED_BY_OCEM"
+    },
+    "how2sign": {
+      "root": "/home/shared_data/sign_language/How2Sign",
+      "video_counts": {
+        "train": 31048,
+        "dev": 1739,
+        "test": 2343
+      },
+      "status": "RECUT_VIDEO_AND_ANNOTATION_ASSETS_PRESENT_PROTOCOL_EQUIVALENCE_UNVERIFIED"
+    },
+    "existing_retrieval_artifacts": {
+      "checkpoints": [
+        "artifacts/pretrained/ph_sota.pth",
+        "artifacts/pretrained/H2S_sota.pth"
+      ],
+      "self_extracted_features_root": "artifacts/features_reextracted",
+      "manifests_root": "artifacts/manifests",
+      "status": "DISCOVERED_NOT_YET_ACCEPTED_AS_OCEM_LOCKS"
+    }
+  },
+  "resource_lock_sha256": null,
+  "feature_lock_sha256": null,
+  "last_run_id": null,
+  "open_blockers": [
+    "Create OCEM-owned resource and protocol locks before promoting discovered assets to G0 PASS.",
+    "Load and shape-check the Oxford I3D checkpoint without suppressing missing or unexpected keys.",
+    "Move or copy the checksum-matching OpenAI CLIP bytes out of the excluded SEDS resource tree, then load and parity-check them under official OpenAI/CiCo provenance.",
+    "Reconcile How2Sign annotation, recut-video and published CiCo gallery counts by sample ID; do not infer exclusions from counts.",
+    "Verify that any reused I3D feature cache preserves local 16-frame supports and matches the selected manifests before issuing a feature lock."
+  ],
+  "next_action": "Implement WP-01: isolated package scaffold, strict config validation, provenance primitives, gate-aware CLI help, and tests."
+}
