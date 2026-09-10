@@ -1,0 +1,446 @@
+{
+  "blocking_resource_ids": [
+    "how2sign_raw"
+  ],
+  "config_path": "/home/haipd/SLR/methods/ocem/configs/resources.yaml",
+  "config_sha256": "c185729b8b9a277330da89a33f078cb2eb421cf0689d0f02435f06e68cca0737",
+  "lock_sha256": "52f27a2db04a009c5b2716a313ae3e906b8ac8e480f4a647223ade5b25ad4026",
+  "note": "This lock verifies registered files/content. Dataset protocol and feature locks remain separate G0 requirements.",
+  "resources": [
+    {
+      "configured_access_status": "present",
+      "content": {
+        "actual_commit": "38a4f7b00da7a858d59b7fabe5093876a84db8e0",
+        "expected_commit": "38a4f7b00da7a858d59b7fabe5093876a84db8e0",
+        "missing_paths": [],
+        "status": "PASS",
+        "worktree_clean_required": false
+      },
+      "excluded_dependency": false,
+      "id": "cico_source",
+      "kind": "git_repository",
+      "loaded": false,
+      "local_path": "/home/haipd/SLR/third_party/SLRT",
+      "path_type": "directory",
+      "required": true,
+      "source_url": "https://github.com/FangyunWei/SLRT.git",
+      "status": "PASS"
+    },
+    {
+      "bytes": 142594302,
+      "configured_access_status": "full_hash_match",
+      "content": {
+        "format": "torch_checkpoint",
+        "minimum_state_tensors": 300,
+        "missing_state_keys": [],
+        "missing_top_level_keys": [],
+        "required_state_shapes": {
+          "module.logits.conv3d.weight": [
+            5383,
+            1024,
+            1,
+            1,
+            1
+          ]
+        },
+        "state_tensors": 344,
+        "status": "PASS",
+        "top_level_keys": [
+          "arch",
+          "epoch",
+          "optimizer",
+          "state_dict"
+        ]
+      },
+      "excluded_dependency": false,
+      "expected_bytes": 142594302,
+      "expected_sha256": "6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f",
+      "id": "oxford_i3d",
+      "kind": "checkpoint",
+      "loaded": true,
+      "local_path": "/home/haipd/SLR/artifacts/pretrained/bsl5k.pth.tar",
+      "path_type": "file",
+      "required": true,
+      "sha256": "6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f",
+      "source_url": "https://www.robots.ox.ac.uk/~vgg/research/bslattend/data/bsl5k.pth.tar",
+      "status": "PASS"
+    },
+    {
+      "bytes": 353976522,
+      "configured_access_status": "full_hash_match",
+      "content": {
+        "format": "torchscript",
+        "minimum_state_tensors": 300,
+        "missing_state_keys": [],
+        "required_state_shapes": {
+          "logit_scale": [],
+          "positional_embedding": [
+            77,
+            512
+          ],
+          "text_projection": [
+            512,
+            512
+          ]
+        },
+        "state_tensors": 305,
+        "status": "PASS"
+      },
+      "excluded_dependency": false,
+      "expected_bytes": 353976522,
+      "expected_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+      "id": "openai_clip",
+      "kind": "checkpoint",
+      "loaded": true,
+      "local_path": "/home/haipd/SLR/artifacts/pretrained/ViT-B-32.pt",
+      "path_type": "file",
+      "required": true,
+      "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+      "source_url": "https://openaipublic.azureedge.net/clip/models/40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af/ViT-B-32.pt",
+      "status": "PASS"
+    },
+    {
+      "configured_access_status": "present",
+      "content": {
+        "file_count_mismatches": {},
+        "file_counts": {
+          "videos_phoenix/videos/dev/*.mp4": 519,
+          "videos_phoenix/videos/test/*.mp4": 642,
+          "videos_phoenix/videos/train/*.mp4": 7096
+        },
+        "missing_paths": [],
+        "status": "PASS"
+      },
+      "excluded_dependency": false,
+      "id": "phoenix2014t_raw",
+      "kind": "dataset_directory",
+      "loaded": false,
+      "local_path": "/home/dongvk/datasets/phoenix14T",
+      "path_type": "directory",
+      "required": true,
+      "source_url": "https://www-i6.informatik.rwth-aachen.de/~koller/RWTH-PHOENIX-2014-T/",
+      "status": "PASS"
+    },
+    {
+      "bytes": 1688455,
+      "configured_access_status": "present",
+      "content": {
+        "expected_rows": 7096,
+        "header": [
+          "name",
+          "video",
+          "start",
+          "end",
+          "speaker",
+          "orth",
+          "translation"
+        ],
+        "missing_header": [],
+        "rows": 7096,
+        "status": "PASS"
+      },
+      "excluded_dependency": false,
+      "expected_bytes": null,
+      "id": "phoenix2014t_train_annotations",
+      "kind": "annotation",
+      "loaded": false,
+      "local_path": "/home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.train.corpus.csv",
+      "path_type": "file",
+      "required": true,
+      "source_url": "https://www-i6.informatik.rwth-aachen.de/~koller/RWTH-PHOENIX-2014-T/",
+      "status": "PASS"
+    },
+    {
+      "bytes": 119165,
+      "configured_access_status": "present",
+      "content": {
+        "expected_rows": 519,
+        "header": [
+          "name",
+          "video",
+          "start",
+          "end",
+          "speaker",
+          "orth",
+          "translation"
+        ],
+        "missing_header": [],
+        "rows": 519,
+        "status": "PASS"
+      },
+      "excluded_dependency": false,
+      "expected_bytes": null,
+      "id": "phoenix2014t_dev_annotations",
+      "kind": "annotation",
+      "loaded": false,
+      "local_path": "/home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.dev.corpus.csv",
+      "path_type": "file",
+      "required": true,
+      "source_url": "https://www-i6.informatik.rwth-aachen.de/~koller/RWTH-PHOENIX-2014-T/",
+      "status": "PASS"
+    },
+    {
+      "bytes": 142164,
+      "configured_access_status": "present",
+      "content": {
+        "expected_rows": 642,
+        "header": [
+          "name",
+          "video",
+          "start",
+          "end",
+          "speaker",
+          "orth",
+          "translation"
+        ],
+        "missing_header": [],
+        "rows": 642,
+        "status": "PASS"
+      },
+      "excluded_dependency": false,
+      "expected_bytes": null,
+      "id": "phoenix2014t_test_annotations",
+      "kind": "annotation",
+      "loaded": false,
+      "local_path": "/home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.test.corpus.csv",
+      "path_type": "file",
+      "required": true,
+      "source_url": "https://www-i6.informatik.rwth-aachen.de/~koller/RWTH-PHOENIX-2014-T/",
+      "status": "PASS"
+    },
+    {
+      "configured_access_status": "present",
+      "content": {
+        "file_count_mismatches": {
+          "train/raw_videos/*.mp4": {
+            "actual": 31047,
+            "expected": 31048
+          }
+        },
+        "file_counts": {
+          "eval/raw_videos/*.mp4": 1739,
+          "test/raw_videos/*.mp4": 2343,
+          "train/raw_videos/*.mp4": 31047
+        },
+        "missing_paths": [],
+        "status": "FAIL"
+      },
+      "excluded_dependency": false,
+      "id": "how2sign_raw",
+      "kind": "dataset_directory",
+      "loaded": false,
+      "local_path": "/home/shared_data/sign_language/How2Sign",
+      "path_type": "directory",
+      "required": true,
+      "source_url": "https://how2sign.github.io/",
+      "status": "FAIL_CONTENT"
+    },
+    {
+      "bytes": 5607385,
+      "configured_access_status": "full_hash_match",
+      "content": {
+        "expected_rows": 31165,
+        "header": [
+          "VIDEO_ID",
+          "VIDEO_NAME",
+          "SENTENCE_ID",
+          "SENTENCE_NAME",
+          "START_REALIGNED",
+          "END_REALIGNED",
+          "SENTENCE"
+        ],
+        "missing_header": [],
+        "rows": 31165,
+        "status": "PASS"
+      },
+      "excluded_dependency": false,
+      "expected_bytes": 5607385,
+      "expected_sha256": "67a8f4fb6dc066f38006b89ac84c27a4b05d7fa07d5e6952f997042724d7a847",
+      "id": "how2sign_train_annotations",
+      "kind": "annotation",
+      "loaded": false,
+      "local_path": "/home/haipd/SLR/third_party/SLRT/CiCo/data_preparation/how2sign_realigned_train.csv",
+      "path_type": "file",
+      "required": true,
+      "sha256": "67a8f4fb6dc066f38006b89ac84c27a4b05d7fa07d5e6952f997042724d7a847",
+      "source_url": "https://how2sign.github.io/",
+      "status": "PASS"
+    },
+    {
+      "bytes": 311419,
+      "configured_access_status": "full_hash_match",
+      "content": {
+        "expected_rows": 1741,
+        "header": [
+          "VIDEO_ID",
+          "VIDEO_NAME",
+          "SENTENCE_ID",
+          "SENTENCE_NAME",
+          "START_REALIGNED",
+          "END_REALIGNED",
+          "SENTENCE"
+        ],
+        "missing_header": [],
+        "rows": 1741,
+        "status": "PASS"
+      },
+      "excluded_dependency": false,
+      "expected_bytes": 311419,
+      "expected_sha256": "1bf5d57ce90d61571776d06a179335d99648d8c94fc22b327d2abb328d26137c",
+      "id": "how2sign_dev_annotations",
+      "kind": "annotation",
+      "loaded": false,
+      "local_path": "/home/shared_data/sign_language/How2Sign/eval/how2sign_realigned_val.csv",
+      "path_type": "file",
+      "required": true,
+      "sha256": "1bf5d57ce90d61571776d06a179335d99648d8c94fc22b327d2abb328d26137c",
+      "source_url": "https://how2sign.github.io/",
+      "status": "PASS"
+    },
+    {
+      "bytes": 423682,
+      "configured_access_status": "full_hash_match",
+      "content": {
+        "expected_rows": 2357,
+        "header": [
+          "VIDEO_ID",
+          "VIDEO_NAME",
+          "SENTENCE_ID",
+          "SENTENCE_NAME",
+          "START_REALIGNED",
+          "END_REALIGNED",
+          "SENTENCE"
+        ],
+        "missing_header": [],
+        "rows": 2357,
+        "status": "PASS"
+      },
+      "excluded_dependency": false,
+      "expected_bytes": 423682,
+      "expected_sha256": "d1799dcbf100eda822eeb1a0e6e754d82b12b2a57756bd47073c4e4b8a02ae4d",
+      "id": "how2sign_test_annotations",
+      "kind": "annotation",
+      "loaded": false,
+      "local_path": "/home/haipd/SLR/third_party/SLRT/CiCo/data_preparation/how2sign_realigned_test.csv",
+      "path_type": "file",
+      "required": true,
+      "sha256": "d1799dcbf100eda822eeb1a0e6e754d82b12b2a57756bd47073c4e4b8a02ae4d",
+      "source_url": "https://how2sign.github.io/",
+      "status": "PASS"
+    },
+    {
+      "bytes": 350469151,
+      "configured_access_status": "full_hash_match",
+      "content": {
+        "format": "torch_state_dict",
+        "minimum_state_tensors": 100,
+        "missing_state_keys": [],
+        "required_state_shapes": {
+          "clip.logit_scale": [],
+          "clip.positional_embedding": [
+            77,
+            512
+          ]
+        },
+        "state_tensors": 305,
+        "status": "PASS"
+      },
+      "excluded_dependency": false,
+      "expected_bytes": 350469151,
+      "expected_sha256": "598b822aafd1b3cd767b290410ea1191f723dc87dd096775c3670e224b6e7b9f",
+      "id": "cico_phoenix_retrieval_checkpoint",
+      "kind": "checkpoint",
+      "loaded": true,
+      "local_path": "/home/haipd/SLR/artifacts/pretrained/ph_sota.pth",
+      "path_type": "file",
+      "required": true,
+      "sha256": "598b822aafd1b3cd767b290410ea1191f723dc87dd096775c3670e224b6e7b9f",
+      "source_url": "https://drive.google.com/file/d/1Hpcn5obCcG5JHa3nLvHqX9pfrp7g6wDu/view",
+      "status": "PASS"
+    },
+    {
+      "bytes": 350469151,
+      "configured_access_status": "full_hash_match",
+      "content": {
+        "format": "torch_state_dict",
+        "minimum_state_tensors": 100,
+        "missing_state_keys": [],
+        "required_state_shapes": {
+          "clip.logit_scale": [],
+          "clip.positional_embedding": [
+            77,
+            512
+          ]
+        },
+        "state_tensors": 305,
+        "status": "PASS"
+      },
+      "excluded_dependency": false,
+      "expected_bytes": 350469151,
+      "expected_sha256": "67f557976d523dc3cd63cae73c29c88145e409b77221c90260ae51b9d0c95b35",
+      "id": "cico_how2sign_retrieval_checkpoint",
+      "kind": "checkpoint",
+      "loaded": true,
+      "local_path": "/home/haipd/SLR/artifacts/pretrained/H2S_sota.pth",
+      "path_type": "file",
+      "required": true,
+      "sha256": "67f557976d523dc3cd63cae73c29c88145e409b77221c90260ae51b9d0c95b35",
+      "source_url": "https://drive.google.com/file/d/1Hpcn5obCcG5JHa3nLvHqX9pfrp7g6wDu/view",
+      "status": "PASS"
+    },
+    {
+      "bytes": 110269047,
+      "configured_access_status": "full_hash_match",
+      "content": {
+        "format": "torch_checkpoint",
+        "minimum_state_tensors": 300,
+        "missing_state_keys": [],
+        "missing_top_level_keys": [],
+        "required_state_shapes": {
+          "module.logits.conv3d.weight": [
+            1432,
+            1024,
+            1,
+            1,
+            1
+          ]
+        },
+        "state_tensors": 344,
+        "status": "PASS",
+        "top_level_keys": [
+          "arch",
+          "epoch",
+          "optimizer",
+          "state_dict"
+        ]
+      },
+      "excluded_dependency": false,
+      "expected_bytes": 110269047,
+      "expected_sha256": "99e101d696ff63131b5d44fa6e465201216604ba5d8cc773f3cefa4a96ebd518",
+      "id": "cico_how2sign_domain_aware_i3d",
+      "kind": "checkpoint",
+      "loaded": true,
+      "local_path": "/home/haipd/SLR/artifacts/pretrained/domain_aware_I3D_H2S.pth.tar",
+      "path_type": "file",
+      "required": false,
+      "sha256": "99e101d696ff63131b5d44fa6e465201216604ba5d8cc773f3cefa4a96ebd518",
+      "source_url": "https://drive.google.com/file/d/1TbX3UjaUvXhsXSQX2UAm81nitt8tsgLq/view",
+      "status": "PASS"
+    },
+    {
+      "configured_access_status": "excluded",
+      "excluded_dependency": true,
+      "id": "seds_artifacts",
+      "kind": "excluded_dependency",
+      "loaded": false,
+      "local_path": null,
+      "required": false,
+      "source_url": null,
+      "status": "PASS_EXCLUDED"
+    }
+  ],
+  "schema_version": "ocem.resource_lock.v1",
+  "scientific_gate_promoted": false,
+  "seds_dependency": false,
+  "status": "BLOCKED_RESOURCE"
+}

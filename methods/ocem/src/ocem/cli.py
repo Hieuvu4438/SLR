@@ -10,6 +10,7 @@ from typing import Any, Sequence
 
 from ocem.config import ConfigError, load_config
 from ocem.doctor import collect_doctor_report
+from ocem.provenance.resources import build_resource_lock
 from ocem.provenance.state import load_implementation_state, render_checkpoint
 
 
@@ -60,6 +61,13 @@ def _validate_config(args: argparse.Namespace) -> int:
         args.output,
     )
     return 0
+
+
+def _resources_verify(args: argparse.Namespace) -> int:
+    config = load_config(args.config, kind="resources")
+    lock = build_resource_lock(config, args.config)
+    _write_json(lock, args.output)
+    return 0 if lock["status"] == "PASS" else 4
 
 
 def _state_checkpoint(args: argparse.Namespace) -> int:
@@ -129,7 +137,11 @@ def build_parser() -> argparse.ArgumentParser:
     validate.set_defaults(handler=_validate_config)
 
     resources = commands.add_parser("resources", help="Verify explicit local resource artifacts.")
-    _nested_placeholder(resources, "resources", [("verify", "Verify hashes/content/load state.", "WP-02")])
+    resource_commands = resources.add_subparsers(dest="resources_command", required=True)
+    verify = resource_commands.add_parser("verify", help="Verify hashes/content/load state.")
+    verify.add_argument("--config", required=True)
+    verify.add_argument("--output", required=True)
+    verify.set_defaults(handler=_resources_verify)
     data = commands.add_parser("data", help="Build provenance-preserving dataset manifests.")
     _nested_placeholder(data, "data", [("prepare", "Prepare a dataset manifest.", "WP-03")])
     features = commands.add_parser("features", help="Adapt and extract frozen I3D features.")
@@ -172,4 +184,3 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ConfigError as error:
         sys.stderr.write(f"configuration error: {error}\n")
         return 2
-

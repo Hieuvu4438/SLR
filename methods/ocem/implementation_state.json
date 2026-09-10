@@ -5,14 +5,16 @@
   "research_decision": "GO_WITH_CONDITIONS",
   "method": "OCEM",
   "seds_dependency": false,
-  "updated_at": "2026-09-10T15:24:00+07:00",
-  "current_work_package": "WP-02",
+  "updated_at": "2026-09-10T15:32:00+07:00",
+  "current_work_package": "WP-03",
   "completed_work_packages": [
     "WP-00",
-    "WP-01"
+    "WP-01",
+    "WP-02"
   ],
   "gates": {
     "software_ready": "PASS",
+    "resource_registry": "BLOCKED_RESOURCE",
     "resources_phoenix2014t": "NOT_RUN",
     "resources_how2sign": "NOT_RUN",
     "baseline_phoenix2014t": "NOT_RUN",
@@ -40,15 +42,16 @@
       "bytes": 142594302,
       "sha256": "6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f",
       "transfer_status": "FULL_HASH_MATCH",
-      "load_status": "NOT_RUN"
+      "load_status": "PASS"
     },
     "openai_clip": {
-      "discovered_path": "third_party/SEDS/modules/ViT-B-32.pt",
+      "discovered_path": "artifacts/pretrained/ViT-B-32.pt",
       "bytes": 353976522,
       "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
       "transfer_status": "FULL_HASH_MATCH",
-      "usable_as_dependency": false,
-      "reason": "The bytes match the official OpenAI checksum, but OCEM may not depend on a path inside the excluded SEDS tree. WP-02 must place or reference an independently governed canonical resource and record provenance before load/parity."
+      "load_status": "PASS",
+      "usable_as_dependency": true,
+      "reason": "Canonical OCEM registry path; bytes match the official OpenAI checksum and load as TorchScript. No OCEM runtime path references SEDS."
     },
     "phoenix2014t": {
       "root": "/home/dongvk/datasets/phoenix14T",
@@ -78,15 +81,14 @@
       "status": "DISCOVERED_NOT_YET_ACCEPTED_AS_OCEM_LOCKS"
     }
   },
-  "resource_lock_sha256": null,
+  "resource_lock_sha256": "52f27a2db04a009c5b2716a313ae3e906b8ac8e480f4a647223ade5b25ad4026",
   "feature_lock_sha256": null,
-  "last_run_id": null,
+  "last_run_id": "wp02_resource_verification",
   "open_blockers": [
-    "Create OCEM-owned resource and protocol locks before promoting discovered assets to G0 PASS.",
-    "Load and shape-check the Oxford I3D checkpoint without suppressing missing or unexpected keys.",
-    "Move or copy the checksum-matching OpenAI CLIP bytes out of the excluded SEDS resource tree, then load and parity-check them under official OpenAI/CiCo provenance.",
+    "Create dataset protocol and feature locks before promoting either dataset-specific G0 gate to PASS.",
+    "How2Sign train has 31,047 named MP4 files plus one valid MP4 with corrupt filename `�~`; the same corrupt entry exists in the local archive, so its sample ID must be established without guessing before H2S resource verification can pass.",
     "Reconcile How2Sign annotation, recut-video and published CiCo gallery counts by sample ID; do not infer exclusions from counts.",
     "Verify that any reused I3D feature cache preserves local 16-frame supports and matches the selected manifests before issuing a feature lock."
   ],
-  "next_action": "Implement WP-02: OCEM-owned resource registry, content/hash/model-load verification, environment lock, and resource_lock.json emission without any SEDS runtime dependency."
+  "next_action": "Implement the P14T slice of WP-03: parse official annotations, join videos by explicit ID, preserve captions and signer/source metadata, emit original/usable manifests plus exclusions, and create a protocol lock without promoting the feature gate."
 }

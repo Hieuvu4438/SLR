@@ -1,0 +1,198 @@
+schema_version: ocem.resources.v1
+project:
+  project_root_env: OCEM_PROJECT_ROOT
+  data_root_env: OCEM_DATA_ROOT
+  run_root_env: OCEM_RUN_ROOT
+resources:
+  - id: cico_source
+    kind: git_repository
+    required: true
+    source_url: https://github.com/FangyunWei/SLRT.git
+    local_path: ${OCEM_PROJECT_ROOT}/../../third_party/SLRT
+    access_status: present
+    excluded_dependency: false
+    loader:
+      kind: git
+      expected_commit: 38a4f7b00da7a858d59b7fabe5093876a84db8e0
+      required_paths:
+        - CiCo/CLCL/modules/modeling.py
+        - CiCo/I3D_feature_extractor/models/i3d.py
+
+  - id: oxford_i3d
+    kind: checkpoint
+    required: true
+    source_url: https://www.robots.ox.ac.uk/~vgg/research/bslattend/data/bsl5k.pth.tar
+    local_path: ${OCEM_PROJECT_ROOT}/../../artifacts/pretrained/bsl5k.pth.tar
+    expected_sha256: 6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f
+    expected_bytes: 142594302
+    access_status: full_hash_match
+    excluded_dependency: false
+    loader:
+      kind: torch_checkpoint
+      state_key: state_dict
+      required_top_level_keys: [epoch, arch, state_dict, optimizer]
+      required_state_keys: [module.logits.conv3d.weight]
+      min_state_tensors: 300
+
+  - id: openai_clip
+    kind: checkpoint
+    required: true
+    source_url: https://openaipublic.azureedge.net/clip/models/40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af/ViT-B-32.pt
+    local_path: ${OCEM_PROJECT_ROOT}/../../artifacts/pretrained/ViT-B-32.pt
+    expected_sha256: 40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af
+    expected_bytes: 353976522
+    access_status: full_hash_match
+    excluded_dependency: false
+    loader:
+      kind: torchscript
+      required_state_keys: [positional_embedding, text_projection, logit_scale]
+      min_state_tensors: 300
+
+  - id: phoenix2014t_raw
+    kind: dataset_directory
+    required: true
+    source_url: https://www-i6.informatik.rwth-aachen.de/~koller/RWTH-PHOENIX-2014-T/
+    local_path: /home/dongvk/datasets/phoenix14T
+    access_status: present
+    excluded_dependency: false
+    loader:
+      kind: directory
+      required_paths:
+        - PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.train.corpus.csv
+        - PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.dev.corpus.csv
+        - PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.test.corpus.csv
+      file_counts:
+        videos_phoenix/videos/train/*.mp4: 7096
+        videos_phoenix/videos/dev/*.mp4: 519
+        videos_phoenix/videos/test/*.mp4: 642
+
+  - id: phoenix2014t_train_annotations
+    kind: annotation
+    required: true
+    source_url: https://www-i6.informatik.rwth-aachen.de/~koller/RWTH-PHOENIX-2014-T/
+    local_path: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.train.corpus.csv
+    access_status: present
+    excluded_dependency: false
+    loader: {kind: delimited_text, delimiter: "|", expected_rows: 7096, header_contains: [name, translation]}
+
+  - id: phoenix2014t_dev_annotations
+    kind: annotation
+    required: true
+    source_url: https://www-i6.informatik.rwth-aachen.de/~koller/RWTH-PHOENIX-2014-T/
+    local_path: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.dev.corpus.csv
+    access_status: present
+    excluded_dependency: false
+    loader: {kind: delimited_text, delimiter: "|", expected_rows: 519, header_contains: [name, translation]}
+
+  - id: phoenix2014t_test_annotations
+    kind: annotation
+    required: true
+    source_url: https://www-i6.informatik.rwth-aachen.de/~koller/RWTH-PHOENIX-2014-T/
+    local_path: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.test.corpus.csv
+    access_status: present
+    excluded_dependency: false
+    loader: {kind: delimited_text, delimiter: "|", expected_rows: 642, header_contains: [name, translation]}
+
+  - id: how2sign_raw
+    kind: dataset_directory
+    required: true
+    source_url: https://how2sign.github.io/
+    local_path: /home/shared_data/sign_language/How2Sign
+    access_status: present
+    excluded_dependency: false
+    loader:
+      kind: directory
+      required_paths:
+        - train/raw_videos
+        - eval/raw_videos
+        - test/raw_videos
+      file_counts:
+        train/raw_videos/*.mp4: 31048
+        eval/raw_videos/*.mp4: 1739
+        test/raw_videos/*.mp4: 2343
+
+  - id: how2sign_train_annotations
+    kind: annotation
+    required: true
+    source_url: https://how2sign.github.io/
+    local_path: ${OCEM_PROJECT_ROOT}/../../third_party/SLRT/CiCo/data_preparation/how2sign_realigned_train.csv
+    expected_sha256: 67a8f4fb6dc066f38006b89ac84c27a4b05d7fa07d5e6952f997042724d7a847
+    expected_bytes: 5607385
+    access_status: full_hash_match
+    excluded_dependency: false
+    loader: {kind: delimited_text, delimiter: "\t", expected_rows: 31165, header_contains: [VIDEO_ID, SENTENCE_ID, SENTENCE]}
+
+  - id: how2sign_dev_annotations
+    kind: annotation
+    required: true
+    source_url: https://how2sign.github.io/
+    local_path: /home/shared_data/sign_language/How2Sign/eval/how2sign_realigned_val.csv
+    expected_sha256: 1bf5d57ce90d61571776d06a179335d99648d8c94fc22b327d2abb328d26137c
+    expected_bytes: 311419
+    access_status: full_hash_match
+    excluded_dependency: false
+    loader: {kind: delimited_text, delimiter: "\t", expected_rows: 1741, header_contains: [VIDEO_ID, SENTENCE_ID, SENTENCE]}
+
+  - id: how2sign_test_annotations
+    kind: annotation
+    required: true
+    source_url: https://how2sign.github.io/
+    local_path: ${OCEM_PROJECT_ROOT}/../../third_party/SLRT/CiCo/data_preparation/how2sign_realigned_test.csv
+    expected_sha256: d1799dcbf100eda822eeb1a0e6e754d82b12b2a57756bd47073c4e4b8a02ae4d
+    expected_bytes: 423682
+    access_status: full_hash_match
+    excluded_dependency: false
+    loader: {kind: delimited_text, delimiter: "\t", expected_rows: 2357, header_contains: [VIDEO_ID, SENTENCE_ID, SENTENCE]}
+
+  - id: cico_phoenix_retrieval_checkpoint
+    kind: checkpoint
+    required: true
+    source_url: https://drive.google.com/file/d/1Hpcn5obCcG5JHa3nLvHqX9pfrp7g6wDu/view
+    local_path: ${OCEM_PROJECT_ROOT}/../../artifacts/pretrained/ph_sota.pth
+    expected_sha256: 598b822aafd1b3cd767b290410ea1191f723dc87dd096775c3670e224b6e7b9f
+    expected_bytes: 350469151
+    access_status: full_hash_match
+    excluded_dependency: false
+    loader:
+      kind: torch_state_dict
+      required_state_keys: [clip.logit_scale, clip.positional_embedding]
+      min_state_tensors: 100
+
+  - id: cico_how2sign_retrieval_checkpoint
+    kind: checkpoint
+    required: true
+    source_url: https://drive.google.com/file/d/1Hpcn5obCcG5JHa3nLvHqX9pfrp7g6wDu/view
+    local_path: ${OCEM_PROJECT_ROOT}/../../artifacts/pretrained/H2S_sota.pth
+    expected_sha256: 67f557976d523dc3cd63cae73c29c88145e409b77221c90260ae51b9d0c95b35
+    expected_bytes: 350469151
+    access_status: full_hash_match
+    excluded_dependency: false
+    loader:
+      kind: torch_state_dict
+      required_state_keys: [clip.logit_scale, clip.positional_embedding]
+      min_state_tensors: 100
+
+  - id: cico_how2sign_domain_aware_i3d
+    kind: checkpoint
+    required: false
+    source_url: https://drive.google.com/file/d/1TbX3UjaUvXhsXSQX2UAm81nitt8tsgLq/view
+    local_path: ${OCEM_PROJECT_ROOT}/../../artifacts/pretrained/domain_aware_I3D_H2S.pth.tar
+    expected_sha256: 99e101d696ff63131b5d44fa6e465201216604ba5d8cc773f3cefa4a96ebd518
+    expected_bytes: 110269047
+    access_status: full_hash_match
+    excluded_dependency: false
+    loader:
+      kind: torch_checkpoint
+      state_key: state_dict
+      required_state_keys: [module.logits.conv3d.weight]
+      min_state_tensors: 300
+
+  - id: seds_artifacts
+    kind: excluded_dependency
+    required: false
+    source_url: null
+    local_path: null
+    access_status: excluded
+    excluded_dependency: true
+    notes: OCEM must never resolve or load SEDS/Baidu features or checkpoints.
+
