@@ -45,6 +45,7 @@ def test_state_round_trip_and_checkpoint(tmp_path) -> None:
     assert "WP-01" in checkpoint
     assert "fixture blocker" in checkpoint
     assert "Neural retrieval result claimed: No" in checkpoint
+    assert "Continue from this state and Checkpoint 8" in checkpoint
 
 
 def test_state_forbids_seds_dependency(tmp_path) -> None:

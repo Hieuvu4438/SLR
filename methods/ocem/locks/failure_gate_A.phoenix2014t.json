@@ -1,0 +1,98 @@
+{
+  "schema_version": "ocem.failure_gate_A_lock.v1",
+  "status": "NO_GO_SCIENTIFIC",
+  "G2": "NO_GO_SCIENTIFIC",
+  "created_at": "2026-09-10T22:18:45+07:00",
+  "dataset": "phoenix2014t",
+  "stage": "A",
+  "execution": {
+    "run_id": "wp09_stage_A_phoenix2014t_rerun1",
+    "output_dir": "methods/ocem/runs/wp09_stage_a_phoenix_rerun1",
+    "exit_code": 6,
+    "exit_code_interpretation": "completed NO_GO_SCIENTIFIC gate, not an implementation failure",
+    "log_sha256": "b892aa40107c7bf6bf398643cbf420c138065898f384911923140cfa39962851"
+  },
+  "provenance": {
+    "original_plan": {
+      "path": "methods/ocem/locks/failure_gate_A_plan.phoenix2014t.json",
+      "sha256": "5c1aaa14e26f45fec2ac48ffb76b757264164ac4e0d15ca1315124f52973eb72"
+    },
+    "implementation_amendment": {
+      "path": "methods/ocem/locks/failure_gate_A_amendment1.phoenix2014t.json",
+      "sha256": "3b160716da28e65f0169ef5f7df01e192387a3d45e354036250148b9fd3d5173"
+    },
+    "runner_git_commit": "c5165aff5778398a8a26a9b60474bb5a63ea41d2",
+    "runner_sha256": "988fd46aaac1b360f824c7b8dc4cc6c2ecc27e68914b6abb468158b048f66ff9",
+    "report_sha256": "3230cc25398554194230a30cc10bdefe1961e4437c65732fa3f9b10b31abc2a0"
+  },
+  "data": {
+    "train_samples": 7096,
+    "validation_samples": 519,
+    "test_features_or_text_read": false,
+    "gallery_pairs_per_direction": 269361,
+    "gallery_coverage": 1.0
+  },
+  "baseline_errors": {
+    "T2V": 135,
+    "V2T": 124,
+    "total": 259,
+    "non_ambiguous_primary": 245,
+    "exact_caption_ambiguity": 14
+  },
+  "primary_association": {
+    "mean_false_minus_true": 0.0006947345291740057,
+    "paired_ci95": [
+      -0.046195844175425466,
+      0.048724223737818394
+    ],
+    "caption_cluster_ci95": [
+      -0.05185139342666744,
+      0.053284240515671426
+    ],
+    "adjusted_effect": 0.0006947345291739967,
+    "adjusted_ci95": [
+      -0.04314870794516958,
+      0.04480057747993389
+    ],
+    "T2V_mean": -0.012123520375631996,
+    "V2T_mean": 0.014718124510500247,
+    "bootstrap_replicates": 10000
+  },
+  "affected_stratum": {
+    "count": 21,
+    "all_R1_errors": 259,
+    "fraction": 0.08108108108108109,
+    "minimum_fraction": 0.1
+  },
+  "gate_checks": {
+    "paired_ci_above_zero": false,
+    "caption_cluster_ci_above_zero": false,
+    "adjusted_ci_above_zero": false,
+    "both_direction_means_positive": false,
+    "affected_fraction_at_least_10pct": false
+  },
+  "duplicate_equivalence_recall_R1": {
+    "T2V": 75.33718689788054,
+    "V2T": 77.45664739884393
+  },
+  "artifacts": {
+    "train_positive_stats.jsonl": "223164c0d7579f351fbabad12bb7fd6bed3fa41acaa9847cee7566c671eb14f8",
+    "validation_error_pairs.jsonl": "df3415be9c99a49f6e66a05784b151bc4747e97428aeec6727c0c475dd410dd9",
+    "raw_t2v.validation.npy": "1a38936dca7b3d8d1fab9c5a69f4e41f4daaa298353702009afa828fadde1cd4",
+    "raw_v2t.validation.npy": "d21e59e7be11018cd369fb1247365faf1c734a868e6805f3ac6b5f558b20cc24",
+    "legacy_mixed_logits.validation.npy": "0b7690a6261bce8f3bdfd70c085357aec3e025f39e1318e3c147b358a7eaeb37"
+  },
+  "independent_revalidation": {
+    "status": "PASS",
+    "finite_score_cells": 269361,
+    "legacy_relation_max_abs_error": 0.0,
+    "error_selection_exact_match": true,
+    "train_threshold_exact_match": true,
+    "artifact_hashes_match": true
+  },
+  "decision": {
+    "hypothesis": "correlated overlapping support inflates near-miss baseline scores",
+    "result": "not supported by the preregistered P14T Stage A test",
+    "required_action": "kill the concentration explanation; do not train A2 or OCEM and do not retune the diagnostic threshold"
+  }
+}

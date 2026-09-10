@@ -1,12 +1,12 @@
 {
   "schema_version": "ocem.implementation_state.v1",
   "spec_version": "1.0",
-  "research_checkpoint": "8",
-  "research_decision": "GO_WITH_CONDITIONS",
+  "research_checkpoint": "9",
+  "research_decision": "NO_GO_SCIENTIFIC",
   "method": "OCEM",
   "seds_dependency": false,
-  "updated_at": "2026-09-10T22:13:55+07:00",
-  "current_work_package": "WP-09",
+  "updated_at": "2026-09-10T22:18:45+07:00",
+  "current_work_package": "STOPPED_AT_G2",
   "completed_work_packages": [
     "WP-00",
     "WP-01",
@@ -16,7 +16,8 @@
     "WP-05",
     "WP-06",
     "WP-07",
-    "WP-08"
+    "WP-08",
+    "WP-09"
   ],
   "gates": {
     "software_ready": "PASS",
@@ -28,7 +29,7 @@
     "baseline_phoenix2014t": "PASS",
     "baseline_how2sign": "NOT_RUN",
     "solver_gpu": "PASS",
-    "failure_A": "NOT_RUN",
+    "failure_A": "NO_GO_SCIENTIFIC",
     "failure_A2": "NOT_RUN",
     "minimal_pilot": "NOT_RUN"
   },
@@ -250,7 +251,8 @@
     "diagnostic_plans": {
       "failure_gate_A_phoenix2014t": {
         "path": "methods/ocem/locks/failure_gate_A_plan.phoenix2014t.json",
-        "status": "AMENDED_IMPLEMENTATION_ONLY",
+        "status": "NO_GO_SCIENTIFIC",
+        "result_lock": "methods/ocem/locks/failure_gate_A.phoenix2014t.json",
         "stage": "A",
         "validation_outcome_observed_before_lock": false,
         "bootstrap_replicates": 10000,
@@ -261,7 +263,14 @@
           "diagnostic_outcome_observed": false
         },
         "amendment": "methods/ocem/locks/failure_gate_A_amendment1.phoenix2014t.json",
-        "ready_to_rerun": true
+        "rerun1": {
+          "status": "NO_GO_SCIENTIFIC",
+          "exit_code": 6,
+          "gallery_scores_produced": true,
+          "independent_revalidation": "PASS"
+        },
+        "ready_to_rerun": false,
+        "A2_authorized": false
       }
     },
     "software_modules": {
@@ -279,11 +288,11 @@
   },
   "resource_lock_sha256": "026b2563b521427afdc495f8a8f59265346a8504cb8c8cb8d4a2e56109055db6",
   "feature_lock_sha256": "bfdb1aa7c5ea2713214b86ef6928147cc35414fb90c296d25993bdf660fcb07f",
-  "last_run_id": "wp09_stage_A_phoenix2014t_attempt0",
+  "last_run_id": "wp09_stage_A_phoenix2014t_rerun1",
   "open_blockers": [
-    "How2Sign train has 31,047 named MP4 files plus one valid MP4 with corrupt filename `�~`; the same corrupt entry exists in the local archive, so its sample ID must be established without guessing before H2S resource verification can pass.",
+    "How2Sign train has 31,047 named MP4 files plus one valid MP4 with corrupt filename `�~`; the user authorized excluding exactly this corrupt entry, which still needs an explicit exclusion record before H2S resource verification.",
     "Reconcile How2Sign annotation, recut-video and published CiCo gallery counts by sample ID; do not infer exclusions from counts.",
     "Add CUDA synchronization and phase-level model-load/feature-load/encode/score timings before making an end-to-end latency or preprocessing-amortization claim; the current G1 elapsed field is not sufficient for that claim."
   ],
-  "next_action": "Implement and run WP-09 duplicate controls plus frozen Stage A/A2 diagnostics on the locked P14T baseline scores; require the preregistered G2/G3 evidence before any OCEM pilot training."
+  "next_action": "Stop the OCEM experiment branch at G2: do not run A2, minimal pilot or core training, and do not retune the Stage A thresholds. Optional resource hygiene may document exclusion of exactly the corrupt How2Sign `�~` file and reconcile all remaining H2S IDs without reviving the rejected concentration hypothesis."
 }

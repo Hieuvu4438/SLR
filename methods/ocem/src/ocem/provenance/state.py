@@ -79,8 +79,8 @@ def render_checkpoint(state: Mapping[str, Any]) -> str:
         "## Exact next action\n\n"
         f"{state['next_action']}\n\n"
         "## Resume rule\n\n"
-        "Continue from this state and Checkpoint 8. Do not restart broad literature search, "
+        f"Continue from this state and Checkpoint {state['research_checkpoint']}. Do not restart "
+        "broad literature search, "
         "change OCEM's core method, add SEDS/Baidu dependencies, or promote NOT_RUN gates to PASS "
         "without their required artifacts.\n"
     )
-
