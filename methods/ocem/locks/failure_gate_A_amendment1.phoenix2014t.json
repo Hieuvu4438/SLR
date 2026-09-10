@@ -1,0 +1,51 @@
+{
+  "schema_version": "ocem.failure_gate_A_plan_amendment.v1",
+  "status": "PASS",
+  "created_at": "2026-09-10T22:13:55+07:00",
+  "scope": "Implementation-only amendment after the first Stage A execution failed before gallery scores or diagnostic outcomes were produced",
+  "original_preregistration": {
+    "path": "methods/ocem/locks/failure_gate_A_plan.phoenix2014t.json",
+    "sha256": "5c1aaa14e26f45fec2ac48ffb76b757264164ac4e0d15ca1315124f52973eb72",
+    "git_commit": "390ae5ed993790e7ec9f026c5ad6feb25a08bb1b",
+    "runner_sha256": "c0b5fa5d8b1717d59cd3f421aa12fda9757c80b5ca87e2a1bcc2c6babf805755"
+  },
+  "failed_execution": {
+    "run_id": "wp09_stage_A_phoenix2014t_attempt0",
+    "output_dir": "methods/ocem/runs/wp09_stage_a_phoenix",
+    "log_sha256": "f4a02dc4c6c418cc1fe8e81237123ce559174f7db197f693e920557b94b85e95",
+    "train_positive_stats_sha256": "223164c0d7579f351fbabad12bb7fd6bed3fa41acaa9847cee7566c671eb14f8",
+    "exit_code": 1,
+    "train_encoded": 7096,
+    "validation_encoded": 519,
+    "gallery_scores_produced": false,
+    "error_pairs_selected": false,
+    "bootstrap_or_gate_computed": false,
+    "diagnostic_outcome_observed": false,
+    "exception": "RuntimeError: The size of tensor a (66) must match the size of tensor b (65) at non-singleton dimension 2"
+  },
+  "root_cause": {
+    "component": "Stage A full-gallery scorer reconstruction",
+    "cause": "The cached contextual representation and validity mask both already contained the visual CLS position, but CiCoAdapter.upstream_video_mask was called again and prepended a second CLS mask.",
+    "evidence": "The certified baseline scorer directly inverts its cached 65-position validity mask; attempt 0 instead converted it with a helper intended for 64 local-window masks, producing 66 positions."
+  },
+  "correction": {
+    "kind": "shape-preserving mask reconstruction only",
+    "rule": "upstream_video_mask=(~video_valid).long()",
+    "corrected_runner_sha256": "988fd46aaac1b360f824c7b8dc4cc6c2ecc27e68914b6abb468158b048f66ff9",
+    "regression_tests": [
+      "preserve the existing 65-position visual CLS mask",
+      "reject token/mask length mismatch"
+    ]
+  },
+  "scientific_plan_changes": [],
+  "unchanged_contracts": [
+    "data splits and locked inputs",
+    "representation and feature fusion",
+    "concentration statistic and train threshold",
+    "R1 error selection and ambiguity handling",
+    "controls, bootstrap settings and seeds",
+    "affected rule and all G2 thresholds"
+  ],
+  "rerun_output_dir": "methods/ocem/runs/wp09_stage_a_phoenix_rerun1",
+  "ready_to_rerun": true
+}

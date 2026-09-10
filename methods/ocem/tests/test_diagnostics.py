@@ -5,9 +5,11 @@ import pickle
 
 import numpy as np
 import pytest
+import torch
 
 from ocem.diagnostics.cico_stage_a import (
     StageADiagnosticError,
+    _encoded_score_block,
     _selected_inputs,
     _verify_text_records,
 )
@@ -132,3 +134,33 @@ def test_stage_a_text_resource_requires_exact_manifest_order_and_original_text()
     _verify_text_records(records, mapping)
     with pytest.raises(StageADiagnosticError, match="order"):
         _verify_text_records(records, {"b": mapping["b"], "a": mapping["a"]})
+
+
+def test_stage_a_score_block_preserves_existing_visual_cls_mask() -> None:
+    video = np.zeros((2, 65, 4), dtype=np.float32)
+    video_valid = np.ones((2, 65), dtype=bool)
+    video_valid[:, -1] = False
+    text = np.zeros((3, 32, 4), dtype=np.float32)
+    text_valid = np.ones((3, 32), dtype=bool)
+    encoded = _encoded_score_block(
+        torch.from_numpy(video),
+        torch.from_numpy(video_valid),
+        torch.from_numpy(text),
+        torch.from_numpy(text_valid),
+        torch.device("cpu"),
+    )
+    assert encoded.visual_tokens.shape[1] == 65
+    assert encoded.upstream_video_mask.shape == (2, 65)
+    assert encoded.upstream_video_mask[:, 0].tolist() == [0, 0]
+    assert encoded.upstream_video_mask[:, -1].tolist() == [1, 1]
+
+
+def test_stage_a_score_block_rejects_misaligned_visual_mask() -> None:
+    with pytest.raises(StageADiagnosticError, match="do not align"):
+        _encoded_score_block(
+            torch.zeros(2, 65, 4),
+            torch.ones(2, 64, dtype=torch.bool),
+            torch.zeros(3, 32, 4),
+            torch.ones(3, 32, dtype=torch.bool),
+            torch.device("cpu"),
+        )

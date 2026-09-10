@@ -5,7 +5,7 @@
   "research_decision": "GO_WITH_CONDITIONS",
   "method": "OCEM",
   "seds_dependency": false,
-  "updated_at": "2026-09-10T22:01:01+07:00",
+  "updated_at": "2026-09-10T22:13:55+07:00",
   "current_work_package": "WP-09",
   "completed_work_packages": [
     "WP-00",
@@ -250,11 +250,18 @@
     "diagnostic_plans": {
       "failure_gate_A_phoenix2014t": {
         "path": "methods/ocem/locks/failure_gate_A_plan.phoenix2014t.json",
-        "status": "PASS",
+        "status": "AMENDED_IMPLEMENTATION_ONLY",
         "stage": "A",
         "validation_outcome_observed_before_lock": false,
         "bootstrap_replicates": 10000,
-        "ready_to_run": true
+        "attempt0": {
+          "status": "FAIL_IMPLEMENTATION",
+          "exit_code": 1,
+          "gallery_scores_produced": false,
+          "diagnostic_outcome_observed": false
+        },
+        "amendment": "methods/ocem/locks/failure_gate_A_amendment1.phoenix2014t.json",
+        "ready_to_rerun": true
       }
     },
     "software_modules": {
@@ -272,7 +279,7 @@
   },
   "resource_lock_sha256": "026b2563b521427afdc495f8a8f59265346a8504cb8c8cb8d4a2e56109055db6",
   "feature_lock_sha256": "bfdb1aa7c5ea2713214b86ef6928147cc35414fb90c296d25993bdf660fcb07f",
-  "last_run_id": "wp09_stage_A_preregistered_plan",
+  "last_run_id": "wp09_stage_A_phoenix2014t_attempt0",
   "open_blockers": [
     "How2Sign train has 31,047 named MP4 files plus one valid MP4 with corrupt filename `�~`; the same corrupt entry exists in the local archive, so its sample ID must be established without guessing before H2S resource verification can pass.",
     "Reconcile How2Sign annotation, recut-video and published CiCo gallery counts by sample ID; do not infer exclusions from counts.",

@@ -182,6 +182,27 @@ def _model_config(clip_checkpoint: Path, alpha: float) -> SimpleNamespace:
     )
 
 
+def _encoded_score_block(
+    video: torch.Tensor,
+    video_valid: torch.Tensor,
+    text: torch.Tensor,
+    text_valid: torch.Tensor,
+    device: torch.device,
+) -> CiCoEncoded:
+    """Reconstruct an encoded block without adding a second visual CLS mask."""
+
+    if video.shape[:2] != video_valid.shape:
+        raise StageADiagnosticError("contextual video tokens and validity mask do not align")
+    return CiCoEncoded(
+        visual_tokens=video.to(device),
+        canonical_text_tokens=text.to(device),
+        augmented_text_tokens=text.to(device),
+        upstream_video_mask=(~video_valid).long().to(device),
+        canonical_text_mask=text_valid.long().to(device),
+        augmented_text_mask=text_valid.long().to(device),
+    )
+
+
 def _encode_batches(
     *,
     records: Sequence[Mapping[str, Any]],
@@ -446,13 +467,12 @@ def diagnose_cico_stage_a(
 
     def scorer(video, video_mask, unused_intervals, text, canonical_mask):
         del unused_intervals
-        encoded = CiCoEncoded(
-            visual_tokens=video.to(resolved_device),
-            canonical_text_tokens=text.to(resolved_device),
-            augmented_text_tokens=text.to(resolved_device),
-            upstream_video_mask=CiCoAdapter.upstream_video_mask(video_mask).to(resolved_device),
-            canonical_text_mask=canonical_mask.long().to(resolved_device),
-            augmented_text_mask=canonical_mask.long().to(resolved_device),
+        encoded = _encoded_score_block(
+            video,
+            video_mask,
+            text,
+            canonical_mask,
+            resolved_device,
         )
         raw = adapter.directional_matrices(encoded)
         return raw.raw_t2v, raw.raw_v2t
