@@ -105,6 +105,18 @@ resources:
     loader: {kind: file}
     notes: CiCo English translation field used by the P14T retrieval baseline; IDs and ori_text match the official train manifest.
 
+  - id: cico_phoenix_dev_text
+    kind: derived_annotation
+    required: true
+    source_url: https://github.com/FangyunWei/SLRT/tree/38a4f7b00da7a858d59b7fabe5093876a84db8e0/CiCo/CLCL/data_ph
+    local_path: ${OCEM_PROJECT_ROOT}/../../third_party/SLRT/CiCo/CLCL/data_ph/dev.pkl
+    expected_sha256: 38bcc1248b7bea5f78b4512a2929df3056d563c3df016b440ed625dab32b1326
+    expected_bytes: 1949304
+    access_status: full_hash_match
+    excluded_dependency: false
+    loader: {kind: file}
+    notes: CiCo train+validation English translations in exact manifest concatenation order; validation IDs and ori_text match the official validation manifest.
+
   - id: cico_phoenix_test_text
     kind: derived_annotation
     required: true

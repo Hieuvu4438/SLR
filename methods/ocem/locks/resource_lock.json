@@ -3,8 +3,8 @@
     "how2sign_raw"
   ],
   "config_path": "/home/haipd/SLR/methods/ocem/configs/resources.yaml",
-  "config_sha256": "2ec8757af5ae6084977e1af6d651e5121c65c0dc525476878815a47b35c61e0a",
-  "lock_sha256": "c594dcc4ce3f6bbd2d0b50f6056888246a5db43b9dcd3e82a0c50f3b8a6b4d9e",
+  "config_sha256": "81c2baf9d20dcd78c595b4e4ea7fb0eb8ffdbb638db03f5bb747b43349dcff8a",
+  "lock_sha256": "026b2563b521427afdc495f8a8f59265346a8504cb8c8cb8d4a2e56109055db6",
   "note": "This lock verifies registered files/content. Dataset protocol and feature locks remain separate G0 requirements.",
   "resources": [
     {
@@ -224,6 +224,25 @@
       "path_type": "file",
       "required": true,
       "sha256": "b35ae6f90136b3c936182355c439374ae209bb42046f9f1eb8f9746a8b2c29e2",
+      "source_url": "https://github.com/FangyunWei/SLRT/tree/38a4f7b00da7a858d59b7fabe5093876a84db8e0/CiCo/CLCL/data_ph",
+      "status": "PASS"
+    },
+    {
+      "bytes": 1949304,
+      "configured_access_status": "full_hash_match",
+      "content": {
+        "status": "PASS"
+      },
+      "excluded_dependency": false,
+      "expected_bytes": 1949304,
+      "expected_sha256": "38bcc1248b7bea5f78b4512a2929df3056d563c3df016b440ed625dab32b1326",
+      "id": "cico_phoenix_dev_text",
+      "kind": "derived_annotation",
+      "loaded": false,
+      "local_path": "/home/haipd/SLR/third_party/SLRT/CiCo/CLCL/data_ph/dev.pkl",
+      "path_type": "file",
+      "required": true,
+      "sha256": "38bcc1248b7bea5f78b4512a2929df3056d563c3df016b440ed625dab32b1326",
       "source_url": "https://github.com/FangyunWei/SLRT/tree/38a4f7b00da7a858d59b7fabe5093876a84db8e0/CiCo/CLCL/data_ph",
       "status": "PASS"
     },
