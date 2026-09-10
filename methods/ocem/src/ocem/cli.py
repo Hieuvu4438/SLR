@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from ocem.config import ConfigError, load_config
+from ocem.data.adaptation import AdaptationPlanError, build_p14t_adaptation_plan
 from ocem.data.datasets.how2sign import prepare_how2sign
 from ocem.data.datasets.phoenix import prepare_phoenix
 from ocem.data.features import FeatureAuditError, audit_feature_cache
@@ -122,6 +123,20 @@ def _features_audit_cache(args: argparse.Namespace) -> int:
     return 0 if report["status"] == "PASS" else 4
 
 
+def _features_plan_adaptation(args: argparse.Namespace) -> int:
+    report = build_p14t_adaptation_plan(
+        train_manifest=args.train_manifest,
+        forbidden_manifests=args.forbidden_manifest,
+        checkpoint=args.checkpoint,
+        expected_checkpoint_sha256=args.checkpoint_sha256,
+        class_vocabulary=args.class_vocabulary,
+        seed=args.seed,
+        holdout_modulus=args.holdout_modulus,
+    )
+    _write_json(report, args.output)
+    return 0
+
+
 def _state_checkpoint(args: argparse.Namespace) -> int:
     state = load_implementation_state(args.state)
     checkpoint = render_checkpoint(state)
@@ -227,6 +242,18 @@ def build_parser() -> argparse.ArgumentParser:
     audit_cache.add_argument("--workers", type=int, default=8)
     audit_cache.add_argument("--output", required=True)
     audit_cache.set_defaults(handler=_features_audit_cache)
+    plan_adaptation = feature_commands.add_parser(
+        "plan-adaptation", help="Lock P14T train-only adaptation IDs and recipe."
+    )
+    plan_adaptation.add_argument("--train-manifest", required=True)
+    plan_adaptation.add_argument("--forbidden-manifest", action="append", required=True)
+    plan_adaptation.add_argument("--checkpoint", required=True)
+    plan_adaptation.add_argument("--checkpoint-sha256", required=True)
+    plan_adaptation.add_argument("--class-vocabulary", required=True)
+    plan_adaptation.add_argument("--seed", type=int, default=0)
+    plan_adaptation.add_argument("--holdout-modulus", type=int, default=10)
+    plan_adaptation.add_argument("--output", required=True)
+    plan_adaptation.set_defaults(handler=_features_plan_adaptation)
     baseline = commands.add_parser("baseline", help="Operate the pinned CiCo baseline.")
     _nested_placeholder(baseline, "baseline", [("reproduce", "Run baseline reproduction.", "WP-08")])
     diagnose = commands.add_parser("diagnose", help="Run preregistered mechanism diagnostics.")
@@ -264,6 +291,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.handler(args))
-    except (ConfigError, FeatureAuditError) as error:
+    except (ConfigError, FeatureAuditError, AdaptationPlanError) as error:
         sys.stderr.write(f"configuration error: {error}\n")
         return 2

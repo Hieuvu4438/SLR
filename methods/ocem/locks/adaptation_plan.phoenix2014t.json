@@ -1,0 +1,63 @@
+{
+  "schema_version": "ocem.p14t_adaptation_plan_lock.v1",
+  "status": "PASS",
+  "scope": "P14T train-only ID and recipe planning; no adapted checkpoint produced",
+  "source_sample_count": 7096,
+  "source_sample_ids_sha256": "c562eb7aee10f216735d2dc8b9c44a049e82014725e6f856f2195df6c61d1d99",
+  "forbidden_manifests": {
+    "validation_samples": 519,
+    "test_samples": 642,
+    "overlap_count": 0
+  },
+  "checkpoint_sha256": "6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f",
+  "class_vocabulary": {
+    "classes": 5383,
+    "sha256": "011ff48344163c9346d42ab250c03ea52ee89dafb213018b6039ce0c8a016558",
+    "names_sha256": "e807ced942091379df48230b1b3b80b7e49fdb0be42573bbcc887f8d5543b49f"
+  },
+  "pseudo_label_recipe": {
+    "confidence_threshold": 0.6,
+    "clip_frames": 16,
+    "window_stride": 1,
+    "merge_start_distance_frames": 3,
+    "suppress_start_distance_frames": 24,
+    "selection": "per-class/per-video descending confidence"
+  },
+  "trainer_recipe": {
+    "epochs": 15,
+    "batch_size": 4,
+    "optimizer": "SGD",
+    "learning_rate": 0.01,
+    "encoder_lr_coefficient": 1.0,
+    "momentum": 0.9,
+    "weight_decay": 0.0,
+    "schedule_epochs": [20, 40],
+    "schedule_gamma": 0.1
+  },
+  "split_policy": {
+    "version": "sha256_modulus_v1",
+    "seed": 0,
+    "holdout_modulus": 10,
+    "train_count": 6349,
+    "holdout_count": 747,
+    "assignment_sha256": "757174253e3672c4b28df95df7ccba1a4998d73485686661cafbab048e53ae0c"
+  },
+  "real_i3d_parity": {
+    "sample_id": "01April_2011_Friday_tagesschau-3379",
+    "decoded_frames": 16,
+    "fps": 25.0,
+    "output_shape": [1, 1024],
+    "max_absolute_error_vs_cache": 0.0,
+    "mean_absolute_error_vs_cache": 0.0,
+    "array_equal": true
+  },
+  "generated_plan": {
+    "path": "methods/ocem/runs/wp04_phoenix/adaptation_plan.json",
+    "sha256": "01d8698cfaa5cbe7a1201ef97d5b3f7adb4d2e4334284010c6470f2141ac3946"
+  },
+  "planner_source_sha256": "7cbbb7cb47e846edbe04acbedfa3d628d944f59154aea9cb61bcd5285899e979",
+  "validation_or_test_used": false,
+  "ready_for_pseudo_label_generation": true,
+  "ready_for_adaptation_training": false,
+  "training_blocker": "Implement and smoke-test the manifest-indexed pseudo-clip loader; the pinned upstream P14T trainer references missing/hard-coded inputs."
+}
