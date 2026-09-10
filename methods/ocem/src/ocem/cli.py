@@ -14,6 +14,7 @@ from ocem.data.datasets.phoenix import prepare_phoenix
 from ocem.doctor import collect_doctor_report
 from ocem.provenance.resources import build_resource_lock
 from ocem.provenance.state import load_implementation_state, render_checkpoint
+from ocem.scoring.validation import profile_solver, validate_solver
 
 
 NOT_IMPLEMENTED_EXIT = 3
@@ -84,6 +85,25 @@ def _data_prepare(args: argparse.Namespace) -> int:
         report = prepare_how2sign(protocol, args.output_dir, workers=args.workers)
     _write_json(report, args.report)
     return 0 if report["status"] == "PASS" else 4
+
+
+def _solver_validate(args: argparse.Namespace) -> int:
+    if args.reference:
+        expected = Path(args.reference).resolve()
+        bundled = Path(__file__).with_name("scoring") / "reference.py"
+        if expected != bundled.resolve():
+            raise ConfigError(
+                f"--reference must resolve to the immutable bundled oracle {bundled.resolve()}"
+            )
+    report = validate_solver(device=args.device, dtype=args.dtype)
+    if args.profile:
+        report["profile"] = profile_solver(
+            device=args.device, dtype=args.dtype, pairs=args.profile_pairs
+        )
+        if report["profile"]["status"] != "PASS":
+            report["status"] = "FAIL_TECHNICAL"
+    _write_json(report, args.output)
+    return 0 if report["status"] == "PASS" else 5
 
 
 def _state_checkpoint(args: argparse.Namespace) -> int:
@@ -185,7 +205,16 @@ def build_parser() -> argparse.ArgumentParser:
         [("concentration", "Measure support concentration for Stage A/A2.", "WP-09")],
     )
     solver = commands.add_parser("solver", help="Validate the certified OCEM solver.")
-    _nested_placeholder(solver, "solver", [("validate", "Run solver parity and profiling.", "WP-06")])
+    solver_commands = solver.add_subparsers(dest="solver_command", required=True)
+    solver_validate = solver_commands.add_parser("validate", help="Run solver parity and profiling.")
+    solver_validate.add_argument("--reference")
+    solver_validate.add_argument("--device", default="cpu")
+    solver_validate.add_argument("--dtype", default="float64", choices=("float32", "float64"))
+    solver_validate.add_argument("--profile", action="store_true")
+    solver_validate.add_argument("--profile-pairs", type=int, default=2)
+    solver_validate.add_argument("--output", required=True)
+    solver_validate.set_defaults(handler=_solver_validate)
+
     _placeholder(commands, "train", "Train an eligible matched experiment.", "WP-07")
     _placeholder(commands, "evaluate", "Run full-gallery evaluation.", "WP-07")
     _placeholder(commands, "compare", "Compare equivalent runs and bootstrap differences.", "WP-07")

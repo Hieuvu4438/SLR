@@ -1,0 +1,86 @@
+{
+  "schema_version": "ocem.solver_validation_lock.v1",
+  "status": "PASS",
+  "scope": "S6/G4 synthetic solver certification; NOT an SLRet experiment",
+  "created_at": "2026-09-10T18:24:27+07:00",
+  "environment": {
+    "python": "3.13.5",
+    "torch": "2.11.0+cu128",
+    "cuda_runtime": "12.8",
+    "numpy": "2.5.3",
+    "scipy": "1.17.1",
+    "gpu": "NVIDIA RTX 5880 Ada Generation",
+    "driver": "570.195.03",
+    "gpu_memory_mib": 49140
+  },
+  "source_sha256": {
+    "geometry.py": "3a072d650d5ea5d162e8434fbc772bf9e1ec5c1c801514d02e026c0e2f053ad9",
+    "dual_gpu.py": "8fe381e200185a824606479dfabecb56014670e366db8754b15f9ece7618010a",
+    "autograd.py": "ba5816c1b42267e6d72cd5b90964feb37aa6209eda5ffcb29d629f72e645c6e3",
+    "validation.py": "69ca12ffc4e11d0b313de4effea9ce355046ca04ef2b719061018998e621972e",
+    "reference.py": "5579b07c5fa6e4f4e15563d43919f6d3a7ff0336969be6c86d81812daf687773"
+  },
+  "generated_report_sha256": {
+    "cpu_float64_final.json": "895371f8866535a89aebf8eae9fcaaed5950239a11c544cc4b219ff43c0244f0",
+    "cuda_float64_final.json": "a4b3454202133a5a0b592f89f761c69483e7e8d1d90e313965a15cdfa99ebe89",
+    "cuda_float32_p64_final.json": "cbd5bce87f92fe3fff3a39f1270460a7c44345908464f847ae701287fe976f2b"
+  },
+  "validation": {
+    "tests_passed": 44,
+    "cpu_float64_max_value_absolute_error": 3.935340942007315e-11,
+    "cuda_float64_max_value_absolute_error": 3.935340942007315e-11,
+    "float64_max_gradient_absolute_error": 1.8571046783710798e-10,
+    "cuda_float32_max_value_absolute_error": 7.425150361228816e-08,
+    "cuda_float32_max_gradient_absolute_error": 4.0905684173253576e-08,
+    "gradient_entries_checked": 9
+  },
+  "cuda_float32_profiles": [
+    {
+      "text_tokens": 8,
+      "windows": 16,
+      "atoms": 31,
+      "pairs": 64,
+      "elapsed_seconds": 0.4143937029875815,
+      "pairs_per_second": 154.44250127014587,
+      "max_iterations": 424,
+      "max_backtracking_steps": 3,
+      "max_interval_width": 4.947185516357422e-05,
+      "max_capacity_violation": 9.939074516296387e-06,
+      "fallback_count": 0,
+      "peak_cuda_memory_bytes": 9242112
+    },
+    {
+      "text_tokens": 16,
+      "windows": 32,
+      "atoms": 47,
+      "pairs": 64,
+      "elapsed_seconds": 0.25442563800606877,
+      "pairs_per_second": 251.5469765608819,
+      "max_iterations": 136,
+      "max_backtracking_steps": 3,
+      "max_interval_width": 4.13060188293457e-05,
+      "max_capacity_violation": 3.7141144275665283e-06,
+      "fallback_count": 0,
+      "peak_cuda_memory_bytes": 13022720
+    },
+    {
+      "text_tokens": 32,
+      "windows": 64,
+      "atoms": 79,
+      "pairs": 64,
+      "elapsed_seconds": 0.32787325500976294,
+      "pairs_per_second": 195.19737893258264,
+      "max_iterations": 112,
+      "max_backtracking_steps": 3,
+      "max_interval_width": 3.600120544433594e-05,
+      "max_capacity_violation": 1.8328428268432617e-06,
+      "fallback_count": 0,
+      "peak_cuda_memory_bytes": 16324096
+    }
+  ],
+  "limitations": [
+    "Synthetic shapes only; no retrieval metric is claimed.",
+    "Full-gallery seconds/query and real feature-shape distribution remain to be measured after feature locking.",
+    "The 4,096-iteration tier remains necessary for the low-kappa null-heavy regression."
+  ]
+}

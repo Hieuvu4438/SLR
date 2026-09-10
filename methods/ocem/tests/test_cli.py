@@ -25,11 +25,11 @@ def test_all_contract_commands_are_registered() -> None:
 
 
 def test_future_command_fails_explicitly(capsys) -> None:
-    exit_code = main(["solver", "validate"])
+    exit_code = main(["features", "adapt"])
     payload = json.loads(capsys.readouterr().out)
     assert exit_code == NOT_IMPLEMENTED_EXIT
     assert payload["status"] == "NOT_IMPLEMENTED"
-    assert payload["required_work_package"] == "WP-06"
+    assert payload["required_work_package"] == "WP-04"
 
 
 def test_doctor_returns_observed_report(capsys, tmp_path) -> None:
@@ -38,4 +38,3 @@ def test_doctor_returns_observed_report(capsys, tmp_path) -> None:
     assert payload["status"] == "ANALYZED"
     assert payload["probe_path"] == str(tmp_path.resolve())
     assert payload["disk"]["free_bytes"] > 0
-
