@@ -21,13 +21,13 @@
     ],
     "tie_policy": "score_desc_id_asc"
   },
-  "feature_lock_sha256": null,
+  "feature_lock_sha256": "bfdb1aa7c5ea2713214b86ef6928147cc35414fb90c296d25993bdf660fcb07f",
   "galleries": {
     "keep_official_gallery": true,
     "t2v": "paired_official_split",
     "v2t": "paired_official_split"
   },
-  "lock_sha256": "70d98a4e05f1477f7be766e3df767359d776aca1c072f97ad432eddde278444e",
+  "lock_sha256": "a7798864dfede128a420a4d5910296182081904ee7ecec90de9fdf87fd41b8d7",
   "preprocessing": {
     "crop": 224,
     "fps_policy": "preserve_source_cfr",

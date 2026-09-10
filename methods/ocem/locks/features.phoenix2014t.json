@@ -1,0 +1,63 @@
+{
+  "alignment": {
+    "test": {
+      "manifest_sha256": "7d5afeaf39ca9523115810900a5026198e462e8eecf759e79100a86dc5aa33e6",
+      "recipe_sha256": [
+        "50045403867d7bdbee644de13e94389b5567c67b0f7f87e7218952dcde49a571"
+      ],
+      "samples": 642,
+      "windows": 54997
+    },
+    "train": {
+      "manifest_sha256": "2bf9b8bc261f2734f62f6918c67ef24e5594e573b45fcb84708da8d03c9fe374",
+      "recipe_sha256": [
+        "50045403867d7bdbee644de13e94389b5567c67b0f7f87e7218952dcde49a571"
+      ],
+      "samples": 7096,
+      "windows": 720914
+    },
+    "validation": {
+      "manifest_sha256": "f9ef7209118295a24ba5b927cefb3c2593377e3024eb7e3688250f6077e3d654",
+      "recipe_sha256": [
+        "50045403867d7bdbee644de13e94389b5567c67b0f7f87e7218952dcde49a571"
+      ],
+      "samples": 519,
+      "windows": 47990
+    }
+  },
+  "alignment_sha256": "1ad8164e0c12425ff5eff4a38aa535f8b048cd9c30859d4c064784ef24199666",
+  "dataset": "phoenix2014t",
+  "ready_for_dataset_g0": true,
+  "sample_count": 8257,
+  "schema_version": "ocem.feature_lock.v1",
+  "status": "PASS",
+  "streams": {
+    "domain_adapted_p14t": {
+      "adaptation_provenance": {
+        "fixed_epoch": 15,
+        "path": "/home/haipd/SLR/methods/ocem/runs/wp04_phoenix/adaptation_train_seed0/run_report.json",
+        "sha256": "23fe77c970046fb3c71c03f08e5a9a6628901ea201178c825faded5db156fd64",
+        "validation_or_test_used": false
+      },
+      "audit": {
+        "path": "/home/haipd/SLR/methods/ocem/runs/wp04_phoenix/adapted_cache_audit.json",
+        "sha256": "ccae762532248a9aace1af74c476f12bc2342461c76966f3887056f8c820612f"
+      },
+      "checkpoint_sha256": "79da4389f1e62526028e882c269f8b3fba822e3d6331032e3443526128e2774a",
+      "root": "/home/haipd/SLR/artifacts/features_reextracted/ph_domain_adapted_p14t",
+      "sample_artifact_digest": "d8168fda828a3a84b2e445629c2b9bb634ccfe5a51ef0cd7f534208520342133"
+    },
+    "domain_agnostic": {
+      "audit": {
+        "path": "/home/haipd/SLR/methods/ocem/runs/wp04_phoenix/agnostic_cache_audit.json",
+        "sha256": "bc33fc3f5d4ed339edbcb0fcc099b2162abec9057b7ec2c9707a9b136e810042"
+      },
+      "checkpoint_sha256": "6430592464a357dfdaa7f31973cb684663237655fdf23f3999608d162167fc6f",
+      "root": "/home/haipd/SLR/artifacts/features_reextracted/ph_domain_agnostic",
+      "sample_artifact_digest": "36648ce48ce9ff9cf0faa4d21984fa2b489cfc0eb29993f6976978595f355375"
+    }
+  },
+  "temporal_root": "/home/haipd/SLR/artifacts/features_reextracted/ph_temporal_metadata",
+  "total_windows": 823901,
+  "validation_or_test_used_for_training": false
+}

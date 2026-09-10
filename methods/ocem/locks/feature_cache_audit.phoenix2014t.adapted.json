@@ -1,0 +1,75 @@
+{
+  "schema_version": "ocem.feature_cache_audit_lock.v1",
+  "status": "PASS",
+  "scope": "P14T train-only domain-adapted I3D cache and extraction provenance",
+  "created_at": "2026-09-10T21:28:51+07:00",
+  "checkpoint_sha256": "79da4389f1e62526028e882c269f8b3fba822e3d6331032e3443526128e2774a",
+  "adaptation_provenance": {
+    "fixed_epoch": 15,
+    "validation_or_test_used": false,
+    "report_path": "methods/ocem/runs/wp04_phoenix/adaptation_train_seed0/run_report.json",
+    "report_sha256": "23fe77c970046fb3c71c03f08e5a9a6628901ea201178c825faded5db156fd64"
+  },
+  "recipe_sha256": "50045403867d7bdbee644de13e94389b5567c67b0f7f87e7218952dcde49a571",
+  "sample_artifact_digest": "d8168fda828a3a84b2e445629c2b9bb634ccfe5a51ef0cd7f534208520342133",
+  "sample_artifact_count": 8257,
+  "total_windows": 823901,
+  "feature_bytes": 3376876288,
+  "splits": {
+    "train": {
+      "samples": 7096,
+      "windows": 720914,
+      "feature_bytes": 2954736519,
+      "missing_or_extra_artifacts": 0,
+      "failed_samples": 0,
+      "extraction_report_sha256": "d03ace414e8b1a6248cb72c32975533d38835038e03af4dc90a9fe76eb47b780"
+    },
+    "validation": {
+      "samples": 519,
+      "windows": 47990,
+      "feature_bytes": 196703097,
+      "missing_or_extra_artifacts": 0,
+      "failed_samples": 0,
+      "extraction_report_sha256": "33246ae8570ca6a8fb65b8c5c3566b67c07a8d5cb8c1b3ec15709eef293439eb"
+    },
+    "test": {
+      "samples": 642,
+      "windows": 54997,
+      "feature_bytes": 225436672,
+      "missing_or_extra_artifacts": 0,
+      "failed_samples": 0,
+      "extraction_report_sha256": "a2fa60115e703b8e0c6cf5fdc34f733781c3e3e3b1c9d316bc7fbfbfd9b6ec0b"
+    }
+  },
+  "checks": [
+    "manifest ID equality",
+    "restricted NumPy-only pickle load",
+    "feature file SHA-256",
+    "float32 [M,1024] shape and finite values",
+    "checkpoint and recipe hashes",
+    "source path and byte size",
+    "manifest frame count and rational FPS",
+    "stride-1 half-open 16-frame supports",
+    "one-to-one feature/support window counts"
+  ],
+  "raw_content_rehashed": false,
+  "raw_verification_basis": "Manifest path/size/frame-count/FPS plus extractor-recorded video SHA-256; raw video bytes were not rehashed by this audit.",
+  "extraction": {
+    "status": "PASS",
+    "report_path": "methods/ocem/runs/wp04_phoenix/adapted_extraction.json",
+    "report_sha256": "487bb32ae339b5181fc7da95c9150039f01205a9c3cc82fa839b34d33c494959",
+    "shared_extractor_sha256": "68aec50447709786cdf739989118b5d8918464801536984682ff7b2285fea3b6",
+    "orchestrator_source_sha256": "8d3aede08342400ea8e8efd39efcf43ae513cc7730249db691635ecce005723b"
+  },
+  "generated_report": {
+    "path": "methods/ocem/runs/wp04_phoenix/adapted_cache_audit.json",
+    "sha256": "ccae762532248a9aace1af74c476f12bc2342461c76966f3887056f8c820612f"
+  },
+  "auditor_source_sha256": "e2790ce6c4214556ac1a21d63e461b8ef1b569a1192405bbca69b35e946f5843",
+  "feature_lock_eligible": true,
+  "consolidated_feature_lock": {
+    "path": "methods/ocem/locks/features.phoenix2014t.json",
+    "sha256": "bfdb1aa7c5ea2713214b86ef6928147cc35414fb90c296d25993bdf660fcb07f",
+    "status": "PASS"
+  }
+}
