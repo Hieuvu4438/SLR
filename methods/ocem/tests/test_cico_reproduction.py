@@ -3,8 +3,14 @@ from __future__ import annotations
 import pickle
 
 import numpy as np
+import pytest
 
-from ocem.baselines.cico_reproduction import _selected_feature, _tokenize
+from ocem.baselines.cico_reproduction import (
+    CiCoReproductionError,
+    _selected_feature,
+    _tokenize,
+    _validate_gate_locks,
+)
 
 
 class _Tokenizer:
@@ -48,3 +54,31 @@ def test_reproduction_feature_selection_covers_short_and_long_cases(tmp_path) ->
     expected = np.linspace(0, 99, 4, dtype=int)
     assert long_valid.tolist() == [True, True, True, True]
     assert np.array_equal(long, np.arange(100 * 1024).reshape(100, 1024)[expected])
+
+
+def test_reproduction_requires_mutually_linked_pass_locks() -> None:
+    feature_sha256 = "f" * 64
+    protocol = {
+        "dataset": "phoenix2014t",
+        "protocol_equivalence": "PASS",
+        "feature_lock_sha256": feature_sha256,
+    }
+    features = {
+        "dataset": "phoenix2014t",
+        "ready_for_dataset_g0": True,
+        "validation_or_test_used_for_training": False,
+    }
+    _validate_gate_locks(protocol, features, feature_sha256)
+
+    for field, value, message in (
+        ("feature_lock_sha256", "0" * 64, "does not reference"),
+        ("protocol_equivalence", "UNVERIFIED", "protocol equivalence"),
+    ):
+        invalid = dict(protocol)
+        invalid[field] = value
+        with pytest.raises(CiCoReproductionError, match=message):
+            _validate_gate_locks(invalid, features, feature_sha256)
+
+    invalid_features = dict(features, validation_or_test_used_for_training=True)
+    with pytest.raises(CiCoReproductionError, match="train-only"):
+        _validate_gate_locks(protocol, invalid_features, feature_sha256)

@@ -51,6 +51,25 @@ def _load_json_lock(path: Path, expected_sha256: str, label: str) -> Mapping[str
     return value
 
 
+def _validate_gate_locks(
+    protocol: Mapping[str, Any],
+    features: Mapping[str, Any],
+    expected_feature_lock_sha256: str,
+) -> None:
+    """Require a mutually linked P14T protocol/feature G0 pair."""
+
+    if protocol.get("dataset") != "phoenix2014t" or features.get("dataset") != "phoenix2014t":
+        raise CiCoReproductionError("locks do not identify phoenix2014t")
+    if protocol.get("protocol_equivalence") != "PASS":
+        raise CiCoReproductionError("protocol lock does not establish protocol equivalence")
+    if protocol.get("feature_lock_sha256") != expected_feature_lock_sha256:
+        raise CiCoReproductionError("protocol lock does not reference the supplied feature lock")
+    if features.get("ready_for_dataset_g0") is not True:
+        raise CiCoReproductionError("feature lock is not ready for the dataset G0 gate")
+    if features.get("validation_or_test_used_for_training") is not False:
+        raise CiCoReproductionError("feature lock does not prove train-only adaptation")
+
+
 def _tokenize(tokenizer: Any, text: str, max_words: int = 32) -> tuple[list[int], list[bool]]:
     words = ["<|startoftext|>"] + tokenizer.tokenize(text)
     if len(words) > max_words - 1:
@@ -164,8 +183,7 @@ def reproduce_cico_phoenix2014t(
         protocol_lock, expected_protocol_lock_sha256, "protocol lock"
     )
     features = _load_json_lock(feature_lock, expected_feature_lock_sha256, "feature lock")
-    if protocol.get("dataset") != "phoenix2014t" or features.get("dataset") != "phoenix2014t":
-        raise CiCoReproductionError("locks do not identify phoenix2014t")
+    _validate_gate_locks(protocol, features, expected_feature_lock_sha256)
     streams = features.get("streams")
     if not isinstance(streams, Mapping):
         raise CiCoReproductionError("feature lock has no stream mapping")
