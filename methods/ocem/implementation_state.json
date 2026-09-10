@@ -5,12 +5,14 @@
   "research_decision": "GO_WITH_CONDITIONS",
   "method": "OCEM",
   "seds_dependency": false,
-  "updated_at": "2026-09-10T15:19:39+07:00",
-  "current_work_package": "WP-01",
+  "updated_at": "2026-09-10T15:24:00+07:00",
+  "current_work_package": "WP-02",
   "completed_work_packages": [
-    "WP-00"
+    "WP-00",
+    "WP-01"
   ],
   "gates": {
+    "software_ready": "PASS",
     "resources_phoenix2014t": "NOT_RUN",
     "resources_how2sign": "NOT_RUN",
     "baseline_phoenix2014t": "NOT_RUN",
@@ -86,5 +88,5 @@
     "Reconcile How2Sign annotation, recut-video and published CiCo gallery counts by sample ID; do not infer exclusions from counts.",
     "Verify that any reused I3D feature cache preserves local 16-frame supports and matches the selected manifests before issuing a feature lock."
   ],
-  "next_action": "Implement WP-01: isolated package scaffold, strict config validation, provenance primitives, gate-aware CLI help, and tests."
+  "next_action": "Implement WP-02: OCEM-owned resource registry, content/hash/model-load verification, environment lock, and resource_lock.json emission without any SEDS runtime dependency."
 }
