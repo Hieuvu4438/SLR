@@ -18,6 +18,7 @@ from ocem.data.adaptation import AdaptationPlanError, build_p14t_adaptation_plan
 from ocem.data.datasets.how2sign import prepare_how2sign
 from ocem.data.datasets.phoenix import prepare_phoenix
 from ocem.data.extraction import ExtractionRunError, extract_p14t_i3d_features
+from ocem.data.feature_lock import FeatureLockError, build_phoenix_feature_lock
 from ocem.data.features import FeatureAuditError, audit_feature_cache
 from ocem.data.pseudoclips import PseudoClipError, validate_pseudoclip_loader
 from ocem.data.pseudolabels import PseudoLabelError, generate_p14t_pseudolabel_index
@@ -222,6 +223,17 @@ def _features_adapt(args: argparse.Namespace) -> int:
     )
     _write_json(report, args.output)
     return 0 if report["status"] == "PASS" else 5
+
+
+def _features_lock(args: argparse.Namespace) -> int:
+    report = build_phoenix_feature_lock(
+        agnostic_audit=args.agnostic_audit,
+        expected_agnostic_audit_sha256=args.agnostic_audit_sha256,
+        adapted_audit=args.adapted_audit,
+        expected_adapted_audit_sha256=args.adapted_audit_sha256,
+    )
+    _write_json(report, args.output)
+    return 0
 
 
 def _features_extract(args: argparse.Namespace) -> int:
@@ -512,6 +524,15 @@ def build_parser() -> argparse.ArgumentParser:
     validate_adaptation_step.add_argument("--rtol", type=float, default=1e-4)
     validate_adaptation_step.add_argument("--output", required=True)
     validate_adaptation_step.set_defaults(handler=_features_validate_adaptation_step)
+    lock_features = feature_commands.add_parser(
+        "lock", help="Consolidate aligned audited P14T feature streams."
+    )
+    lock_features.add_argument("--agnostic-audit", required=True)
+    lock_features.add_argument("--agnostic-audit-sha256", required=True)
+    lock_features.add_argument("--adapted-audit", required=True)
+    lock_features.add_argument("--adapted-audit-sha256", required=True)
+    lock_features.add_argument("--output", required=True)
+    lock_features.set_defaults(handler=_features_lock)
     baseline = commands.add_parser("baseline", help="Operate the pinned CiCo baseline.")
     baseline_commands = baseline.add_subparsers(dest="baseline_command", required=True)
     validate_adapter = baseline_commands.add_parser(
@@ -602,6 +623,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         CiCoParityError,
         CiCoReproductionError,
         FeatureAuditError,
+        FeatureLockError,
         ExtractionRunError,
         AdaptationPlanError,
         AdaptationRunError,
