@@ -126,6 +126,9 @@ def _features_audit_cache(args: argparse.Namespace) -> int:
         expected_checkpoint_sha256=args.checkpoint_sha256,
         split_dirs={"train": "train", "validation": "dev", "test": "test"},
         workers=args.workers,
+        expected_stream_name=args.stream_name,
+        adaptation_report=args.adaptation_report,
+        expected_adaptation_report_sha256=args.adaptation_report_sha256,
     )
     _write_json(report, args.output)
     return 0 if report["status"] == "PASS" else 4
@@ -382,6 +385,13 @@ def build_parser() -> argparse.ArgumentParser:
     audit_cache.add_argument("--feature-root", required=True)
     audit_cache.add_argument("--temporal-root", required=True)
     audit_cache.add_argument("--checkpoint-sha256", required=True)
+    audit_cache.add_argument(
+        "--stream-name",
+        default="domain_agnostic",
+        choices=("domain_agnostic", "domain_adapted_p14t"),
+    )
+    audit_cache.add_argument("--adaptation-report")
+    audit_cache.add_argument("--adaptation-report-sha256")
     audit_cache.add_argument("--workers", type=int, default=8)
     audit_cache.add_argument("--output", required=True)
     audit_cache.set_defaults(handler=_features_audit_cache)

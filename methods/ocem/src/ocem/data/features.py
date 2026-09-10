@@ -99,6 +99,7 @@ def _audit_one(
     metadata_path: Path,
     support_path: Path,
     expected_checkpoint_sha256: str,
+    expected_stream_name: str,
 ) -> dict[str, Any]:
     sample_id = str(record["sample_id"])
     metadata = _read_json(metadata_path)
@@ -114,7 +115,7 @@ def _audit_one(
         errors.append("checkpoint_sha256_mismatch")
     if metadata.get("feature_dtype") != "float32":
         errors.append("feature_dtype_not_float32")
-    if metadata.get("stream_name") != "domain_agnostic":
+    if metadata.get("stream_name") != expected_stream_name:
         errors.append("unexpected_stream_name")
     if metadata.get("recipe_sha256") != support.get("recipe_sha256"):
         errors.append("recipe_sha256_mismatch")
@@ -220,6 +221,9 @@ def audit_feature_cache(
     expected_checkpoint_sha256: str,
     split_dirs: Mapping[str, str],
     workers: int = 8,
+    expected_stream_name: str = "domain_agnostic",
+    adaptation_report: str | Path | None = None,
+    expected_adaptation_report_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Verify an existing cache without accepting it as target-adapted features."""
 
@@ -231,6 +235,45 @@ def audit_feature_cache(
         raise FeatureAuditError("expected checkpoint SHA-256 must be hexadecimal") from error
     if workers <= 0:
         raise FeatureAuditError("workers must be positive")
+    if expected_stream_name not in {"domain_agnostic", "domain_adapted_p14t"}:
+        raise FeatureAuditError(f"unsupported feature stream: {expected_stream_name}")
+    adaptation_provenance: dict[str, Any] | None = None
+    if expected_stream_name == "domain_adapted_p14t":
+        if adaptation_report is None or expected_adaptation_report_sha256 is None:
+            raise FeatureAuditError("adapted stream requires a hashed adaptation report")
+        adaptation_path = Path(adaptation_report)
+        actual_report_sha256 = sha256_file(adaptation_path)
+        if actual_report_sha256 != expected_adaptation_report_sha256:
+            raise FeatureAuditError("adaptation report SHA-256 mismatch")
+        report = _read_json(adaptation_path)
+        final_checkpoint = report.get("final_checkpoint")
+        data_policy = report.get("data_policy")
+        config = report.get("config")
+        if (
+            report.get("schema_version") != "ocem.p14t_i3d_adaptation_run.v1"
+            or report.get("status") != "PASS"
+            or report.get("completed_epochs") != 15
+            or not isinstance(final_checkpoint, Mapping)
+            or final_checkpoint.get("sha256") != expected_checkpoint_sha256
+            or final_checkpoint.get("fixed_epoch") != 15
+            or not isinstance(data_policy, Mapping)
+            or data_policy.get("holdout_used_for_optimizer") is not False
+            or data_policy.get("holdout_used_for_checkpoint_selection") is not False
+            or data_policy.get("validation_or_test_used") is not False
+            or not isinstance(config, Mapping)
+            or config.get("checkpoint_selection") != "fixed_final_epoch_15"
+        ):
+            raise FeatureAuditError(
+                "adaptation report does not prove fixed train-only epoch-15 provenance"
+            )
+        adaptation_provenance = {
+            "path": str(adaptation_path.resolve()),
+            "sha256": actual_report_sha256,
+            "fixed_epoch": 15,
+            "validation_or_test_used": False,
+        }
+    elif adaptation_report is not None or expected_adaptation_report_sha256 is not None:
+        raise FeatureAuditError("domain-agnostic audit must not attach adaptation provenance")
     manifest_dir = Path(manifest_dir)
     feature_root = Path(feature_root)
     temporal_root = Path(temporal_root)
@@ -265,6 +308,7 @@ def audit_feature_cache(
                         metadata_paths[sample_id],
                         support_paths[sample_id],
                         expected_checkpoint_sha256,
+                        expected_stream_name,
                     ),
                     common,
                 )
@@ -308,7 +352,7 @@ def audit_feature_cache(
     return {
         "schema_version": "ocem.feature_cache_audit.v1",
         "status": "PASS" if passed else "FAIL_TECHNICAL",
-        "stream": "domain_agnostic",
+        "stream": expected_stream_name,
         "checkpoint_sha256": expected_checkpoint_sha256,
         "feature_root": str(feature_root.resolve()),
         "temporal_root": str(temporal_root.resolve()),
@@ -320,9 +364,16 @@ def audit_feature_cache(
             "manifest path/size/frame-count/FPS plus extractor-recorded video SHA-256; "
             "raw video bytes were not rehashed by this audit"
         ),
-        "feature_lock_eligible": False,
+        "adaptation_provenance": adaptation_provenance,
+        "feature_lock_eligible": passed and adaptation_provenance is not None,
         "feature_lock_blocker": (
-            "Only the Oxford domain-agnostic stream was audited. A P14T train-only adapted "
-            "checkpoint and aligned adapted stream are still required by WP-04."
+            None
+            if passed and adaptation_provenance is not None
+            else (
+                "Only the Oxford domain-agnostic stream was audited. A P14T train-only adapted "
+                "checkpoint and aligned adapted stream are still required by WP-04."
+                if expected_stream_name == "domain_agnostic"
+                else "The adapted cache audit did not pass every artifact check."
+            )
         ),
     }

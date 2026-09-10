@@ -5,8 +5,9 @@ import pickle
 from pathlib import Path
 
 import numpy as np
+import pytest
 
-from ocem.data.features import audit_feature_cache
+from ocem.data.features import FeatureAuditError, audit_feature_cache
 from ocem.provenance.hashes import canonical_json_sha256, sha256_file
 
 
@@ -115,9 +116,7 @@ def test_feature_cache_audit_reports_missing_id_without_silent_drop(tmp_path) ->
     report = _audit(paths)
     assert report["status"] == "FAIL_TECHNICAL"
     assert report["split_reports"]["train"]["audited_records"] == 0
-    assert report["split_reports"]["train"]["inventory_errors"]["missing_features"] == [
-        "sample-1"
-    ]
+    assert report["split_reports"]["train"]["inventory_errors"]["missing_features"] == ["sample-1"]
     assert report["split_reports"]["train"]["inventory_error_counts"]["missing_features"] == 1
 
 
@@ -133,3 +132,58 @@ def test_feature_cache_audit_rejects_disallowed_pickle_global(tmp_path) -> None:
     report = _audit(paths)
     errors = report["split_reports"]["train"]["failure_examples"][0]["errors"]
     assert "feature_payload_invalid:UnpicklingError" in errors
+
+
+def _adaptation_report(path: Path, *, leaked: bool = False) -> str:
+    report = {
+        "schema_version": "ocem.p14t_i3d_adaptation_run.v1",
+        "status": "PASS",
+        "completed_epochs": 15,
+        "final_checkpoint": {"sha256": CHECKPOINT_SHA256, "fixed_epoch": 15},
+        "config": {"checkpoint_selection": "fixed_final_epoch_15"},
+        "data_policy": {
+            "holdout_used_for_optimizer": False,
+            "holdout_used_for_checkpoint_selection": False,
+            "validation_or_test_used": leaked,
+        },
+    }
+    path.write_text(json.dumps(report), encoding="utf-8")
+    return sha256_file(path)
+
+
+def test_adapted_cache_becomes_eligible_only_with_train_only_run_provenance(tmp_path) -> None:
+    paths = _write_fixture(tmp_path)
+    metadata_path = paths["feature_root"] / "train" / "sample-1.pkl.meta.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["stream_name"] = "domain_adapted_p14t"
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    report_path = tmp_path / "adaptation.json"
+    report_sha256 = _adaptation_report(report_path)
+    report = audit_feature_cache(
+        **paths,
+        expected_checkpoint_sha256=CHECKPOINT_SHA256,
+        split_dirs={"train": "train"},
+        workers=1,
+        expected_stream_name="domain_adapted_p14t",
+        adaptation_report=report_path,
+        expected_adaptation_report_sha256=report_sha256,
+    )
+    assert report["status"] == "PASS"
+    assert report["feature_lock_eligible"] is True
+    assert report["adaptation_provenance"]["fixed_epoch"] == 15
+
+
+def test_adapted_cache_rejects_leaky_training_report(tmp_path) -> None:
+    paths = _write_fixture(tmp_path)
+    report_path = tmp_path / "adaptation.json"
+    report_sha256 = _adaptation_report(report_path, leaked=True)
+    with pytest.raises(FeatureAuditError, match="does not prove"):
+        audit_feature_cache(
+            **paths,
+            expected_checkpoint_sha256=CHECKPOINT_SHA256,
+            split_dirs={"train": "train"},
+            workers=1,
+            expected_stream_name="domain_adapted_p14t",
+            adaptation_report=report_path,
+            expected_adaptation_report_sha256=report_sha256,
+        )
