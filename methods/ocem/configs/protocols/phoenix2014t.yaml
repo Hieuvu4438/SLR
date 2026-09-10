@@ -1,0 +1,54 @@
+schema_version: ocem.protocol.v1
+dataset: phoenix2014t
+release: PHOENIX-2014-T-release-v3
+resource_group: rgb_sign_pretraining
+official_splits:
+  train:
+    annotation: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.train.corpus.csv
+    video_dir: /home/dongvk/datasets/phoenix14T/videos_phoenix/videos/train
+    expected_count: 7096
+  validation:
+    annotation: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.dev.corpus.csv
+    video_dir: /home/dongvk/datasets/phoenix14T/videos_phoenix/videos/dev
+    expected_count: 519
+  test:
+    annotation: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.test.corpus.csv
+    video_dir: /home/dongvk/datasets/phoenix14T/videos_phoenix/videos/test
+    expected_count: 642
+galleries:
+  t2v: paired_official_split
+  v2t: paired_official_split
+  keep_official_gallery: true
+preprocessing:
+  fps_policy: preserve_source_cfr
+  window_frames: 16
+  window_stride: 1
+  resize: 256
+  crop: 224
+  pixel_range: [0.0, 1.0]
+  mean: [0.5, 0.5, 0.5]
+  std: [1.0, 1.0, 1.0]
+  padding_policy: repeat_last_without_extending_observed_support
+baseline:
+  implementation: cico
+  commit: 38a4f7b00da7a858d59b7fabe5093876a84db8e0
+  batch_size: 512
+  score_contract: directional_raw_before_external_logit_scale
+  reported_t2v_r1: 69.5
+  reported_v2t_r1: 70.2
+  reproduction_tolerance_pp: 1.0
+evaluation:
+  full_gallery: true
+  tie_policy: score_desc_id_asc
+  metrics: [R1, R5, R10, MedianR, MeanR]
+resources:
+  source_registry: ../resources.yaml
+  required_ids:
+    - cico_source
+    - oxford_i3d
+    - openai_clip
+    - phoenix2014t_raw
+    - phoenix2014t_train_annotations
+    - phoenix2014t_dev_annotations
+    - phoenix2014t_test_annotations
+

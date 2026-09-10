@@ -5,16 +5,19 @@
   "research_decision": "GO_WITH_CONDITIONS",
   "method": "OCEM",
   "seds_dependency": false,
-  "updated_at": "2026-09-10T15:32:00+07:00",
-  "current_work_package": "WP-03",
+  "updated_at": "2026-09-10T15:50:00+07:00",
+  "current_work_package": "WP-04",
   "completed_work_packages": [
     "WP-00",
     "WP-01",
-    "WP-02"
+    "WP-02",
+    "WP-03"
   ],
   "gates": {
     "software_ready": "PASS",
     "resource_registry": "BLOCKED_RESOURCE",
+    "protocol_phoenix2014t": "PASS",
+    "protocol_how2sign": "BLOCKED_RESOURCE",
     "resources_phoenix2014t": "NOT_RUN",
     "resources_how2sign": "NOT_RUN",
     "baseline_phoenix2014t": "NOT_RUN",
@@ -79,16 +82,31 @@
       "self_extracted_features_root": "artifacts/features_reextracted",
       "manifests_root": "artifacts/manifests",
       "status": "DISCOVERED_NOT_YET_ACCEPTED_AS_OCEM_LOCKS"
+    },
+    "protocol_locks": {
+      "phoenix2014t": {
+        "path": "methods/ocem/locks/protocol.phoenix2014t.json",
+        "sha256": "70d98a4e05f1477f7be766e3df767359d776aca1c072f97ad432eddde278444e",
+        "status": "PASS",
+        "counts": {"train": 7096, "validation": 519, "test": 642}
+      },
+      "how2sign": {
+        "path": "methods/ocem/locks/protocol.how2sign.json",
+        "sha256": "0981c3f52f28985a3bc24552c95329daa2b01617381c14cd58335dd0ba352ace",
+        "status": "BLOCKED_RESOURCE",
+        "usable_counts": {"train": 31047, "validation": 1739, "test": 2343},
+        "excluded_counts": {"train": 118, "validation": 2, "test": 14}
+      }
     }
   },
   "resource_lock_sha256": "52f27a2db04a009c5b2716a313ae3e906b8ac8e480f4a647223ade5b25ad4026",
   "feature_lock_sha256": null,
-  "last_run_id": "wp02_resource_verification",
+  "last_run_id": "wp03_how2sign",
   "open_blockers": [
-    "Create dataset protocol and feature locks before promoting either dataset-specific G0 gate to PASS.",
+    "Create feature locks before promoting the P14T dataset-specific G0 gate to PASS.",
     "How2Sign train has 31,047 named MP4 files plus one valid MP4 with corrupt filename `�~`; the same corrupt entry exists in the local archive, so its sample ID must be established without guessing before H2S resource verification can pass.",
     "Reconcile How2Sign annotation, recut-video and published CiCo gallery counts by sample ID; do not infer exclusions from counts.",
     "Verify that any reused I3D feature cache preserves local 16-frame supports and matches the selected manifests before issuing a feature lock."
   ],
-  "next_action": "Implement the P14T slice of WP-03: parse official annotations, join videos by explicit ID, preserve captions and signer/source metadata, emit original/usable manifests plus exclusions, and create a protocol lock without promoting the feature gate."
+  "next_action": "Implement the P14T slice of WP-04: validate existing independently extracted I3D streams and temporal sidecars against the P14T protocol manifest, then emit deterministic feature shards/lock or an exact mismatch report before any new extraction."
 }

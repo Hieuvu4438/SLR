@@ -1,0 +1,157 @@
+{
+  "baseline": {
+    "batch_size": 512,
+    "commit": "38a4f7b00da7a858d59b7fabe5093876a84db8e0",
+    "implementation": "cico",
+    "reported_t2v_r1": 56.6,
+    "reported_v2t_r1": 51.6,
+    "reproduction_tolerance_pp": 1.0,
+    "score_contract": "directional_raw_before_external_logit_scale"
+  },
+  "baseline_reproduction_status": "NOT_RUN",
+  "dataset": "how2sign",
+  "evaluation": {
+    "full_gallery": true,
+    "metrics": [
+      "R1",
+      "R5",
+      "R10",
+      "MedianR",
+      "MeanR"
+    ],
+    "tie_policy": "score_desc_id_asc"
+  },
+  "feature_lock_sha256": null,
+  "galleries": {
+    "keep_official_gallery": true,
+    "t2v": "paired_official_split",
+    "v2t": "paired_official_split"
+  },
+  "lock_sha256": "0981c3f52f28985a3bc24552c95329daa2b01617381c14cd58335dd0ba352ace",
+  "preprocessing": {
+    "crop": 224,
+    "fps_policy": "preserve_source_cfr",
+    "mean": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "padding_policy": "repeat_last_without_extending_observed_support",
+    "pixel_range": [
+      0.0,
+      1.0
+    ],
+    "resize": 256,
+    "std": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "window_frames": 16,
+    "window_stride": 1
+  },
+  "protocol_equivalence": "UNVERIFIED",
+  "schema_version": "ocem.protocol_lock.v1",
+  "split_reports": {
+    "test": {
+      "annotation_count": 2357,
+      "annotation_file_sha256": "d1799dcbf100eda822eeb1a0e6e754d82b12b2a57756bd47073c4e4b8a02ae4d",
+      "annotation_rows": 2357,
+      "excluded_count": 14,
+      "manifests": {
+        "exclusions": {
+          "bytes": 1077,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_how2sign/manifests/exclusions_test.jsonl",
+          "records": 14,
+          "sha256": "48f263936aa14ed75188a766ac998f5766f085973e3942e77a237b6f62bb66b6"
+        },
+        "original": {
+          "bytes": 2147485,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_how2sign/manifests/original_test.jsonl",
+          "records": 2357,
+          "sha256": "e832c5bb81093bee7fe10f9daf96a0569041e37a44fc354fbb08eb46fb858b2b"
+        },
+        "usable": {
+          "bytes": 2135041,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_how2sign/manifests/test.jsonl",
+          "records": 2343,
+          "sha256": "d9e2644169b4405030a1d3464e52999df53a587ce184a21d3bf3f77cc114cfcb"
+        }
+      },
+      "protocol_equivalence": "UNVERIFIED",
+      "published_cico_count": 2348,
+      "raw_index_basis": "sample_id+relative_filename+bytes; individual video content hashes not computed",
+      "raw_index_sha256": "3104bfda010d6a21c168a42baf6c98652551cb32eddd43b519f8e83e42952126",
+      "split": "test",
+      "status": "BLOCKED_RESOURCE",
+      "usable_count": 2343
+    },
+    "train": {
+      "annotation_count": 31165,
+      "annotation_file_sha256": "67a8f4fb6dc066f38006b89ac84c27a4b05d7fa07d5e6952f997042724d7a847",
+      "annotation_rows": 31165,
+      "excluded_count": 118,
+      "manifests": {
+        "exclusions": {
+          "bytes": 9079,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_how2sign/manifests/exclusions_train.jsonl",
+          "records": 118,
+          "sha256": "2dee4deed84fd9271de08d8741c56a74126cc8c4f4a14b45b9f965dc7295a87f"
+        },
+        "original": {
+          "bytes": 28479099,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_how2sign/manifests/original_train.jsonl",
+          "records": 31165,
+          "sha256": "b241e387942eb9ba0f22aa0cfdcff023c26951918b3531d78045cd3758e413e2"
+        },
+        "usable": {
+          "bytes": 28375533,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_how2sign/manifests/train.jsonl",
+          "records": 31047,
+          "sha256": "fc19f77b6bcbb94d572c572758ba986684c6890311d501f33a0ed7c86fd5f03e"
+        }
+      },
+      "protocol_equivalence": "UNVERIFIED",
+      "published_cico_count": 31085,
+      "raw_index_basis": "sample_id+relative_filename+bytes; individual video content hashes not computed",
+      "raw_index_sha256": "ed0b1a142ffaa0a58f488644e50eec43a711b8d66f2f68747ff0634d50fc6766",
+      "split": "train",
+      "status": "BLOCKED_RESOURCE",
+      "usable_count": 31047
+    },
+    "validation": {
+      "annotation_count": 1741,
+      "annotation_file_sha256": "1bf5d57ce90d61571776d06a179335d99648d8c94fc22b327d2abb328d26137c",
+      "annotation_rows": 1741,
+      "excluded_count": 2,
+      "manifests": {
+        "exclusions": {
+          "bytes": 154,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_how2sign/manifests/exclusions_validation.jsonl",
+          "records": 2,
+          "sha256": "11e59bed4e234445b95ae530f4bd3653f0a99670abd065002f8337f33f51d95c"
+        },
+        "original": {
+          "bytes": 1595398,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_how2sign/manifests/original_validation.jsonl",
+          "records": 1741,
+          "sha256": "58688132cc95fc5e37bb451022b1196cbbbd0d9377f3834ed66b62ee9034e158"
+        },
+        "usable": {
+          "bytes": 1593733,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_how2sign/manifests/validation.jsonl",
+          "records": 1739,
+          "sha256": "4840248b975c126bb292163e6fac30c56df9dd0d3612262df1c7bb49c502c74d"
+        }
+      },
+      "protocol_equivalence": "UNVERIFIED",
+      "published_cico_count": 1739,
+      "raw_index_basis": "sample_id+relative_filename+bytes; individual video content hashes not computed",
+      "raw_index_sha256": "f042c3870a4a413a402ffe7013cc2b6a445a4c3462648015458a832702934aa6",
+      "split": "validation",
+      "status": "BLOCKED_RESOURCE",
+      "usable_count": 1739
+    }
+  },
+  "status": "BLOCKED_RESOURCE"
+}

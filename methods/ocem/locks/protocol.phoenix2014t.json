@@ -1,0 +1,151 @@
+{
+  "baseline": {
+    "batch_size": 512,
+    "commit": "38a4f7b00da7a858d59b7fabe5093876a84db8e0",
+    "implementation": "cico",
+    "reported_t2v_r1": 69.5,
+    "reported_v2t_r1": 70.2,
+    "reproduction_tolerance_pp": 1.0,
+    "score_contract": "directional_raw_before_external_logit_scale"
+  },
+  "baseline_reproduction_status": "NOT_RUN",
+  "dataset": "phoenix2014t",
+  "evaluation": {
+    "full_gallery": true,
+    "metrics": [
+      "R1",
+      "R5",
+      "R10",
+      "MedianR",
+      "MeanR"
+    ],
+    "tie_policy": "score_desc_id_asc"
+  },
+  "feature_lock_sha256": null,
+  "galleries": {
+    "keep_official_gallery": true,
+    "t2v": "paired_official_split",
+    "v2t": "paired_official_split"
+  },
+  "lock_sha256": "70d98a4e05f1477f7be766e3df767359d776aca1c072f97ad432eddde278444e",
+  "preprocessing": {
+    "crop": 224,
+    "fps_policy": "preserve_source_cfr",
+    "mean": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "padding_policy": "repeat_last_without_extending_observed_support",
+    "pixel_range": [
+      0.0,
+      1.0
+    ],
+    "resize": 256,
+    "std": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "window_frames": 16,
+    "window_stride": 1
+  },
+  "protocol_equivalence": "PASS",
+  "schema_version": "ocem.protocol_lock.v1",
+  "split_reports": {
+    "test": {
+      "annotation_file_sha256": "632b19c9a87fb9c98b0821e04861750565348bce20a069c6dea1bba5bda27879",
+      "annotation_rows": 642,
+      "excluded_count": 0,
+      "expected_count": 642,
+      "manifests": {
+        "exclusions": {
+          "bytes": 0,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_phoenix/manifests/exclusions_test.jsonl",
+          "records": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "original": {
+          "bytes": 617453,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_phoenix/manifests/original_test.jsonl",
+          "records": 642,
+          "sha256": "7d5afeaf39ca9523115810900a5026198e462e8eecf759e79100a86dc5aa33e6"
+        },
+        "usable": {
+          "bytes": 617453,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_phoenix/manifests/test.jsonl",
+          "records": 642,
+          "sha256": "7d5afeaf39ca9523115810900a5026198e462e8eecf759e79100a86dc5aa33e6"
+        }
+      },
+      "raw_index_basis": "sample_id+relative_filename+bytes; individual video content hashes not computed",
+      "raw_index_sha256": "f184ad9ec9ffa9bc9d0c4e64368f5474237e5409e074f1191e5a9764c4b68c29",
+      "split": "test",
+      "status": "PASS",
+      "usable_count": 642
+    },
+    "train": {
+      "annotation_file_sha256": "cc3dc2461f0a222b92f3927c24ac21c1467f3e5428b406ee7fe40bca1b0b8d44",
+      "annotation_rows": 7096,
+      "excluded_count": 0,
+      "expected_count": 7096,
+      "manifests": {
+        "exclusions": {
+          "bytes": 0,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_phoenix/manifests/exclusions_train.jsonl",
+          "records": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "original": {
+          "bytes": 6952612,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_phoenix/manifests/original_train.jsonl",
+          "records": 7096,
+          "sha256": "2bf9b8bc261f2734f62f6918c67ef24e5594e573b45fcb84708da8d03c9fe374"
+        },
+        "usable": {
+          "bytes": 6952612,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_phoenix/manifests/train.jsonl",
+          "records": 7096,
+          "sha256": "2bf9b8bc261f2734f62f6918c67ef24e5594e573b45fcb84708da8d03c9fe374"
+        }
+      },
+      "raw_index_basis": "sample_id+relative_filename+bytes; individual video content hashes not computed",
+      "raw_index_sha256": "9c19b6600c00f853ebf5e0e0ef830bbfd8ea866aa08a6ea07f224d0653f382d4",
+      "split": "train",
+      "status": "PASS",
+      "usable_count": 7096
+    },
+    "validation": {
+      "annotation_file_sha256": "1085141d0ed6f28c6de6196a271b72c07366ed3fe5470c9717bd44640737f00b",
+      "annotation_rows": 519,
+      "excluded_count": 0,
+      "expected_count": 519,
+      "manifests": {
+        "exclusions": {
+          "bytes": 0,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_phoenix/manifests/exclusions_validation.jsonl",
+          "records": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "original": {
+          "bytes": 505912,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_phoenix/manifests/original_validation.jsonl",
+          "records": 519,
+          "sha256": "f9ef7209118295a24ba5b927cefb3c2593377e3024eb7e3688250f6077e3d654"
+        },
+        "usable": {
+          "bytes": 505912,
+          "path": "/home/haipd/SLR/methods/ocem/runs/wp03_phoenix/manifests/validation.jsonl",
+          "records": 519,
+          "sha256": "f9ef7209118295a24ba5b927cefb3c2593377e3024eb7e3688250f6077e3d654"
+        }
+      },
+      "raw_index_basis": "sample_id+relative_filename+bytes; individual video content hashes not computed",
+      "raw_index_sha256": "22493c08a56eb95bdbc4e2a35b6f2fc0af64357aaff6a5172264feafbd87f63d",
+      "split": "validation",
+      "status": "PASS",
+      "usable_count": 519
+    }
+  },
+  "status": "PASS"
+}

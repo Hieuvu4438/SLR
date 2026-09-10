@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from ocem.config import ConfigError, load_config
+from ocem.data.datasets.how2sign import prepare_how2sign
+from ocem.data.datasets.phoenix import prepare_phoenix
 from ocem.doctor import collect_doctor_report
 from ocem.provenance.resources import build_resource_lock
 from ocem.provenance.state import load_implementation_state, render_checkpoint
@@ -68,6 +70,20 @@ def _resources_verify(args: argparse.Namespace) -> int:
     lock = build_resource_lock(config, args.config)
     _write_json(lock, args.output)
     return 0 if lock["status"] == "PASS" else 4
+
+
+def _data_prepare(args: argparse.Namespace) -> int:
+    protocol = load_config(args.protocol, kind="protocol")
+    if protocol["dataset"] != args.dataset:
+        raise ConfigError(
+            f"protocol dataset {protocol['dataset']!r} does not match --dataset {args.dataset!r}"
+        )
+    if args.dataset == "phoenix2014t":
+        report = prepare_phoenix(protocol, args.output_dir, workers=args.workers)
+    else:
+        report = prepare_how2sign(protocol, args.output_dir, workers=args.workers)
+    _write_json(report, args.report)
+    return 0 if report["status"] == "PASS" else 4
 
 
 def _state_checkpoint(args: argparse.Namespace) -> int:
@@ -143,7 +159,14 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--output", required=True)
     verify.set_defaults(handler=_resources_verify)
     data = commands.add_parser("data", help="Build provenance-preserving dataset manifests.")
-    _nested_placeholder(data, "data", [("prepare", "Prepare a dataset manifest.", "WP-03")])
+    data_commands = data.add_subparsers(dest="data_command", required=True)
+    prepare = data_commands.add_parser("prepare", help="Prepare a dataset manifest.")
+    prepare.add_argument("--dataset", required=True, choices=("phoenix2014t", "how2sign"))
+    prepare.add_argument("--protocol", required=True)
+    prepare.add_argument("--output-dir", required=True)
+    prepare.add_argument("--workers", type=int, default=8)
+    prepare.add_argument("--report")
+    prepare.set_defaults(handler=_data_prepare)
     features = commands.add_parser("features", help="Adapt and extract frozen I3D features.")
     _nested_placeholder(
         features,

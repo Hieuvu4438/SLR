@@ -1,0 +1,60 @@
+schema_version: ocem.protocol.v1
+dataset: how2sign
+release: realigned_rgb_front_snapshot_2026-09-10
+resource_group: rgb_sign_pretraining
+official_splits:
+  train:
+    annotation: ${OCEM_PROJECT_ROOT}/../../third_party/SLRT/CiCo/data_preparation/how2sign_realigned_train.csv
+    video_dir: /home/shared_data/sign_language/How2Sign/train/raw_videos
+    annotation_count: 31165
+    published_cico_count: 31085
+    raw_relprefix: train/raw_videos
+  validation:
+    annotation: /home/shared_data/sign_language/How2Sign/eval/how2sign_realigned_val.csv
+    video_dir: /home/shared_data/sign_language/How2Sign/eval/raw_videos
+    annotation_count: 1741
+    published_cico_count: 1739
+    raw_relprefix: eval/raw_videos
+  test:
+    annotation: ${OCEM_PROJECT_ROOT}/../../third_party/SLRT/CiCo/data_preparation/how2sign_realigned_test.csv
+    video_dir: /home/shared_data/sign_language/How2Sign/test/raw_videos
+    annotation_count: 2357
+    published_cico_count: 2348
+    raw_relprefix: test/raw_videos
+galleries:
+  t2v: paired_official_split
+  v2t: paired_official_split
+  keep_official_gallery: true
+preprocessing:
+  fps_policy: preserve_source_cfr
+  window_frames: 16
+  window_stride: 1
+  resize: 256
+  crop: 224
+  pixel_range: [0.0, 1.0]
+  mean: [0.5, 0.5, 0.5]
+  std: [1.0, 1.0, 1.0]
+  padding_policy: repeat_last_without_extending_observed_support
+baseline:
+  implementation: cico
+  commit: 38a4f7b00da7a858d59b7fabe5093876a84db8e0
+  batch_size: 512
+  score_contract: directional_raw_before_external_logit_scale
+  reported_t2v_r1: 56.6
+  reported_v2t_r1: 51.6
+  reproduction_tolerance_pp: 1.0
+evaluation:
+  full_gallery: true
+  tie_policy: score_desc_id_asc
+  metrics: [R1, R5, R10, MedianR, MeanR]
+resources:
+  source_registry: ../resources.yaml
+  required_ids:
+    - cico_source
+    - oxford_i3d
+    - openai_clip
+    - how2sign_raw
+    - how2sign_train_annotations
+    - how2sign_dev_annotations
+    - how2sign_test_annotations
+
