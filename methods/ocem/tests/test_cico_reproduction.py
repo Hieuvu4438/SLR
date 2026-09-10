@@ -7,6 +7,7 @@ import pytest
 
 from ocem.baselines.cico_reproduction import (
     CiCoReproductionError,
+    _feature_indices,
     _selected_feature,
     _tokenize,
     _validate_gate_locks,
@@ -54,6 +55,13 @@ def test_reproduction_feature_selection_covers_short_and_long_cases(tmp_path) ->
     expected = np.linspace(0, 99, 4, dtype=int)
     assert long_valid.tolist() == [True, True, True, True]
     assert np.array_equal(long, np.arange(100 * 1024).reshape(100, 1024)[expected])
+
+
+def test_reproduction_feature_indices_lock_linspace_and_padding_rules() -> None:
+    assert _feature_indices(3, 4).tolist() == [0, 1, 2]
+    assert _feature_indices(5, 3).tolist() == [0, 2, 4]
+    with pytest.raises(CiCoReproductionError, match="must be positive"):
+        _feature_indices(0, 4)
 
 
 def test_reproduction_requires_mutually_linked_pass_locks() -> None:

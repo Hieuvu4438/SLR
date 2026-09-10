@@ -85,17 +85,23 @@ def _tokenize(tokenizer: Any, text: str, max_words: int = 32) -> tuple[list[int]
     return ids, valid
 
 
+def _feature_indices(window_count: int, feature_len: int = 64) -> np.ndarray:
+    if window_count < 1 or feature_len < 1:
+        raise CiCoReproductionError("window_count and feature_len must be positive")
+    return (
+        np.linspace(0, window_count - 1, feature_len, dtype=int)
+        if window_count >= feature_len
+        else np.arange(window_count, dtype=int)
+    )
+
+
 def _selected_feature(path: Path, feature_len: int = 64) -> tuple[np.ndarray, np.ndarray]:
     with path.open("rb") as handle:
         payload = pickle.load(handle)  # noqa: S301 - feature lock authenticates local cache
     feature = np.asarray(payload["feature"], dtype=np.float32)
     if feature.ndim != 2 or feature.shape[1] != 1024 or feature.shape[0] < 1:
         raise CiCoReproductionError(f"invalid feature shape at {path}: {feature.shape}")
-    indices = (
-        np.linspace(0, feature.shape[0] - 1, feature_len, dtype=int)
-        if feature.shape[0] >= feature_len
-        else np.arange(feature.shape[0], dtype=int)
-    )
+    indices = _feature_indices(feature.shape[0], feature_len)
     selected = np.zeros((feature_len, 1024), dtype=np.float32)
     selected[: len(indices)] = feature[indices]
     valid = np.zeros(feature_len, dtype=bool)
