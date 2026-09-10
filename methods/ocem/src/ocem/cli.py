@@ -22,6 +22,9 @@ from ocem.data.feature_lock import FeatureLockError, build_phoenix_feature_lock
 from ocem.data.features import FeatureAuditError, audit_feature_cache
 from ocem.data.pseudoclips import PseudoClipError, validate_pseudoclip_loader
 from ocem.data.pseudolabels import PseudoLabelError, generate_p14t_pseudolabel_index
+from ocem.diagnostics.cico_stage_a import StageADiagnosticError, diagnose_cico_stage_a
+from ocem.diagnostics.concentration import ConcentrationError
+from ocem.diagnostics.errors import ErrorSelectionError
 from ocem.doctor import collect_doctor_report
 from ocem.provenance.resources import build_resource_lock
 from ocem.provenance.state import load_implementation_state, render_checkpoint
@@ -315,6 +318,48 @@ def _baseline_reproduce(args: argparse.Namespace) -> int:
     return 0 if report["status"] == "PASS" else 6
 
 
+def _diagnose_concentration(args: argparse.Namespace) -> int:
+    if args.stage != "A":
+        raise StageADiagnosticError("Stage A2 requires the locked common local head")
+    report = diagnose_cico_stage_a(
+        checkpoint=args.checkpoint,
+        expected_checkpoint_sha256=args.checkpoint_sha256,
+        clip_checkpoint=args.clip_checkpoint,
+        expected_clip_sha256=args.clip_sha256,
+        upstream_root=args.upstream_root,
+        expected_source_hashes={
+            "modeling": args.modeling_sha256,
+            "module_clip": args.module_clip_sha256,
+            "tokenization": args.tokenization_sha256,
+            "metrics": args.metrics_sha256,
+        },
+        baseline_lock=args.baseline_lock,
+        expected_baseline_lock_sha256=args.baseline_lock_sha256,
+        protocol_lock=args.protocol_lock,
+        expected_protocol_lock_sha256=args.protocol_lock_sha256,
+        feature_lock=args.feature_lock,
+        expected_feature_lock_sha256=args.feature_lock_sha256,
+        train_manifest=args.train_manifest,
+        validation_manifest=args.validation_manifest,
+        train_text=args.train_text,
+        expected_train_text_sha256=args.train_text_sha256,
+        dev_text=args.dev_text,
+        expected_dev_text_sha256=args.dev_text_sha256,
+        output_dir=args.output_dir,
+        device=args.device,
+        encode_batch_size=args.encode_batch_size,
+        score_block_size=args.score_block_size,
+        alpha=args.alpha,
+        epsilon=args.epsilon,
+        null_prior=args.null_prior,
+        kappa=args.kappa,
+        bootstrap_replicates=args.bootstrap_replicates,
+        bootstrap_seed=args.bootstrap_seed,
+    )
+    _write_json(report, args.output)
+    return 0 if report["status"] == "PASS" else 6
+
+
 def _state_checkpoint(args: argparse.Namespace) -> int:
     state = load_implementation_state(args.state)
     checkpoint = render_checkpoint(state)
@@ -580,11 +625,44 @@ def build_parser() -> argparse.ArgumentParser:
     reproduce.add_argument("--output", required=True)
     reproduce.set_defaults(handler=_baseline_reproduce)
     diagnose = commands.add_parser("diagnose", help="Run preregistered mechanism diagnostics.")
-    _nested_placeholder(
-        diagnose,
-        "diagnose",
-        [("concentration", "Measure support concentration for Stage A/A2.", "WP-09")],
+    diagnose_commands = diagnose.add_subparsers(dest="diagnose_command", required=True)
+    concentration = diagnose_commands.add_parser(
+        "concentration", help="Measure preregistered Stage A/A2 support concentration."
     )
+    concentration.add_argument("--stage", choices=("A", "A2"), required=True)
+    concentration.add_argument("--checkpoint", required=True)
+    concentration.add_argument("--checkpoint-sha256", required=True)
+    concentration.add_argument("--clip-checkpoint", required=True)
+    concentration.add_argument("--clip-sha256", required=True)
+    concentration.add_argument("--upstream-root", required=True)
+    concentration.add_argument("--modeling-sha256", required=True)
+    concentration.add_argument("--module-clip-sha256", required=True)
+    concentration.add_argument("--tokenization-sha256", required=True)
+    concentration.add_argument("--metrics-sha256", required=True)
+    concentration.add_argument("--baseline-lock", required=True)
+    concentration.add_argument("--baseline-lock-sha256", required=True)
+    concentration.add_argument("--protocol-lock", required=True)
+    concentration.add_argument("--protocol-lock-sha256", required=True)
+    concentration.add_argument("--feature-lock", required=True)
+    concentration.add_argument("--feature-lock-sha256", required=True)
+    concentration.add_argument("--train-manifest", required=True)
+    concentration.add_argument("--validation-manifest", required=True)
+    concentration.add_argument("--train-text", required=True)
+    concentration.add_argument("--train-text-sha256", required=True)
+    concentration.add_argument("--dev-text", required=True)
+    concentration.add_argument("--dev-text-sha256", required=True)
+    concentration.add_argument("--output-dir", required=True)
+    concentration.add_argument("--device", default="cuda:0")
+    concentration.add_argument("--encode-batch-size", type=int, default=256)
+    concentration.add_argument("--score-block-size", type=int, default=128)
+    concentration.add_argument("--alpha", type=float, default=0.9)
+    concentration.add_argument("--epsilon", type=float, default=0.05)
+    concentration.add_argument("--null-prior", type=float, default=0.15)
+    concentration.add_argument("--kappa", type=float, default=1.5)
+    concentration.add_argument("--bootstrap-replicates", type=int, default=10_000)
+    concentration.add_argument("--bootstrap-seed", type=int, default=20260910)
+    concentration.add_argument("--output", required=True)
+    concentration.set_defaults(handler=_diagnose_concentration)
     solver = commands.add_parser("solver", help="Validate the certified OCEM solver.")
     solver_commands = solver.add_subparsers(dest="solver_command", required=True)
     solver_validate = solver_commands.add_parser(
@@ -630,6 +708,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         I3DAdaptationError,
         PseudoClipError,
         PseudoLabelError,
+        StageADiagnosticError,
+        ConcentrationError,
+        ErrorSelectionError,
     ) as error:
         sys.stderr.write(f"configuration error: {error}\n")
         return 2

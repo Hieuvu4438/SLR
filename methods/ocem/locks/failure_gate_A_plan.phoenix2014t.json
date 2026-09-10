@@ -1,0 +1,114 @@
+{
+  "schema_version": "ocem.failure_gate_A_plan.v1",
+  "status": "PASS",
+  "scope": "Preregistered frozen contextual-token concentration diagnosis on P14T train/validation; no validation diagnostic outcome observed when locked",
+  "created_at": "2026-09-10T22:01:01+07:00",
+  "stage": "A",
+  "inputs": {
+    "baseline_reproduction_lock_sha256": "37c8d611d98d92b4ca10beb0bcfb766ef4014ea211839701e19133b04320d1e3",
+    "protocol_lock_file_sha256": "827919a85de3350af91641a540536350078b92a5c4ff0b8be5d40cd4d479fdab",
+    "feature_lock_sha256": "bfdb1aa7c5ea2713214b86ef6928147cc35414fb90c296d25993bdf660fcb07f",
+    "cico_checkpoint_sha256": "598b822aafd1b3cd767b290410ea1191f723dc87dd096775c3670e224b6e7b9f",
+    "clip_checkpoint_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+    "train_manifest_sha256": "2bf9b8bc261f2734f62f6918c67ef24e5594e573b45fcb84708da8d03c9fe374",
+    "validation_manifest_sha256": "f9ef7209118295a24ba5b927cefb3c2593377e3024eb7e3688250f6077e3d654",
+    "train_text_sha256": "b35ae6f90136b3c936182355c439374ae209bb42046f9f1eb8f9746a8b2c29e2",
+    "train_plus_validation_text_sha256": "38bcc1248b7bea5f78b4512a2929df3056d563c3df016b440ed625dab32b1326",
+    "train_samples": 7096,
+    "validation_samples": 519,
+    "test_features_or_text_allowed": false
+  },
+  "representation": {
+    "kind": "CiCo contextual visual/text token affinity",
+    "interpretation": "window-index concentration proxy only; not physical local support",
+    "feature_fusion": "0.9*domain_agnostic + 0.1*domain_adapted_p14t",
+    "selected_windows": 64,
+    "actual_selected_half_open_supports": true,
+    "text_view": "canonical original English translation",
+    "encoder_frozen": true
+  },
+  "statistic": {
+    "reference_plan": "exact independent closed form; no capacity constraint",
+    "epsilon": 0.05,
+    "null_prior": 0.15,
+    "kappa_for_excess": 1.5,
+    "primary": "left-continuous weighted P95 of atom load divided by atom weight and real mass",
+    "secondary": [
+      "E_kappa",
+      "maximum_density",
+      "real_mass",
+      "null_mass",
+      "excess_atom_count"
+    ],
+    "train_positive_threshold": "linear P90 of all 7,096 train-positive primary concentrations"
+  },
+  "error_selection": {
+    "split": "validation",
+    "directions": [
+      "T2V",
+      "V2T"
+    ],
+    "rule": "for every paired-ID R1 error, compare true pair with canonical-tie highest-ranked incorrect pair",
+    "tie_policy": "score_desc_id_asc",
+    "exact_caption_wrong_id": "retained as a separate ambiguity stratum and excluded from primary association"
+  },
+  "affected_rule": {
+    "all_required": [
+      "not exact-caption ambiguous",
+      "false real_mass >= 0.1",
+      "false concentration > true concentration",
+      "false concentration > locked train-positive P90",
+      "false E_kappa > true E_kappa"
+    ],
+    "denominator": "all T2V and V2T validation R1 errors, including ambiguity errors",
+    "minimum_fraction": 0.1
+  },
+  "controls": {
+    "train_derived_quartile_bins": [
+      "duration_s",
+      "selected_windows",
+      "text_tokens",
+      "deterministic train-negative lexical Jaccard"
+    ],
+    "paired_adjustment": [
+      "log_duration",
+      "selected_windows",
+      "text_tokens",
+      "lexical_overlap",
+      "log_exact_caption_class_size"
+    ],
+    "known_source_group": false,
+    "primary_resampling_unit": "query-direction pair",
+    "sensitivity_resampling_unit": "exact query-caption hash cluster",
+    "duplicate_control": "report exact-caption equivalence recall without changing paired-ID gallery"
+  },
+  "uncertainty": {
+    "method": "paired nonparametric bootstrap",
+    "replicates": 10000,
+    "seed": 20260910,
+    "ci": 0.95
+  },
+  "gate": {
+    "all_required": [
+      "unadjusted paired CI lower bound > 0",
+      "exact-caption-cluster sensitivity CI lower bound > 0",
+      "adjusted effect CI lower bound > 0",
+      "mean concentration difference > 0 in both directions",
+      "affected fraction of all R1 errors >= 0.10"
+    ],
+    "failure_status": "NO_GO_SCIENTIFIC",
+    "failure_action": "do not train the A2 local head or OCEM; do not retune this diagnostic threshold"
+  },
+  "source_sha256": {
+    "runner": "c0b5fa5d8b1717d59cd3f421aa12fda9757c80b5ca87e2a1bcc2c6babf805755",
+    "concentration": "c75a7665fc2121c4e8cf9acab1035a480b0bf39e8f95a500491364956e3bd22d",
+    "errors": "c7fc93bd0024299ae29b183ee5ecc8247151630e7bbcb1b521d665a71863ce5b",
+    "shortcuts": "dd0e7ab80fc1537842fbb27b70a8dda015c0c8b8abd85734d38621f364693bb3",
+    "feature_selection": "94836aadd2de4380b4a4057e6d42171e19928b6c9374a44c00e482417ca23233",
+    "upstream_modeling": "aeaf646b720f4cf051950dcbac68347196bed4b1c856d9aa833b063ed09e9e7f",
+    "upstream_module_clip": "8fae51a298872c9d9e07e898a7f09a117cdfbd21a0fc51c2f3a608af2ee6d2d5",
+    "upstream_tokenization": "60af2eccd9d1208933213b57d24c9ac337ca4be935bc6550a7300b656a6f3bb5",
+    "upstream_metrics": "103e93090de14f55d1db61e40ecf1fbc814670975bd9b9ab1fe341d0c95f0a6f"
+  },
+  "ready_to_run": true
+}

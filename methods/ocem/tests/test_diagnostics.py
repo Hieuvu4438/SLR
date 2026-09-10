@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import json
+import pickle
+
 import numpy as np
 import pytest
 
+from ocem.diagnostics.cico_stage_a import (
+    StageADiagnosticError,
+    _selected_inputs,
+    _verify_text_records,
+)
 from ocem.diagnostics.concentration import (
     adjusted_paired_effect,
     bootstrap_mean_ci,
@@ -82,3 +90,45 @@ def test_shortcut_controls_are_train_determined() -> None:
     assert deterministic_negative_overlaps(ids, captions, seed=3) == (
         deterministic_negative_overlaps(ids, captions, seed=3)
     )
+
+
+def test_stage_a_selection_keeps_feature_and_support_indices_aligned(tmp_path) -> None:
+    agnostic, adapted, temporal = (
+        tmp_path / "agnostic",
+        tmp_path / "adapted",
+        tmp_path / "temporal",
+    )
+    for path in (agnostic, adapted, temporal):
+        path.mkdir()
+    values = np.arange(5 * 1024, dtype=np.float32).reshape(5, 1024)
+    for root, offset in ((agnostic, 0.0), (adapted, 10.0)):
+        with (root / "sample.pkl").open("wb") as handle:
+            pickle.dump({"feature": values + offset}, handle)
+    (temporal / "sample.json").write_text(
+        json.dumps({"rf_start": [0, 1, 2, 3, 4], "rf_end": [16, 17, 18, 19, 20]})
+    )
+    selected, valid, intervals = _selected_inputs(
+        "sample",
+        agnostic_dir=agnostic,
+        adapted_dir=adapted,
+        temporal_dir=temporal,
+        feature_len=3,
+        alpha=0.75,
+    )
+    assert valid.tolist() == [True, True, True]
+    assert np.array_equal(intervals, [[0, 16], [2, 18], [4, 20]])
+    assert np.array_equal(selected, values[[0, 2, 4]] + 2.5)
+
+
+def test_stage_a_text_resource_requires_exact_manifest_order_and_original_text() -> None:
+    records = [
+        {"sample_id": "a", "caption_raw": "first"},
+        {"sample_id": "b", "caption_raw": "second"},
+    ]
+    mapping = {
+        "a": {"video_name": "a", "ori_text": "first", "text": "one"},
+        "b": {"video_name": "b", "ori_text": "second", "text": "two"},
+    }
+    _verify_text_records(records, mapping)
+    with pytest.raises(StageADiagnosticError, match="order"):
+        _verify_text_records(records, {"b": mapping["b"], "a": mapping["a"]})
