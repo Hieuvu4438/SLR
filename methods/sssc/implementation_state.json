@@ -78,10 +78,7 @@
       "invalidated_run": "runs/method1/ph/base/seed42_invalid_rng_order_20260913",
       "clean_run": "runs/method1/ph/base/seed42",
       "semantic_source_sha256": "ffdb3b671b0e594a756d8c364a12b98e8fb138c5d60d12317ef5c0189c8c909f",
-      "complete_pool_evaluator": "PASS_SYNTHETIC",
-      "remaining": [
-        "real full-gallery evaluator"
-      ]
+      "complete_pool_evaluator": "PASS_REAL_PH_DEV_519x519_DURING_CLEAN_S1"
     },
     "M3_training_infrastructure": {
       "status": "PASS_IMPLEMENTATION",
@@ -118,13 +115,14 @@
       "optional_reliability_gate": "DEFERRED_FAIL_CLOSED_PENDING_SUPPORT_INSTABILITY_EVIDENCE"
     },
     "M6_real_smoke_pilot": {
-      "status": "PASS_ENGINEERING",
+      "status": "IN_PROGRESS",
       "dataset": "ph",
       "regime": "world1_cpu_global_batch2_one_step_nonreportable",
       "base_loss": 1.0128757953643799,
       "gradient_norm_before_outer_clip": 80.7323226928711,
       "complete_dev_pool": "PASS_519x519",
       "real_short_overlong_batch": "PASS_HASHED_PH_FEATURES_AND_TOKEN_POSITIONS",
+      "real_small_overfit": "PENDING_REQUIRES_EXCLUSIVE_GPU_AFTER_S1",
       "real_batch_artifact": "artifacts/method1/audit/ph_real_batch.json",
       "artifact": "runs/method1/ph/base_engineering_smoke/seed42/dev_step_1.json"
     },

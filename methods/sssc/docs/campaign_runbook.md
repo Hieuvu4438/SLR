@@ -41,6 +41,17 @@ PYTHONPATH=methods/sssc:shared python -m method1.cli train-base \
 
 Do not use the preserved `seed42_invalid_rng_order_20260913` attempt.
 
+After S1 releases the GPU, run the fixed real-batch overfit gate once. It is an
+engineering check from permitted CLIP initialization, not a retrieval result or
+an alternate checkpoint source:
+
+```bash
+PYTHONPATH=methods/sssc:shared python methods/sssc/tools/run_real_overfit_gate.py \
+  --config methods/sssc/configs/method1/ph_seed42_base_initial.yaml \
+  --device cuda --steps 25 --batch-size 2 \
+  --output artifacts/method1/audit/ph_real_overfit_gate.json
+```
+
 ## S2–S4: frozen reference, miner, diagnostics and K=1 pilot
 
 For seed 42, after `training_complete.json` and the completed `best_dev.pt`
