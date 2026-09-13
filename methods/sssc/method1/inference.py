@@ -151,6 +151,10 @@ def evaluate_loaded_student(
         ],
     }
     evaluated["query_ids"] = {"V2T": video_ids, "T2V": group_ids}
+    evaluated["query_group_ids"] = {
+        "V2T": [record.group_uid for record in videos],
+        "T2V": group_ids,
+    }
     report = {
         **evaluated,
         "status": "complete",

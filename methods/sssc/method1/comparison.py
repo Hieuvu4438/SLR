@@ -7,7 +7,7 @@ from typing import Any, Mapping
 import numpy as np
 import torch
 
-from .utils import atomic_json_dump, sha256_file
+from .utils import atomic_json_dump, sha256_file, stable_seed
 
 
 class ComparisonError(RuntimeError):
@@ -60,6 +60,54 @@ def _metric_summary(metrics: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _paired_cluster_bootstrap(
+    ranks_a: np.ndarray,
+    ranks_b: np.ndarray,
+    cluster_ids: list[str],
+    *,
+    seed: int,
+    iterations: int = 10_000,
+) -> dict[str, Any]:
+    if iterations < 1 or ranks_a.shape != ranks_b.shape or len(cluster_ids) != len(ranks_a):
+        raise ComparisonError("invalid paired cluster-bootstrap inputs")
+    clusters: dict[str, list[int]] = {}
+    for index, cluster_id in enumerate(cluster_ids):
+        clusters.setdefault(str(cluster_id), []).append(index)
+    ordered_clusters = list(clusters)
+    generator = np.random.default_rng(seed)
+    samples = {key: np.empty(iterations, dtype=np.float64) for key in ("R1", "R5", "R10", "MRR")}
+    for iteration in range(iterations):
+        selected_clusters = generator.choice(ordered_clusters, len(ordered_clusters), replace=True)
+        indexes = np.concatenate(
+            [np.asarray(clusters[str(cluster)], dtype=np.int64) for cluster in selected_clusters]
+        )
+        selected_a = ranks_a[indexes]
+        selected_b = ranks_b[indexes]
+        samples["R1"][iteration] = 100.0 * np.mean(selected_b <= 1) - 100.0 * np.mean(
+            selected_a <= 1
+        )
+        samples["R5"][iteration] = 100.0 * np.mean(selected_b <= 5) - 100.0 * np.mean(
+            selected_a <= 5
+        )
+        samples["R10"][iteration] = 100.0 * np.mean(
+            selected_b <= 10
+        ) - 100.0 * np.mean(selected_a <= 10)
+        samples["MRR"][iteration] = np.mean(1.0 / selected_b) - np.mean(1.0 / selected_a)
+    return {
+        "iterations": iterations,
+        "resampling_unit": "retrieval_group",
+        "cluster_count": len(ordered_clusters),
+        "confidence_level": 0.95,
+        "delta_run_b_minus_a": {
+            key: {
+                "lower": float(np.quantile(values, 0.025)),
+                "upper": float(np.quantile(values, 0.975)),
+            }
+            for key, values in samples.items()
+        },
+    }
+
+
 def compare_runs(run_a: str | Path, run_b: str | Path) -> dict[str, Any]:
     left = _load_run(run_a)
     right = _load_run(run_b)
@@ -81,6 +129,7 @@ def compare_runs(run_a: str | Path, run_b: str | Path) -> dict[str, Any]:
     metrics_a = left["metrics"]
     metrics_b = right["metrics"]
     paired_rank_changes = {}
+    paired_bootstrap = {}
     for direction in ("T2V", "V2T"):
         ranks_a = np.asarray(metrics_a[direction]["ranks"], dtype=np.int64)
         ranks_b = np.asarray(metrics_b[direction]["ranks"], dtype=np.int64)
@@ -88,6 +137,10 @@ def compare_runs(run_a: str | Path, run_b: str | Path) -> dict[str, Any]:
         query_ids_b = metrics_b.get("query_ids", {}).get(direction)
         if ranks_a.shape != ranks_b.shape or query_ids_a != query_ids_b:
             raise ComparisonError(f"{direction} query identities/rank shapes differ")
+        query_groups_a = metrics_a.get("query_group_ids", {}).get(direction)
+        query_groups_b = metrics_b.get("query_group_ids", {}).get(direction)
+        if query_groups_a != query_groups_b or not isinstance(query_groups_a, list):
+            raise ComparisonError(f"{direction} paired query-group identities differ or are absent")
         delta = ranks_b - ranks_a
         paired_rank_changes[direction] = {
             "query_count": len(ranks_a),
@@ -97,6 +150,18 @@ def compare_runs(run_a: str | Path, run_b: str | Path) -> dict[str, Any]:
             "mean_rank_change_b_minus_a": float(delta.mean()),
             "median_rank_change_b_minus_a": float(np.median(delta)),
         }
+        paired_bootstrap[direction] = _paired_cluster_bootstrap(
+            ranks_a,
+            ranks_b,
+            query_groups_a,
+            seed=stable_seed(
+                checkpoint_a.get("resolved_config", {}).get("seed"),
+                direction,
+                checkpoint_a.get("arm"),
+                checkpoint_b.get("arm"),
+                "paired_cluster_bootstrap_v1",
+            ),
+        )
     summary_a = _metric_summary(metrics_a)
     summary_b = _metric_summary(metrics_b)
     metric_delta = {
@@ -130,6 +195,7 @@ def compare_runs(run_a: str | Path, run_b: str | Path) -> dict[str, Any]:
         },
         "metric_delta_run_b_minus_a": metric_delta,
         "paired_rank_changes": paired_rank_changes,
+        "paired_cluster_bootstrap": paired_bootstrap,
         "config_differences": config_differences,
         "implementation_revision": checkpoint_a.get("implementation_revision"),
         "artifact_hashes": checkpoint_a.get("artifact_hashes"),

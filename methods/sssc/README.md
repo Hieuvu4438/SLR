@@ -59,3 +59,8 @@ resume, reference/mining caches, strong controls, diagnostics, paired comparison
 student-only export have synthetic contract tests. Full PH baseline training and every
 reportable method/control run remain unexecuted; reference construction correctly remains
 gated on the completed dev-selected baseline.
+
+`compare-runs` requires identical resource/protocol hashes, implementation revision, seed,
+query order, and query-group identities. It reports paired rank changes plus a deterministic
+10,000-draw group-cluster bootstrap, so repeated recordings in grouped datasets are not
+treated as independent observations.

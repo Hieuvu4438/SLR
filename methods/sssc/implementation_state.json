@@ -95,6 +95,7 @@
       "selected_vs_equal_random_input_feature_removal": "PASS_SYNTHETIC",
       "single_process_base_aux_gradient_cosine": "PASS_SYNTHETIC",
       "paired_run_comparison": "PASS_SYNTHETIC",
+      "paired_cluster_bootstrap": "PASS_SYNTHETIC_GROUP_RESAMPLING",
       "source_attribution": "methods/sssc/docs/control_ledger.md",
       "ph_seed_arm_configs": 24,
       "real_control_runs": "BLOCKED_ON_SELECTED_BASELINE_AND_CACHES"

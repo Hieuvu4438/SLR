@@ -14,6 +14,7 @@ def _write_run(root: Path, arm: str, ranks: list[int], artifacts=None) -> None:
     (root / "run_manifest.json").write_text("{}\n", encoding="utf-8")
     metrics = {
         "query_ids": {"T2V": ["g0", "g1"], "V2T": ["v0", "v1"]},
+        "query_group_ids": {"T2V": ["g0", "g1"], "V2T": ["g0", "g1"]},
         "T2V": {
             "R1": 50.0,
             "R5": 100.0,
@@ -66,6 +67,8 @@ def test_compare_runs_checks_resources_and_paired_rank_changes(tmp_path: Path) -
         "median_rank_change_b_minus_a": 0.0,
     }
     assert "auxiliary.arm" in report["config_differences"]
+    assert report["paired_cluster_bootstrap"]["T2V"]["cluster_count"] == 2
+    assert report["paired_cluster_bootstrap"]["T2V"]["iterations"] == 10_000
     saved = json.loads(Path(report["output"]).read_text(encoding="utf-8"))
     assert saved["status"] == "complete"
 

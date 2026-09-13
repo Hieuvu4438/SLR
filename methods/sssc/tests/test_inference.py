@@ -93,6 +93,10 @@ def test_complete_pool_inference_uses_grouped_max_and_persists_identities(
     assert report["V2T"]["R1"] == 100.0
     assert report["T2V"]["R1"] == 100.0
     assert report["query_ids"] == {"V2T": ["v0", "v1", "v2"], "T2V": ["g0", "g1"]}
+    assert report["query_group_ids"] == {
+        "V2T": ["g0", "g0", "g1"],
+        "T2V": ["g0", "g1"],
+    }
     assert report["top_candidate_ids"]["T2V"][0][0] == "g0"
 
 
