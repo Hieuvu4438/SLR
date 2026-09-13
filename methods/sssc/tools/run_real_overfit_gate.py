@@ -24,6 +24,15 @@ class OverfitGateError(RuntimeError):
     pass
 
 
+def _validate_gate_request(*, steps: int, batch_size: int) -> None:
+    if steps < 2:
+        raise OverfitGateError("steps must be at least two")
+    if batch_size < 2:
+        raise OverfitGateError("batch size must be at least two for contrastive overfit")
+    if batch_size > 16:
+        raise OverfitGateError("the non-reportable overfit gate is capped at 16 samples")
+
+
 def _move_batch(batch: dict[str, Any], device: torch.device) -> dict[str, Any]:
     return {
         key: value.to(device, non_blocking=False) if isinstance(value, torch.Tensor) else value
@@ -49,19 +58,13 @@ def run_gate(
     output: Path,
     upret_root: Path,
 ) -> dict[str, Any]:
-    if steps < 2:
-        raise OverfitGateError("steps must be at least two")
-    if batch_size < 2:
-        raise OverfitGateError("batch size must be at least two for contrastive overfit")
+    _validate_gate_request(steps=steps, batch_size=batch_size)
     device = torch.device(device_name)
     if device.type == "cuda" and not torch.cuda.is_available():
         raise OverfitGateError("CUDA was requested but is unavailable")
     config = load_config(config_path)
     if config.auxiliary.arm != "base_initial":
         raise OverfitGateError("the real overfit gate requires a base_initial config")
-    if batch_size > 16:
-        raise OverfitGateError("the non-reportable overfit gate is capped at 16 samples")
-
     tokenizer = create_upret_tokenizer(upret_root, config.model.bpe_path)
     dataset = Method1Dataset(config, split="train", tokenizer=tokenizer, augment=True)
     dataset.set_epoch(0)
