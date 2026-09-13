@@ -18,3 +18,14 @@ This file records executed runs only. Engineering checks are not reportable retr
 - Interpretation: PASS as a real data/model/loss/evaluator smoke. Recall is effectively random
   after one step from initialization and must not be cited as a baseline, ablation, or SOTA
   result. The run is labeled `pilot_complete` and cannot satisfy the reference-teacher gate.
+
+## 2026-09-13 — PH real-batch contract inspection
+
+- Config: `configs/method1/ph_seed42_base_initial.yaml`.
+- Artifact: `artifacts/method1/audit/ph_real_batch.json` (ignored runtime artifact).
+- Short caption: 2 full BPE tokens, fully retained, 24 valid sampled feature rows.
+- Overlong caption: 57 full BPE tokens, ordinary baseline input is exactly 32 positions and
+  auxiliary eligibility is disabled, 64 valid sampled feature rows.
+- Both agnostic/aware files for both records were re-hashed against the canonical manifest;
+  the `[2,1024,64,1]` batch was finite and its class position was ignored.
+- This is an engineering/data gate, not a retrieval result.

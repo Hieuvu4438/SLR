@@ -82,6 +82,8 @@
       "base_loss": 1.0128757953643799,
       "gradient_norm_before_outer_clip": 80.7323226928711,
       "complete_dev_pool": "PASS_519x519",
+      "real_short_overlong_batch": "PASS_HASHED_PH_FEATURES_AND_TOKEN_POSITIONS",
+      "real_batch_artifact": "artifacts/method1/audit/ph_real_batch.json",
       "artifact": "runs/method1/ph/base_engineering_smoke/seed42/dev_step_1.json"
     },
     "M7_controls": {
