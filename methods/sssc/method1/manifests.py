@@ -66,6 +66,46 @@ def iter_jsonl(path: str | Path) -> Iterator[dict[str, Any]]:
             yield value
 
 
+def validate_manifest_bundle(directory: str | Path) -> dict[str, Any]:
+    root = Path(directory)
+    try:
+        metadata = json.loads((root / "manifest_meta.json").read_text(encoding="utf-8"))
+        splits = json.loads((root / "splits.json").read_text(encoding="utf-8"))
+        resources = json.loads((root / "resources.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ManifestError(f"cannot read completed manifest bundle: {error}") from error
+    if metadata.get("status") != "ready" or metadata.get("schema_version") != 1:
+        raise ManifestError("manifest metadata is not a completed schema-v1 bundle")
+    expected_files = {"texts.jsonl", "videos.jsonl", "groups.jsonl"}
+    if set(metadata.get("files", {})) != expected_files:
+        raise ManifestError("manifest metadata has an unexpected JSONL file set")
+    for name in sorted(expected_files):
+        path = root / name
+        expected = metadata["files"][name]
+        if sha256_file(path) != expected.get("sha256"):
+            raise ManifestError(f"manifest hash mismatch: {name}")
+        count = sum(1 for _ in iter_jsonl(path))
+        if count != expected.get("count"):
+            raise ManifestError(f"manifest count mismatch: {name}")
+    if sha256_file(root / "splits.json") != metadata.get("splits_sha256"):
+        raise ManifestError("split manifest hash mismatch")
+    if sha256_file(root / "resources.json") != metadata.get("resources_sha256"):
+        raise ManifestError("resource manifest hash mismatch")
+    content_sha256 = sha256_json(
+        {"files": metadata["files"], "splits": splits, "resources": resources}
+    )
+    if content_sha256 != metadata.get("content_sha256"):
+        raise ManifestError("manifest bundle content hash mismatch")
+    return {
+        "status": "ready",
+        "content_sha256": content_sha256,
+        "counts": {
+            name: int(metadata["files"][name]["count"])
+            for name in sorted(expected_files)
+        },
+    }
+
+
 def derive_official_membership(config: Method1Config) -> dict[str, list[str]]:
     memberships: dict[str, list[str]] = {}
     sources: dict[str, dict[str, Any]] = {}

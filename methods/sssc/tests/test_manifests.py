@@ -6,9 +6,15 @@ from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from method1.config import load_config
-from method1.manifests import build_manifests, iter_jsonl
+from method1.manifests import (
+    ManifestError,
+    build_manifests,
+    iter_jsonl,
+    validate_manifest_bundle,
+)
 
 
 def test_grouped_manifest_builder_preserves_membership(
@@ -65,6 +71,12 @@ def test_grouped_manifest_builder_preserves_membership(
     assert report["files"]["videos.jsonl"]["count"] == 6
     groups = list(iter_jsonl(tmp_path / "manifests" / "groups.jsonl"))
     assert [len(group["video_uids"]) for group in groups] == [2, 2, 2]
+    validation = validate_manifest_bundle(tmp_path / "manifests")
+    assert validation["counts"]["videos.jsonl"] == 6
+    with (tmp_path / "manifests" / "texts.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(groups[0]) + "\n")
+    with pytest.raises(ManifestError, match="hash mismatch"):
+        validate_manifest_bundle(tmp_path / "manifests")
 
 
 def test_grouped_release_membership_is_mechanically_derived_without_resplitting(

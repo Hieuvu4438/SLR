@@ -27,6 +27,7 @@
       },
       "tokenizer_contract": "PASS_SYNTHETIC",
       "feature_mixture_contract": "PASS_SYNTHETIC",
+      "manifest_bundle_hash_validation": "PASS_REAL_PH",
       "confirmation_dataset_readiness": {
         "h2": "BLOCKED_MISSING_DEV_AND_FULL_CICO_FEATURES",
         "csl": "BLOCKED_MISSING_ESTABLISHED_TEST_FEATURES_AND_DEV_GROUP_SOURCE"
@@ -60,7 +61,8 @@
       "runtime_environment_provenance": "PASS_HOST_CAPTURE",
       "resumable_cost_counters": "PASS_SYNTHETIC",
       "one_step_train_dev_checkpoint_pipeline": "PASS_SYNTHETIC",
-      "pilot_checkpoint_teacher_gate": "PASS_SYNTHETIC"
+      "pilot_checkpoint_teacher_gate": "PASS_SYNTHETIC",
+      "command_scoped_method_audit": "PASS_SYNTHETIC"
     },
     "M4_reference_miner": {
       "status": "IN_PROGRESS",

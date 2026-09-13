@@ -7,7 +7,10 @@ from typing import Any
 import numpy as np
 import torch
 
+from .auxiliary_cache import Method1AuxiliaryCache
 from .config import Method1Config
+from .manifests import validate_manifest_bundle
+from .reference_pipeline import reference_cache_identity
 from .utils import sha256_file
 
 
@@ -78,14 +81,47 @@ def audit_resources(config: Method1Config, stage: str) -> dict[str, Any]:
         manifest_dir = Path(config.data.manifest_dir)
         for name in ("texts.jsonl", "videos.jsonl", "groups.jsonl", "splits.json", "resources.json", "manifest_meta.json"):
             resources[name] = _file_check(str(manifest_dir / name), label=name)
+        resources["manifest_validation"] = validate_manifest_bundle(manifest_dir)
         resources["reference_checkpoint"] = _file_check(
             config.reference.checkpoint, label="selected baseline/reference checkpoint"
         )
-        cache_meta = Path(config.reference.cache_dir) / "cache_meta.json"
-        resources["reference_cache"] = _file_check(str(cache_meta), label="reference cache metadata")
+        checkpoint = torch.load(
+            config.reference.checkpoint, map_location="cpu", weights_only=True
+        )
+        if (
+            checkpoint.get("arm") != "base_initial"
+            or checkpoint.get("dev_selection") is None
+            or not checkpoint.get("training_run_complete", False)
+        ):
+            raise AuditError(
+                "method training requires a completed dev-selected base_initial checkpoint"
+            )
+        del checkpoint
+        if config.auxiliary.arm != "base_continuation":
+            cache_meta = Path(config.reference.cache_dir) / "cache_meta.json"
+            resources["reference_cache"] = _file_check(
+                str(cache_meta), label="reference cache metadata"
+            )
+            identity = reference_cache_identity(config)
+            cache = Method1AuxiliaryCache(
+                config.reference.cache_dir, expected_identity=identity
+            )
+            resources["auxiliary_cache"] = {
+                "reference_identity_sha256": cache.reference_identity_sha256,
+                "mining_content_sha256": cache.mining_content_sha256,
+                "edit_count": len(cache.edits_by_uid),
+            }
+        else:
+            resources["auxiliary_cache"] = {
+                "status": "not_required_for_base_continuation"
+            }
     else:
         # Inference/export intentionally excludes reference, miner, and training captions.
         manifest_dir = Path(config.data.manifest_dir)
         for name in ("texts.jsonl", "videos.jsonl", "groups.jsonl", "splits.json", "resources.json"):
             resources[name] = _file_check(str(manifest_dir / name), label=name)
+        resources["manifest_meta.json"] = _file_check(
+            str(manifest_dir / "manifest_meta.json"), label="manifest_meta.json"
+        )
+        resources["manifest_validation"] = validate_manifest_bundle(manifest_dir)
     return report
