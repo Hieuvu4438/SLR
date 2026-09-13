@@ -29,6 +29,19 @@
       "feature_mixture_contract": "PASS_SYNTHETIC",
       "manifest_bundle_hash_validation": "PASS_REAL_PH",
       "immutable_atomic_manifest_bundle": "PASS_SYNTHETIC",
+      "cico_sign_feature_archive": {
+        "status": "PASS_ZIP_TEST_ONLY_RELEASE",
+        "path": "artifacts/method1/input/releases/sign_features.zip",
+        "sha256": "9ba1956cf416df9a31ae3d1a71a3fa9a2d1e2b3724670288b608c8d4eb895c51",
+        "bytes": 2797376661,
+        "ph_files": {
+          "domain_agnostic_test": 642,
+          "domain_aware_test": 642,
+          "train": 0,
+          "dev": 0
+        }
+      },
+      "active_feature_regime": "LOCAL_REEXTRACTED_AGNOSTIC_PLUS_P14T_ADAPTED_AWARE_NOT_EXACT_CICO_RELEASE",
       "confirmation_dataset_readiness": {
         "h2": "BLOCKED_MISSING_DEV_AND_FULL_CICO_FEATURES",
         "csl": "BLOCKED_MISSING_ESTABLISHED_TEST_FEATURES_AND_DEV_GROUP_SOURCE"
