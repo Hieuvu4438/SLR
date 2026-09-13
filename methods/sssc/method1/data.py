@@ -304,9 +304,12 @@ class TrimmedDistributedGroupSampler(Sampler[int]):
     def __len__(self) -> int:
         return self.usable // self.world_size
 
-    def __iter__(self):
+    def permutation(self) -> np.ndarray:
         generator = np.random.default_rng(
             stable_seed(self.seed, self.epoch, "trimmed_group_permutation")
         )
-        permutation = generator.permutation(self.length)[: self.usable]
+        return generator.permutation(self.length)[: self.usable]
+
+    def __iter__(self):
+        permutation = self.permutation()
         return iter(int(index) for index in permutation[self.rank :: self.world_size])

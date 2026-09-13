@@ -5,6 +5,7 @@ from typing import Any, Iterator
 
 import torch
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 from .distributed import DistributedRuntime, gather_with_grad
 from .schemas import LocalEncoding, SchemaError
@@ -171,6 +172,7 @@ def directional_scores_blocked(
     temperature: float = 0.07,
     video_block: int = 32,
     text_block: int = 64,
+    checkpoint_blocks: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     if video_block < 1 or text_block < 1:
         raise ValueError("score blocks must be positive")
@@ -184,16 +186,31 @@ def directional_scores_blocked(
         row_text: list[torch.Tensor] = []
         for text_start in range(0, text_raw.shape[0], text_block):
             text_end = min(text_raw.shape[0], text_start + text_block)
-            current = directional_scores_dense(
-                core,
+            inputs = (
                 video_raw[video_start:video_end],
                 video_ignore_raw[video_start:video_end],
                 text_raw[text_start:text_end],
                 text_valid[text_start:text_end],
-                text_aug_raw=text_aug_raw[text_start:text_end],
-                text_aug_valid=text_aug_valid[text_start:text_end],
-                temperature=temperature,
+                text_aug_raw[text_start:text_end],
+                text_aug_valid[text_start:text_end],
             )
+
+            def score_block(*values):
+                return directional_scores_dense(
+                    core,
+                    values[0],
+                    values[1],
+                    values[2],
+                    values[3],
+                    text_aug_raw=values[4],
+                    text_aug_valid=values[5],
+                    temperature=temperature,
+                )
+
+            if checkpoint_blocks and torch.is_grad_enabled():
+                current = checkpoint(score_block, *inputs, use_reentrant=False)
+            else:
+                current = score_block(*inputs)
             row_video.append(current[0])
             row_text.append(current[1])
         video_rows.append(torch.cat(row_video, dim=1))
@@ -326,17 +343,32 @@ def baseline_loss_from_local(
     optimizer_step: int,
     microstep: int = 0,
     temperature: float = 0.07,
+    checkpoint_score_blocks: bool = False,
+    video_block: int = 32,
+    text_block: int = 64,
 ) -> torch.Tensor:
     global_encoding = gather_local_encoding(encoding, runtime)
-    video_score, text_score = directional_scores_dense(
+    scorer = directional_scores_blocked if checkpoint_score_blocks else directional_scores_dense
+    score_kwargs = {
+        "text_aug_raw": global_encoding.text_aug_raw,
+        "text_aug_valid": global_encoding.text_aug_valid,
+        "temperature": temperature,
+    }
+    if checkpoint_score_blocks:
+        score_kwargs.update(
+            {
+                "video_block": video_block,
+                "text_block": text_block,
+                "checkpoint_blocks": True,
+            }
+        )
+    video_score, text_score = scorer(
         core,
         global_encoding.video_raw,
         global_encoding.video_ignore_raw,
         global_encoding.text_raw,
         global_encoding.text_valid,
-        text_aug_raw=global_encoding.text_aug_raw,
-        text_aug_valid=global_encoding.text_aug_valid,
-        temperature=temperature,
+        **score_kwargs,
     )
     if video_score.shape[0] != video_score.shape[1]:
         raise SchemaError("base contrastive matrices must be square")

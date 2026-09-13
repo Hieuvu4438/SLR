@@ -8,6 +8,7 @@ from method1.config import ConfigError, load_config
 
 
 CONFIG = Path("methods/sssc/configs/method1/ph_span_shared.yaml")
+BASE_CONFIG = Path("methods/sssc/configs/method1/ph_base_initial.yaml")
 
 
 def test_config_is_strict_and_resolves_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -26,3 +27,9 @@ def test_config_rejects_unresolved_environment(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("SLRET_RUN_ROOT", "/tmp/method1-runs")
     with pytest.raises(ConfigError, match="SLRET_DATA_ROOT"):
         load_config(CONFIG)
+
+
+def test_local_base_initial_config_is_explicit_and_valid() -> None:
+    config = load_config(BASE_CONFIG)
+    assert config.auxiliary.arm == "base_initial"
+    assert config.output.root.endswith("/base/seed42")

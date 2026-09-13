@@ -14,10 +14,19 @@ Implemented data/reference entry points are:
 PYTHONPATH=methods/sssc:shared python -m method1.cli build-manifests --config CONFIG
 PYTHONPATH=methods/sssc:shared python -m method1.cli cache-reference --config CONFIG --device cuda
 PYTHONPATH=methods/sssc:shared python -m method1.cli mine-negatives --config CONFIG --device cuda
+PYTHONPATH=methods/sssc:shared torchrun --standalone --nproc_per_node=W -m method1.cli train-base --config CONFIG
+PYTHONPATH=methods/sssc:shared torchrun --standalone --nproc_per_node=W -m method1.cli train-method --config CONFIG
+PYTHONPATH=methods/sssc:shared python -m method1.cli evaluate --config CONFIG --checkpoint CKPT --split dev
+PYTHONPATH=methods/sssc:shared python -m method1.cli export --config CONFIG --checkpoint CKPT --output OUTPUT
 ```
 
 The latter two fail closed unless the configured checkpoint is a dev-selected
 `base_initial` checkpoint and every manifest/cache identity matches.
+
+`configs/method1/ph_base_initial.yaml` is the explicit S1 configuration. A bounded
+`--max-steps` run is labeled `pilot_complete`; its checkpoint is intentionally rejected as a
+teacher. Only completion of the full configured epoch/step budget adds the
+`training_run_complete` gate required by reference caching and Method 1 arms.
 
 The implementation starts from pinned UPRet commit
 `046366227417e1d8ec14145965403462df345984`. The local audit checkout is kept at

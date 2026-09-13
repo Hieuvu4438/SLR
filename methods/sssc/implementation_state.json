@@ -37,9 +37,9 @@
       "full_cpu_forward_backward": "PASS_B2",
       "corrected_dense_blocked_score_parity": "PASS_SYNTHETIC",
       "two_rank_gather_gradient_parity": "PASS_GLOO",
+      "two_rank_full_stochastic_base_gradient_parity": "PASS_GLOO",
+      "complete_pool_evaluator": "PASS_SYNTHETIC",
       "remaining": [
-        "dev-only trainer/checkpoint selection",
-        "two-rank full stochastic base-loss gradient parity",
         "real full-gallery evaluator"
       ]
     },
@@ -48,7 +48,9 @@
       "optimizer_contract": "PASS_SYNTHETIC",
       "atomic_checkpoint_resume_identity": "PASS_SYNTHETIC",
       "dev_selector": "PASS_SYNTHETIC",
-      "two_rank_weighted_auxiliary": "PASS_GLOO"
+      "two_rank_weighted_auxiliary": "PASS_GLOO",
+      "one_step_train_dev_checkpoint_pipeline": "PASS_SYNTHETIC",
+      "pilot_checkpoint_teacher_gate": "PASS_SYNTHETIC"
     },
     "M4_reference_miner": {
       "status": "IN_PROGRESS",
@@ -66,7 +68,12 @@
     },
     "M6_real_smoke_pilot": {"status": "NOT_STARTED"},
     "M7_controls": {"status": "NOT_STARTED"},
-    "M8_experiments_export": {"status": "NOT_STARTED"}
+    "M8_experiments_export": {
+      "status": "IN_PROGRESS",
+      "complete_pool_ranking_and_ids": "PASS_SYNTHETIC",
+      "student_only_export": "PASS_SYNTHETIC",
+      "real_test_evaluation": "LOCKED_UNTIL_SELECTION"
+    }
   },
   "last_verified": "2026-09-13"
 }

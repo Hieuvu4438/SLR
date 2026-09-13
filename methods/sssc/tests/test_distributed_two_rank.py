@@ -9,12 +9,14 @@ import torch.multiprocessing as mp
 from torch import nn
 from torch.nn.parallel import DistributedDataParallel
 
+from method1.baseline import baseline_loss_from_local
 from method1.distributed import (
     DistributedRuntime,
     ddp_weighted_auxiliary,
     gather_with_grad,
 )
 from method1.schemas import AuxiliaryTerms
+from method1.schemas import LocalEncoding
 
 
 class GatherProbe(nn.Module):
@@ -33,6 +35,74 @@ class AuxiliaryProbe(nn.Module):
 
     def forward(self, coefficient: torch.Tensor) -> torch.Tensor:
         return coefficient * self.weight.square()
+
+
+class DistributionProbe(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.mu_scale = nn.Parameter(torch.tensor(0.8))
+        self.log_sigma = nn.Parameter(torch.tensor(-0.7))
+
+    def forward(self, tokens, mask=None, weight=None):
+        return (
+            self.mu_scale * tokens,
+            self.log_sigma.expand_as(tokens),
+            tokens,
+        )
+
+
+class FullBaseProbe(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.encoder_scale = nn.Parameter(torch.tensor(1.1))
+        self.video_weight_fc = nn.Linear(2, 1)
+        self.text_weight_fc = nn.Linear(2, 1)
+        self.dist_text_trans = DistributionProbe()
+        self.dist_video_trans = DistributionProbe()
+        self.clip = nn.Module()
+        self.clip.logit_scale = nn.Parameter(torch.tensor(0.2))
+        self.eps = 0.1
+        self.max_iter = 20
+        self.ot_weight = 1.0
+        self.dual_mix = 0.5
+        self.mix_design = "balance"
+
+    def forward(self, local_video: torch.Tensor, local_text: torch.Tensor) -> torch.Tensor:
+        batch = local_video.shape[0]
+        encoding = LocalEncoding(
+            video_raw=self.encoder_scale * local_video,
+            video_ignore_raw=torch.tensor(
+                [[True, False, False]], device=local_video.device
+            ).expand(batch, -1),
+            text_raw=self.encoder_scale * local_text,
+            text_valid=torch.ones(batch, 2, dtype=torch.bool, device=local_text.device),
+            text_aug_raw=self.encoder_scale * (local_text + 0.05),
+            text_aug_valid=torch.ones(batch, 2, dtype=torch.bool, device=local_text.device),
+        )
+        return baseline_loss_from_local(
+            self,
+            encoding,
+            runtime=DistributedRuntime.current(),
+            seed=42,
+            optimizer_step=7,
+        )
+
+
+def _full_probe_inputs() -> tuple[torch.Tensor, torch.Tensor]:
+    return (
+        torch.tensor(
+            [
+                [[3.0, 3.0], [1.0, 0.2], [0.1, 1.0]],
+                [[2.0, 2.0], [0.7, 0.4], [0.2, 0.9]],
+            ]
+        ),
+        torch.tensor(
+            [
+                [[1.0, 0.1], [0.3, 0.8]],
+                [[0.2, 1.0], [0.9, 0.2]],
+            ]
+        ),
+    )
 
 
 def _two_rank_worker(rank: int, init_file: str, output_dir: str) -> None:
@@ -63,6 +133,16 @@ def _two_rank_worker(rank: int, init_file: str, output_dir: str) -> None:
             "auxiliary_log": float(logs["auxiliary"]),
             "auxiliary_count": float(logs["auxiliary_weight_count"]),
         }
+        torch.manual_seed(123)
+        full_model = DistributedDataParallel(FullBaseProbe())
+        videos, texts = _full_probe_inputs()
+        full_loss = full_model(videos[rank : rank + 1], texts[rank : rank + 1])
+        full_loss.backward()
+        payload["full_loss"] = float(full_loss.detach())
+        payload["full_gradients"] = {
+            name: parameter.grad.detach().cpu()
+            for name, parameter in full_model.module.named_parameters()
+        }
         torch.save(payload, Path(output_dir) / f"rank{rank}.pt")
     finally:
         dist.destroy_process_group()
@@ -84,6 +164,14 @@ def test_two_rank_gather_and_weighted_auxiliary_match_global_reference(
     results = [
         torch.load(output_dir / f"rank{rank}.pt", weights_only=True) for rank in range(2)
     ]
+    torch.manual_seed(123)
+    reference = FullBaseProbe()
+    videos, texts = _full_probe_inputs()
+    reference_loss = reference(videos, texts)
+    reference_loss.backward()
+    reference_gradients = {
+        name: parameter.grad.detach() for name, parameter in reference.named_parameters()
+    }
     for result in results:
         # d/dw sum_i (w*x_i)^2 at w=2, x=[1,2].
         assert result["gather_gradient"] == pytest.approx(20.0)
@@ -91,3 +179,9 @@ def test_two_rank_gather_and_weighted_auxiliary_match_global_reference(
         assert result["auxiliary_gradient"] == pytest.approx(4.0)
         assert result["auxiliary_log"] == pytest.approx(4.0)
         assert result["auxiliary_count"] == pytest.approx(4.0)
+        assert result["full_loss"] == pytest.approx(float(reference_loss.detach()), rel=1e-6)
+        assert set(result["full_gradients"]) == set(reference_gradients)
+        for name, gradient in reference_gradients.items():
+            torch.testing.assert_close(
+                result["full_gradients"][name], gradient, atol=2e-5, rtol=2e-5
+            )

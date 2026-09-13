@@ -169,7 +169,11 @@ def mine_reference_negatives(
         raise MinerError("mining produced no token-valid candidate edits")
     model, _ = build_upret_model(config, upret_root=upret_root)
     checkpoint = load_exact_student_state(model, config.reference.checkpoint)
-    if checkpoint.get("dev_selection") is None or checkpoint.get("arm") != "base_initial":
+    if (
+        checkpoint.get("dev_selection") is None
+        or checkpoint.get("arm") != "base_initial"
+        or not checkpoint.get("training_run_complete", False)
+    ):
         raise MinerError("negative spans require the same dev-selected base reference")
     reference = freeze_reference(model.to(device))
     batch_size = int(batch_size or config.evaluation.encode_batch_size)

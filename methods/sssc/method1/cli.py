@@ -11,12 +11,14 @@ import torch
 from .audit import audit_resources
 from .config import ConfigError, load_config
 from .evaluation import evaluate_grouped_retrieval
+from .inference import evaluate_checkpoint, export_student
 from .losses.shared_support import span_contrast_terms
 from .manifests import build_manifests
 from .mining_pipeline import mine_reference_negatives
 from .reference_pipeline import create_reference_cache
 from .sampling import mix_and_sample_features
 from .token_spans import tokenize_with_spans
+from .train_pipeline import train_stage
 from .upstream import create_upret_tokenizer
 from .utils import atomic_json_dump
 
@@ -62,12 +64,17 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--config", required=True)
         if name in {"train-base", "train-method"}:
             command.add_argument("--max-steps", type=int)
+            command.add_argument("--resume")
+            command.add_argument("--device", default="auto")
+            command.add_argument("--upret-root", default="third_party/UPRet")
         if name in {"cache-reference", "mine-negatives"}:
             command.add_argument("--device", default="auto")
             command.add_argument("--upret-root", default="third_party/UPRet")
             command.add_argument("--batch-size", type=int)
         if name in {"evaluate", "export"}:
             command.add_argument("--checkpoint", required=True)
+            command.add_argument("--device", default="auto")
+            command.add_argument("--upret-root", default="third_party/UPRet")
         if name in {"evaluate", "diagnose"}:
             command.add_argument("--split", choices=("dev", "test"), required=True)
         if name == "diagnose":
@@ -206,6 +213,42 @@ def main(argv: Sequence[str] | None = None) -> int:
                     upret_root=args.upret_root,
                     device=device,
                     batch_size=args.batch_size,
+                )
+            )
+        elif args.command in {"train-base", "train-method"}:
+            _emit(
+                train_stage(
+                    load_config(args.config),
+                    stage="base" if args.command == "train-base" else "method",
+                    max_steps=args.max_steps,
+                    resume=args.resume,
+                    requested_device=args.device,
+                    upret_root=args.upret_root,
+                )
+            )
+        elif args.command == "evaluate":
+            config = load_config(args.config)
+            device = (
+                "cuda" if args.device == "auto" and torch.cuda.is_available() else args.device
+            )
+            if device == "auto":
+                device = "cpu"
+            _emit(
+                evaluate_checkpoint(
+                    config,
+                    args.checkpoint,
+                    split=args.split,
+                    upret_root=args.upret_root,
+                    device=device,
+                )
+            )
+        elif args.command == "export":
+            _emit(
+                export_student(
+                    load_config(args.config),
+                    args.checkpoint,
+                    args.output,
+                    upret_root=args.upret_root,
                 )
             )
         else:

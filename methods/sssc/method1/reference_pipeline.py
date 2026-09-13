@@ -90,7 +90,11 @@ def create_reference_cache(
     identity = reference_cache_identity(config, teacher_checkpoint=checkpoint_path)
     model, _ = build_upret_model(config, upret_root=upret_root)
     checkpoint = load_exact_student_state(model, checkpoint_path)
-    if checkpoint.get("dev_selection") is None or checkpoint.get("arm") != "base_initial":
+    if (
+        checkpoint.get("dev_selection") is None
+        or checkpoint.get("arm") != "base_initial"
+        or not checkpoint.get("training_run_complete", False)
+    ):
         raise RuntimeError("reference checkpoint must be the dev-selected base_initial artifact")
     reference = freeze_reference(model.to(device))
     tokenizer = create_upret_tokenizer(upret_root, config.model.bpe_path)

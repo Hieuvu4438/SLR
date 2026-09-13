@@ -17,6 +17,13 @@ def _core():
     return SimpleNamespace(video_weight_fc=ScalarHead(), text_weight_fc=ScalarHead())
 
 
+class LearnableCore(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.video_weight_fc = nn.Linear(3, 1)
+        self.text_weight_fc = nn.Linear(3, 1)
+
+
 def test_corrected_score_is_padding_invariant() -> None:
     core = _core()
     video = torch.tensor(
@@ -54,10 +61,31 @@ def test_dense_and_blocked_scores_and_gradients_match() -> None:
     )
     blocked_loss = blocked[0].sum() + blocked[1].sum()
     blocked_gradients = torch.autograd.grad(blocked_loss, (video, text))
+    checkpointed = directional_scores_blocked(
+        _core(),
+        video,
+        video_ignore,
+        text,
+        text_valid,
+        video_block=2,
+        text_block=2,
+        checkpoint_blocks=True,
+    )
+    checkpointed_gradients = torch.autograd.grad(
+        checkpointed[0].sum() + checkpointed[1].sum(), (video, text)
+    )
     torch.testing.assert_close(dense[0], blocked[0], atol=1e-6, rtol=1e-6)
     torch.testing.assert_close(dense[1], blocked[1], atol=1e-6, rtol=1e-6)
     torch.testing.assert_close(dense_gradients[0], blocked_gradients[0], atol=1e-5, rtol=1e-5)
     torch.testing.assert_close(dense_gradients[1], blocked_gradients[1], atol=1e-5, rtol=1e-5)
+    torch.testing.assert_close(dense[0], checkpointed[0], atol=1e-6, rtol=1e-6)
+    torch.testing.assert_close(dense[1], checkpointed[1], atol=1e-6, rtol=1e-6)
+    torch.testing.assert_close(
+        dense_gradients[0], checkpointed_gradients[0], atol=1e-5, rtol=1e-5
+    )
+    torch.testing.assert_close(
+        dense_gradients[1], checkpointed_gradients[1], atol=1e-5, rtol=1e-5
+    )
 
 
 def test_encode_local_unpacks_nine_value_contract() -> None:
@@ -98,3 +126,45 @@ def test_encode_local_unpacks_nine_value_contract() -> None:
     encoding = encode_local(Student(), batch_value)
     assert encoding.video_raw is values[3]
     assert encoding.text_aug_raw is values[6]
+
+
+def test_checkpointed_blocks_match_weighting_head_parameter_gradients() -> None:
+    torch.manual_seed(19)
+    dense_core = LearnableCore()
+    blocked_core = LearnableCore()
+    blocked_core.load_state_dict(dense_core.state_dict())
+    video_dense = torch.randn(3, 4, 3, requires_grad=True)
+    text_dense = torch.randn(3, 3, 3, requires_grad=True)
+    video_blocked = video_dense.detach().clone().requires_grad_(True)
+    text_blocked = text_dense.detach().clone().requires_grad_(True)
+    video_ignore = torch.tensor(
+        [[True, False, False, True], [True, False, False, False], [True, False, True, True]]
+    )
+    text_valid = torch.tensor(
+        [[True, True, False], [True, True, True], [True, False, False]]
+    )
+    dense = directional_scores_dense(
+        dense_core, video_dense, video_ignore, text_dense, text_valid
+    )
+    (dense[0].sum() + dense[1].sum()).backward()
+    blocked = directional_scores_blocked(
+        blocked_core,
+        video_blocked,
+        video_ignore,
+        text_blocked,
+        text_valid,
+        video_block=2,
+        text_block=2,
+        checkpoint_blocks=True,
+    )
+    (blocked[0].sum() + blocked[1].sum()).backward()
+    torch.testing.assert_close(dense[0], blocked[0], atol=1e-6, rtol=1e-6)
+    torch.testing.assert_close(dense[1], blocked[1], atol=1e-6, rtol=1e-6)
+    torch.testing.assert_close(video_dense.grad, video_blocked.grad, atol=1e-5, rtol=1e-5)
+    torch.testing.assert_close(text_dense.grad, text_blocked.grad, atol=1e-5, rtol=1e-5)
+    for (_, dense_parameter), (_, blocked_parameter) in zip(
+        dense_core.named_parameters(), blocked_core.named_parameters(), strict=True
+    ):
+        torch.testing.assert_close(
+            dense_parameter.grad, blocked_parameter.grad, atol=1e-5, rtol=1e-5
+        )

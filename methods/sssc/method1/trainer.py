@@ -33,6 +33,10 @@ class Method1TrainModel(nn.Module):
         runtime: DistributedRuntime,
         *,
         baseline_seed: int,
+        inner_similarity_temperature: float = 0.07,
+        checkpoint_score_blocks: bool = False,
+        video_pair_block: int = 32,
+        text_pair_block: int = 64,
     ) -> None:
         super().__init__()
         if auxiliary_config.arm not in _BASE_ONLY_ARMS | _SPAN_ARMS:
@@ -43,6 +47,10 @@ class Method1TrainModel(nn.Module):
         self.config = auxiliary_config
         self.runtime = runtime
         self.baseline_seed = int(baseline_seed)
+        self.inner_similarity_temperature = float(inner_similarity_temperature)
+        self.checkpoint_score_blocks = bool(checkpoint_score_blocks)
+        self.video_pair_block = int(video_pair_block)
+        self.text_pair_block = int(text_pair_block)
 
     def forward(
         self,
@@ -60,6 +68,10 @@ class Method1TrainModel(nn.Module):
             seed=self.baseline_seed,
             optimizer_step=optimizer_step,
             microstep=microstep,
+            temperature=self.inner_similarity_temperature,
+            checkpoint_score_blocks=self.checkpoint_score_blocks,
+            video_block=self.video_pair_block,
+            text_block=self.text_pair_block,
         )
         if self.config.arm in _BASE_ONLY_ARMS:
             return {"loss": base, "base": base.detach()}
