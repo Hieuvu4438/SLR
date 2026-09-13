@@ -58,6 +58,7 @@
       "periodic_exact_resume": "PASS_SYNTHETIC_BITWISE_TWO_STEPS",
       "per_rank_rng_checkpoint": "PASS_SYNTHETIC",
       "runtime_environment_provenance": "PASS_HOST_CAPTURE",
+      "resumable_cost_counters": "PASS_SYNTHETIC",
       "one_step_train_dev_checkpoint_pipeline": "PASS_SYNTHETIC",
       "pilot_checkpoint_teacher_gate": "PASS_SYNTHETIC"
     },
@@ -69,6 +70,7 @@
       "group_balanced_visual_prototypes": "PASS_SYNTHETIC",
       "train_only_caption_filter": "PASS_SYNTHETIC",
       "atomic_auxiliary_bundle": "IMPLEMENTED_UNEXECUTED_REAL",
+      "offline_cost_accounting": "IMPLEMENTED_UNEXECUTED_REAL",
       "real_cache_blocker": "dev-selected corrected baseline checkpoint is not yet available"
     },
     "M5_core_method": {

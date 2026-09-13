@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -86,6 +87,10 @@ def create_reference_cache(
     device: str | torch.device = "cpu",
     batch_size: int | None = None,
 ) -> dict[str, Any]:
+    started_at = time.perf_counter()
+    torch_device = torch.device(device)
+    if torch_device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(torch_device)
     checkpoint_path = Path(config.reference.checkpoint)
     identity = reference_cache_identity(config, teacher_checkpoint=checkpoint_path)
     model, _ = build_upret_model(config, upret_root=upret_root)
@@ -232,4 +237,19 @@ def create_reference_cache(
         "eligible_caption_count": len(encoded_texts),
         "positive_occurrence_count": len(occurrences),
         "cache_content_sha256": metadata["content_sha256"],
+        "cost": {
+            "wall_seconds": time.perf_counter() - started_at,
+            "video_encoder_batches": (len(videos) + batch_size - 1) // batch_size,
+            "text_encoder_batches": (len(occurrences) + batch_size - 1) // batch_size,
+            "artifact_bytes": sum(
+                path.stat().st_size
+                for path in Path(config.reference.cache_dir).rglob("*")
+                if path.is_file()
+            ),
+            "peak_cuda_bytes": (
+                int(torch.cuda.max_memory_allocated(torch_device))
+                if torch_device.type == "cuda"
+                else 0
+            ),
+        },
     }

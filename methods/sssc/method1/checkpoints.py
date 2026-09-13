@@ -120,6 +120,7 @@ def make_training_checkpoint(
     dev_metrics: Mapping[str, Any] | None,
     scaler: Any | None = None,
     rng_state: Mapping[str, Any] | None = None,
+    run_counters: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if min(epoch, next_batch_index, global_step) < 0:
         raise CheckpointError("checkpoint progress fields must be non-negative")
@@ -148,6 +149,7 @@ def make_training_checkpoint(
         "arm": config.auxiliary.arm,
         "dev_selection": asdict(selection) if selection is not None else None,
         "dev_metrics": dict(dev_metrics) if dev_metrics is not None else None,
+        "run_counters": dict(run_counters or {}),
     }
 
 

@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -88,6 +89,10 @@ def mine_reference_negatives(
     device: str | torch.device = "cpu",
     batch_size: int | None = None,
 ) -> dict[str, Any]:
+    started_at = time.perf_counter()
+    torch_device = torch.device(device)
+    if torch_device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(torch_device)
     cache_root = Path(config.reference.cache_dir)
     identity = reference_cache_identity(config)
     arrays = validate_reference_cache(cache_root, expected_identity=identity)
@@ -293,4 +298,22 @@ def mine_reference_negatives(
         "diagnostics": difference_diagnostics,
         "mining_content_sha256": mining_report["content_sha256"],
         "negative_cache_content_sha256": negative_report["content_sha256"],
+        "cost": {
+            "wall_seconds": time.perf_counter() - started_at,
+            "negative_text_encoder_batches": (
+                (len(all_edits) + batch_size - 1) // batch_size
+            ),
+            "encoded_negative_caption_count": len(all_edits),
+            "retained_negative_caption_count": len(retained_edits),
+            "artifact_bytes": sum(
+                path.stat().st_size
+                for path in bundle_destination.rglob("*")
+                if path.is_file()
+            ),
+            "peak_cuda_bytes": (
+                int(torch.cuda.max_memory_allocated(torch_device))
+                if torch_device.type == "cuda"
+                else 0
+            ),
+        },
     }

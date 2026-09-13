@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import subprocess
 from dataclasses import asdict
 from pathlib import Path
@@ -162,6 +163,16 @@ def _batch_identity_hash(batch: dict[str, Any], runtime: DistributedRuntime) -> 
     return sha256_json(gathered)
 
 
+def _counter_snapshot(
+    counters: dict[str, int], *, elapsed_before_resume: float, started_at: float
+) -> dict[str, Any]:
+    return {
+        **counters,
+        "elapsed_wall_seconds": elapsed_before_resume + time.perf_counter() - started_at,
+        "negative_encoding_cost_unit": "student_caption_slots",
+    }
+
+
 def train_stage(
     config: Method1Config,
     *,
@@ -199,6 +210,7 @@ def train_stage(
         raise TrainingError("the K=1 engineering pilot is capped at 200 optimizer steps")
 
     runtime, device, owned_process_group = _initialize_runtime(requested_device)
+    started_at = time.perf_counter()
     try:
         if config.training.global_contrastive_batch % runtime.world_size:
             raise TrainingError("global contrastive batch must be divisible by world size")
@@ -270,6 +282,12 @@ def train_stage(
         start_epoch = 0
         next_batch_index = 0
         global_step = 0
+        elapsed_before_resume = 0.0
+        counters = {
+            "optimizer_updates": 0,
+            "negative_encoding_slots": 0,
+            "valid_negative_count": 0,
+        }
         if resume is not None:
             resumed = torch.load(resume, map_location="cpu", weights_only=True)
             validate_resume_identity(resumed, config=config, artifact_hashes=artifacts)
@@ -285,6 +303,23 @@ def train_stage(
             start_epoch = int(resumed["epoch"])
             next_batch_index = int(resumed["next_batch_index"])
             global_step = int(resumed["global_step"])
+            resumed_counters = resumed.get("run_counters", {})
+            counters = {
+                "optimizer_updates": int(
+                    resumed_counters.get("optimizer_updates", global_step)
+                ),
+                "negative_encoding_slots": int(
+                    resumed_counters.get("negative_encoding_slots", 0)
+                ),
+                "valid_negative_count": int(
+                    resumed_counters.get("valid_negative_count", 0)
+                ),
+            }
+            elapsed_before_resume = float(
+                resumed_counters.get("elapsed_wall_seconds", 0.0)
+            )
+            if counters["optimizer_updates"] != global_step:
+                raise TrainingError("resume optimizer-update counter disagrees with global step")
             if global_step > optimizer_steps:
                 raise TrainingError("resume checkpoint is beyond the configured step budget")
         train_model = Method1TrainModel(
@@ -369,6 +404,13 @@ def train_stage(
                     max_grad_norm=config.training.max_grad_norm,
                 )
                 global_step += 1
+                counters["optimizer_updates"] = global_step
+                counters["negative_encoding_slots"] += int(
+                    result.get("negative_encoding_slots", torch.tensor(0))
+                )
+                counters["valid_negative_count"] += int(
+                    result.get("valid_negative_count", torch.tensor(0))
+                )
                 final_next_batch = batch_index + 1
                 debug_batch_hash = (
                     _batch_identity_hash(batch, runtime)
@@ -442,6 +484,11 @@ def train_stage(
                             implementation_revision=implementation_revision,
                             dev_metrics=None,
                             rng_state=rng_states[0],
+                            run_counters=_counter_snapshot(
+                                counters,
+                                elapsed_before_resume=elapsed_before_resume,
+                                started_at=started_at,
+                            ),
                         )
                         periodic["rng_state_by_rank"] = rng_states
                         periodic["training_run_complete"] = False
@@ -482,6 +529,11 @@ def train_stage(
                     implementation_revision=implementation_revision,
                     dev_metrics=final_metrics,
                     rng_state=rng_states[0],
+                    run_counters=_counter_snapshot(
+                        counters,
+                        elapsed_before_resume=elapsed_before_resume,
+                        started_at=started_at,
+                    ),
                 )
                 checkpoint["rng_state_by_rank"] = rng_states
                 checkpoint["training_run_complete"] = False
@@ -516,6 +568,11 @@ def train_stage(
                     "status": "complete",
                     "global_step": global_step,
                     "planned_steps": planned_steps,
+                    "run_counters": _counter_snapshot(
+                        counters,
+                        elapsed_before_resume=elapsed_before_resume,
+                        started_at=started_at,
+                    ),
                     "best_dev": str(best_path.resolve()),
                 },
                 output_root / "training_complete.json",
@@ -530,6 +587,11 @@ def train_stage(
             "global_step": global_step,
             "effective_step_budget": optimizer_steps,
             "full_protocol_complete": full_protocol_complete,
+            "run_counters": _counter_snapshot(
+                counters,
+                elapsed_before_resume=elapsed_before_resume,
+                started_at=started_at,
+            ),
             "output_root": str(output_root.resolve()),
             "best_dev": str(best_path.resolve()) if best_path.is_file() else None,
             "dev_metrics": _compact_metrics(final_metrics) if runtime.rank == 0 else None,

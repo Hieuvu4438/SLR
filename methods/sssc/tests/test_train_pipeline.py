@@ -159,6 +159,8 @@ def test_one_step_training_pipeline_writes_completed_selected_checkpoint(
         tmp_path / "run" / "best_dev.pt", map_location="cpu", weights_only=True
     )
     assert checkpoint["training_run_complete"] is True
+    assert checkpoint["run_counters"]["optimizer_updates"] == 1
+    assert checkpoint["run_counters"]["negative_encoding_slots"] == 0
     assert checkpoint["arm"] == "base_initial"
     assert checkpoint["dev_selection"]["mean_bidirectional_r1"] == 20.0
     assert (tmp_path / "run" / "training_complete.json").is_file()
@@ -236,6 +238,7 @@ def test_periodic_checkpoint_resume_matches_continuous_updates(
         tmp_path / "continuous" / "best_dev.pt", map_location="cpu", weights_only=True
     )
     assert resumed_checkpoint["global_step"] == continuous_checkpoint["global_step"] == 2
+    assert resumed_checkpoint["run_counters"]["optimizer_updates"] == 2
     for key, expected in continuous_checkpoint["student_state_dict"].items():
         torch.testing.assert_close(
             resumed_checkpoint["student_state_dict"][key], expected, atol=0, rtol=0
