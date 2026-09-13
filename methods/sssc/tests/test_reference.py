@@ -123,6 +123,41 @@ def test_cache_round_trip_mmap_and_strict_identity(tmp_path: Path) -> None:
         )
 
 
+def test_online_reference_encodings_equal_float32_cached_values(tmp_path: Path) -> None:
+    reference = freeze_reference(FakeReference())
+    video_mask = torch.ones(1, 65, dtype=torch.bool)
+    video_mask[:, 1:3] = False
+    online_video, online_valid = encode_reference_video(
+        reference,
+        {
+            "video_features": torch.zeros(1, 1024, 64, 1),
+            "video_ignore_raw": video_mask,
+        },
+    )
+    input_ids = torch.tensor([[0, 1, 3, 9, 0]])
+    text_valid = torch.tensor([[True, True, True, True, False]])
+    text_tokens, _ = encode_reference_text(
+        reference, input_ids, torch.zeros_like(input_ids), text_valid
+    )
+    online_span = pool_reference_spans(reference, text_tokens, [(1, 2)])
+    cache_root = tmp_path / "online_equivalence"
+    write_reference_cache(
+        cache_root,
+        identity=_identity(),
+        arrays={
+            "reference_video_tokens": online_video.numpy(),
+            "reference_video_valid": online_valid.numpy(),
+            "reference_positive_spans": online_span.numpy(),
+        },
+        video_index=[{"row": 0, "video_uid": "video-1"}],
+        positive_span_index=[{"row": 0, "occurrence_uid": "text-1:0:4"}],
+    )
+    cached = validate_reference_cache(cache_root, expected_identity=_identity())
+    np.testing.assert_array_equal(cached["reference_video_tokens"], online_video.numpy())
+    np.testing.assert_array_equal(cached["reference_video_valid"], online_valid.numpy())
+    np.testing.assert_array_equal(cached["reference_positive_spans"], online_span.numpy())
+
+
 def test_negative_span_cache_is_bound_to_reference_and_miner(tmp_path: Path) -> None:
     vectors = np.array([[0.6, 0.8], [0.0, 1.0]], dtype=np.float32)
     metadata = write_negative_span_cache(
