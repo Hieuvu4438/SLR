@@ -307,9 +307,12 @@ def distribution_transport_score(
     text = encoding.text_aug_raw.float()
     with scoped_distribution_rng(seed, optimizer_step, microstep, video.device):
         text_mu, text_logsigma, _ = core.dist_text_trans(text, mask=text_mask, weight=None)
-        video_mu, video_logsigma, _ = core.dist_video_trans(video, mask=video_mask, weight=None)
         if text_noise is None:
             text_noise = torch.randn_like(text_mu)
+        # Preserve the pinned UPRet RNG order exactly: text distribution/dropout,
+        # text sample, video distribution/dropout, then video sample.  Moving both
+        # distribution forwards before both samples changes every later RNG draw.
+        video_mu, video_logsigma, _ = core.dist_video_trans(video, mask=video_mask, weight=None)
         if video_noise is None:
             video_noise = torch.randn_like(video_mu)
     text_samples = torch.stack((text_mu, text_mu + torch.exp(text_logsigma) * text_noise))

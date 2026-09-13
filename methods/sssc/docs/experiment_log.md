@@ -2,6 +2,22 @@
 
 This file records executed runs only. Engineering checks are not reportable retrieval results.
 
+## 2026-09-13 — PH seed-42 S1 attempt invalidated by stochastic-parity audit
+
+- The first full S1 attempt reached optimizer step 870/2600 before it was stopped.
+- Its best observed dev checkpoint was step 533 with mean bidirectional R@1
+  `19.749518%`; training loss later approached zero while dev retrieval remained
+  implausibly low for a baseline reproduction.
+- A direct real-PH B=3 comparison against the pinned UPRet scorer found maximum
+  I2T/T2I logit disagreement `0.0073204041`. The local distribution path sampled
+  both distribution modules before either Gaussian noise tensor, while UPRet
+  samples text noise before invoking the video distribution module. Dropout makes
+  those RNG schedules observably different.
+- After restoring source RNG order, the same source comparison has exact maximum
+  logit difference `0.0`. The run is scientifically invalid and is excluded from
+  teacher selection, reference caching and all comparisons. Its preserved artifacts
+  are under `runs/method1/ph/base/seed42_invalid_rng_order_20260913/`.
+
 ## 2026-09-13 — PH real-data engineering smoke
 
 - Revision under test: `8f16fa6` plus the subsequently committed output-compaction helper.

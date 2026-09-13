@@ -5,7 +5,14 @@ from types import SimpleNamespace
 import torch
 from torch import nn
 
-from method1.baseline import directional_scores_blocked, directional_scores_dense, encode_local
+from method1.baseline import (
+    directional_scores_blocked,
+    directional_scores_dense,
+    distribution_transport_score,
+    encode_local,
+)
+from method1.schemas import LocalEncoding
+from method1.utils import stable_seed
 
 
 class ScalarHead(nn.Module):
@@ -168,3 +175,47 @@ def test_checkpointed_blocks_match_weighting_head_parameter_gradients() -> None:
         torch.testing.assert_close(
             dense_parameter.grad, blocked_parameter.grad, atol=1e-5, rtol=1e-5
         )
+
+
+def test_distribution_branch_preserves_upstream_rng_call_order() -> None:
+    observed: list[float] = []
+
+    class RandomConsumingDistribution(nn.Module):
+        def forward(self, value, *, mask, weight):
+            assert mask is not None and weight is None
+            marker = torch.rand(())
+            observed.append(float(marker))
+            return value + marker, torch.zeros_like(value), None
+
+    core = SimpleNamespace(
+        dist_text_trans=RandomConsumingDistribution(),
+        dist_video_trans=RandomConsumingDistribution(),
+        eps=0.1,
+        max_iter=10,
+    )
+    encoding = LocalEncoding(
+        video_raw=torch.ones(1, 3, 2),
+        video_ignore_raw=torch.tensor([[True, False, False]]),
+        text_raw=torch.ones(1, 3, 2),
+        text_valid=torch.tensor([[True, True, True]]),
+        text_aug_raw=torch.ones(1, 3, 2),
+        text_aug_valid=torch.tensor([[True, True, True]]),
+    )
+    seed = 17
+    step = 3
+    microstep = 0
+    scoped_seed = stable_seed(seed, step, microstep, "base_distribution") % (2**63 - 1)
+    with torch.random.fork_rng():
+        torch.manual_seed(scoped_seed)
+        expected_text_marker = float(torch.rand(()))
+        torch.randn_like(encoding.text_aug_raw)
+        expected_video_marker = float(torch.rand(()))
+
+    distribution_transport_score(
+        core,
+        encoding,
+        seed=seed,
+        optimizer_step=step,
+        microstep=microstep,
+    )
+    assert observed == [expected_text_marker, expected_video_marker]

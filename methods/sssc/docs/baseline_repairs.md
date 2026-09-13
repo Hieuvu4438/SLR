@@ -11,6 +11,7 @@ intervention. No item below is claimed as Method 1 novelty.
 | Directional inner softmax includes padding and later relies on `nansum` | Mask before softmax; finite affinities; invalid outer positions contribute zero | PASS: padding-invariance and dense/blocked gradient tests |
 | Grouped evaluator slices `segment_ids[input_mask,...]` | Slice `input_mask[filter_inds,...]` | PASS: tracked upstream patch; new evaluator avoids the tuple path |
 | Custom gather backward returns only the local slice | Sum full output gradient across ranks, then return local slice | PASS: two-rank Gloo encoder-gradient fixture matches the single global objective |
+| Reordered UPRet distribution RNG draws can change stochastic logits despite using the same seed | Preserve source order: text distribution/dropout, text sample, video distribution/dropout, video sample | PASS: RNG-order fixture plus a real PH B=3 source comparison (maximum logit difference `0.0`) |
 | Test is used during training / PH dev loader is incomplete | Complete dev selection only; test locked until configuration selection | PASS_SYNTHETIC: trainer calls only dev; test is a separate explicit evaluation command; real full-pool run pending |
 | Tie expansion can emit multiple ranks per query | One stable manifest-order rank per query | PASS: exact-tie fixture yields one rank/query |
 | Import-time NLTK downloads and removed `np.long` aliases | Legacy EDA import is lazy; Method 1 tensors use explicit integer dtypes | PARTIAL: import safety passes; legacy loaders are audit-only |

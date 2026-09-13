@@ -14,6 +14,45 @@ import torch
 from .utils import atomic_json_dump, sha256_file, sha256_json
 
 
+def implementation_source_report(
+    *,
+    method_package_root: str | Path | None = None,
+    upret_root: str | Path = "third_party/UPRet",
+    supporting_files: list[str | Path] | None = None,
+) -> dict[str, Any]:
+    """Hash every source file that can affect training/reference semantics."""
+    package_root = Path(method_package_root or Path(__file__).resolve().parent)
+    upstream_modules = Path(upret_root).resolve() / "modules"
+    if not package_root.is_dir() or not upstream_modules.is_dir():
+        raise RuntimeError("Method 1 or pinned UPRet source tree is missing")
+    files: dict[str, str] = {}
+    for source in sorted(package_root.rglob("*.py")):
+        files[f"method1/{source.relative_to(package_root).as_posix()}"] = sha256_file(source)
+    for source in sorted(upstream_modules.rglob("*")):
+        if source.is_file() and source.suffix in {".py", ".json"}:
+            files[f"upret/modules/{source.relative_to(upstream_modules).as_posix()}"] = (
+                sha256_file(source)
+            )
+    if supporting_files is None:
+        sssc_root = package_root.parent
+        supporting_files = [
+            sssc_root / "requirements.lock",
+            sssc_root / "patches" / "upret_corrected_v1.patch",
+        ]
+    for source_value in supporting_files:
+        source = Path(source_value)
+        if not source.is_file():
+            raise RuntimeError(f"implementation support file is missing: {source}")
+        files[f"support/{source.name}"] = sha256_file(source)
+    if not files:
+        raise RuntimeError("implementation source identity cannot be empty")
+    return {
+        "schema_version": 1,
+        "content_sha256": sha256_json(files),
+        "files": files,
+    }
+
+
 def _command_lines(command: list[str]) -> list[str]:
     completed = subprocess.run(
         command,

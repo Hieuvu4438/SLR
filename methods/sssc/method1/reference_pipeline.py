@@ -12,6 +12,7 @@ import torch
 from .config import Method1Config
 from .data import _load_feature, _load_records
 from .model_factory import build_upret_model, load_exact_student_state
+from .provenance import implementation_source_report
 from .reference import (
     ReferenceCacheIdentity,
     encode_reference_text,
@@ -51,7 +52,10 @@ def reference_cache_identity(
         caption_manifest_sha256=sha256_file(root / "texts.jsonl"),
         feature_manifest_sha256=sha256_file(root / "videos.jsonl"),
         mixture_sampler_sha256=sha256_json(sampler),
-        implementation_version=REFERENCE_IMPLEMENTATION_VERSION,
+        implementation_version=(
+            f"{REFERENCE_IMPLEMENTATION_VERSION}:"
+            f"{implementation_source_report()['content_sha256']}"
+        ),
         cache_dtype=config.reference.cache_dtype,
     )
 

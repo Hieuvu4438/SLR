@@ -28,7 +28,7 @@ from .distributed import DistributedRuntime
 from .inference import evaluate_loaded_student
 from .model_factory import build_upret_model, load_exact_student_state
 from .optimizer import build_upret_optimizer
-from .provenance import runtime_environment_report
+from .provenance import implementation_source_report, runtime_environment_report
 from .reference_pipeline import reference_cache_identity
 from .trainer import Method1TrainModel, complete_optimizer_step
 from .upstream import create_upret_tokenizer
@@ -86,6 +86,7 @@ def _artifact_hashes(config: Method1Config, *, method_stage: bool) -> dict[str, 
         "reference_cache": None,
         "mining_cache": None,
         "negative_span_cache": None,
+        "implementation_source": implementation_source_report(),
     }
     if method_stage:
         identity = reference_cache_identity(config)

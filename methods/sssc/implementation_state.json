@@ -45,6 +45,8 @@
       "corrected_dense_blocked_score_parity": "PASS_SYNTHETIC",
       "two_rank_gather_gradient_parity": "PASS_GLOO",
       "two_rank_full_stochastic_base_gradient_parity": "PASS_GLOO",
+      "upstream_real_batch_stochastic_logit_parity": "PASS_PH_B3_EXACT_AFTER_RNG_ORDER_REPAIR",
+      "invalidated_run": "runs/method1/ph/base/seed42_invalid_rng_order_20260913",
       "complete_pool_evaluator": "PASS_SYNTHETIC",
       "remaining": [
         "real full-gallery evaluator"
@@ -60,6 +62,7 @@
       "periodic_exact_resume": "PASS_SYNTHETIC_BITWISE_TWO_STEPS",
       "per_rank_rng_checkpoint": "PASS_SYNTHETIC",
       "runtime_environment_provenance": "PASS_HOST_CAPTURE",
+      "semantic_source_tree_resume_and_cache_identity": "PASS_SYNTHETIC",
       "resumable_cost_counters": "PASS_SYNTHETIC",
       "one_step_train_dev_checkpoint_pipeline": "PASS_SYNTHETIC",
       "pilot_checkpoint_teacher_gate": "PASS_SYNTHETIC",
