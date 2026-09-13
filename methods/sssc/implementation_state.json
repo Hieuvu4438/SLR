@@ -42,6 +42,17 @@
         }
       },
       "active_feature_regime": "LOCAL_REEXTRACTED_AGNOSTIC_PLUS_P14T_ADAPTED_AWARE_NOT_EXACT_CICO_RELEASE",
+      "complete_ph_test_feature_alignment_audit": {
+        "videos": 642,
+        "rows": 54997,
+        "all_stream_lengths_match": true,
+        "mean_row_cosine": {
+          "agnostic_local_vs_release": 0.9931881716337555,
+          "aware_p14t_vs_release": 0.4511623703489144,
+          "configured_mixture_local_vs_release": 0.9712353267128785
+        },
+        "mean_per_video_relative_l2_configured_mixture": 0.23802357466421395
+      },
       "confirmation_dataset_readiness": {
         "h2": "BLOCKED_MISSING_DEV_AND_FULL_CICO_FEATURES",
         "csl": "BLOCKED_MISSING_ESTABLISHED_TEST_FEATURES_AND_DEV_GROUP_SOURCE"
@@ -59,6 +70,7 @@
       "two_rank_gather_gradient_parity": "PASS_GLOO",
       "two_rank_full_stochastic_base_gradient_parity": "PASS_GLOO",
       "upstream_real_batch_stochastic_logit_parity": "PASS_PH_B3_EXACT_AFTER_RNG_ORDER_REPAIR",
+      "baseline_augmentation_source_parity": "PASS_TEXTAUGMENT_1_3_4_AND_2_0_0_ONE_SWAP_ALGORITHM",
       "invalidated_run": "runs/method1/ph/base/seed42_invalid_rng_order_20260913",
       "clean_run": "runs/method1/ph/base/seed42",
       "semantic_source_sha256": "ffdb3b671b0e594a756d8c364a12b98e8fb138c5d60d12317ef5c0189c8c909f",

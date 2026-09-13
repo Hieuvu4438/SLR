@@ -23,12 +23,15 @@ version; the mining table and negative-span vectors are published together as on
 auxiliary bundle.
 
 The active PH manifest uses locally re-extracted agnostic and P14T-adapted aware features for
-all three official splits. On five matching released test videos, the agnostic rows have mean
-token cosine 0.9974--0.9997 versus the CiCo archive, while the P14T-aware rows have only
-0.5090--0.5719 versus the CiCo aware release. Consequently, results from this manifest are
-matched local-resource measurements, not an exact published-CiCo/UPRet reproduction and not
-eligible for the broad SOTA gate. The release archive is test-only, so using its test features
-would also create a train/test feature-regime mismatch and is not used for model selection.
+all three official splits. A complete row-aligned audit over all 642 matching test videos
+(54,997 feature rows; every stream has exactly matching per-video lengths) gives mean/median
+row cosine `0.99319/0.99940` for local versus released agnostic features and
+`0.45116/0.44324` for local P14T-aware versus released aware features. After the configured
+`.9/.1` mixture, mean/median row cosine is `0.97124/0.97590`, while mean per-video relative
+L2 error is `0.23802`. Consequently, results from this manifest are matched local-resource
+measurements, not an exact published-CiCo/UPRet reproduction and not eligible for the broad
+SOTA gate. The release archive is test-only, so using its test features would also create a
+train/test feature-regime mismatch and is not used for model selection.
 
 The UPRet repository snapshot contains no visible license file. Source adaptation remains
 attributed and patch-based; redistribution/license compatibility is unresolved and must be

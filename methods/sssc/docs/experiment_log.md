@@ -2,6 +2,22 @@
 
 This file records executed runs only. Engineering checks are not reportable retrieval results.
 
+## 2026-09-13 — baseline augmentation and released-feature audits
+
+- The pinned UPRet PH loader calls `textaugment.EDA.random_swap` with probability `.5`.
+  Source distributions `textaugment==1.3.4` and `2.0.0` have the same one-swap path used
+  here: whitespace split, two inclusive `randint` draws with at most four retries for a
+  distinct second position, one swap, then whitespace join. Method 1 retains those semantics
+  and applies the specification-required stateless per-sample/epoch RNG namespace.
+- The complete official CiCo feature ZIP passes `unzip -t` but contains test only. Across all
+  642 PH test videos and 54,997 aligned rows, local/released agnostic cosine averages
+  `0.99319`; local P14T-aware/released-aware cosine averages `0.45116`; and the configured
+  mixed-feature cosine averages `0.97124`. The mixed per-video relative L2 error averages
+  `0.23802`. This confirms a material resource-regime discrepancy without authorizing a
+  test-only feature substitution.
+- These are source/resource audits, not retrieval results. They do not invalidate the active
+  S1 implementation, but they preclude an exact published-resource or broad SOTA claim.
+
 ## 2026-09-13 — PH seed-42 S1 attempt invalidated by stochastic-parity audit
 
 - The first full S1 attempt reached optimizer step 870/2600 before it was stopped.
