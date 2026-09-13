@@ -1,0 +1,124 @@
+schema_version: 1
+method_version: sssc_v1
+baseline_version: upret_main_corrected_v1
+upstream_commit: 046366227417e1d8ec14145965403462df345984
+seed: 42
+data:
+  dataset: ph
+  language: en
+  source_annotations:
+    train: third_party/UPRet/data_ph/train.pkl
+    dev: third_party/UPRet/data_ph/dev.pkl
+    test: third_party/UPRet/data_ph/test.pkl
+  official_membership_json: artifacts/method1/input/ph_official_membership.json
+  official_split_annotations:
+    train: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.train.corpus.csv
+    dev: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.dev.corpus.csv
+    test: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.test.corpus.csv
+  manifest_dir: artifacts/method1/manifests/ph
+  agnostic_root: artifacts/features_reextracted/ph_domain_agnostic
+  aware_root: artifacts/features_reextracted/ph_domain_adapted_p14t
+  agnostic_weight: 0.9
+  combine_type: sum
+  feature_dim: 1024
+  feature_len: 64
+  feature_sampling: legacy_linspace
+  text_max_positions: 32
+  text_overlength_policy: legacy_uniform_bpe
+  auxiliary_full_caption_only: true
+  group_member_sampling: stateless_uniform
+  baseline_text_augmentation: random_swap
+  baseline_text_augmentation_probability: 0.5
+model:
+  pretrained_clip_name: ViT-B/32
+  clip_checkpoint_path: artifacts/pretrained/ViT-B-32.pt
+  bpe_path: third_party/UPRet/modules/bpe_simple_vocab_16e6.txt.gz
+  visual_layers: 12
+  text_layers: 12
+  embedding_dim: 512
+  linear_patch: 2d
+  sim_header: Filip
+  loose_type: true
+  freeze_layer_num: 0
+  inner_similarity_temperature: 0.07
+  dual_mix: 0.5
+  mix_design: balance
+  distribution_samples: 2
+  sample_ot_epsilon: 0.1
+  sample_ot_max_iterations: 100
+  sample_ot_logit_weight: 1.0
+reference:
+  mode: cached
+  checkpoint: runs/method1/ph/base/seed42/best_dev.pt
+  cache_dir: artifacts/method1/reference/ph/seed42
+  cache_dtype: float32
+  require_exact_hashes: true
+miner:
+  version: visual_prototype_v1
+  edits_per_negative: 1
+  retained_occurrence_fraction: 0.5
+  minimum_concentration: 1.0e-06
+  minimum_retained_occurrences: 10
+  minimum_distinct_groups: 5
+  candidate_cosine_minimum: 0.7
+  candidates_per_word: 20
+  cached_negatives_per_caption: 20
+  reject_existing_train_caption: true
+  reject_word_already_in_caption: true
+auxiliary:
+  arm: span_shared
+  support_mode: shared
+  negatives_per_caption: 1
+  edits_per_negative: 1
+  tau_support: 0.07
+  margin: 0.05
+  aux_weight: 0.1
+  normalize_text_difference: false
+  normalize_support_pool: false
+  reliability_gate: false
+  caption_loss_weight: 0.4
+  fsc_loss_weight: 0.4
+  fsc_loss_name: focal_loss
+  fsc_focal_gamma: 1.0
+  fsc_label_smoothing: 0.1
+  fsc_similarity_normalizer: minmax
+training:
+  base_epochs: 200
+  finetune_epochs: 20
+  global_contrastive_batch: 512
+  gradient_accumulation_steps: 1
+  optimizer: upstream_bertadam
+  learning_rate: 1.0e-05
+  betas:
+  - 0.9
+  - 0.98
+  epsilon: 1.0e-06
+  weight_decay: 0.001
+  warmup_fraction: 0.1
+  schedule: upstream_warmup_cosine
+  restart_optimizer_for_finetuning: true
+  max_grad_norm: 1.0
+  mixed_precision: none
+  deterministic_debug: false
+  autograd_global_gather: true
+  replicated_distribution_rng: true
+  train_video_pair_block: 32
+  train_text_pair_block: 64
+  checkpoint_deterministic_score_blocks: true
+  num_workers: 4
+  checkpoint_every_steps: 100
+evaluation:
+  encode_batch_size: 64
+  complete_candidate_pool: true
+  group_aggregation: max
+  tie_policy: stable_manifest_order
+  selection_metric: mean_bidirectional_r1
+  tie_break_metric: mean_bidirectional_r5
+  report_ranks: true
+  report_top_k: 10
+  test_during_training: false
+output:
+  root: runs/method1/ph/span_shared_k1_pilot/seed42
+  save_last: true
+  save_best_dev: true
+  atomic_checkpoints: true

@@ -164,6 +164,14 @@ def test_one_step_training_pipeline_writes_completed_selected_checkpoint(
     assert (tmp_path / "run" / "training_complete.json").is_file()
 
 
+def test_k1_method_pilot_rejects_more_than_200_steps() -> None:
+    config = load_config(
+        "methods/sssc/configs/method1/ph_seed42_span_shared_k1_pilot.yaml"
+    )
+    with pytest.raises(pipeline.TrainingError, match="capped at 200"):
+        pipeline.train_stage(config, stage="method", max_steps=201)
+
+
 def test_periodic_checkpoint_resume_matches_continuous_updates(
     tmp_path: Path, monkeypatch
 ) -> None:

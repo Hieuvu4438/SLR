@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -33,3 +34,22 @@ def test_local_base_initial_config_is_explicit_and_valid() -> None:
     config = load_config(BASE_CONFIG)
     assert config.auxiliary.arm == "base_initial"
     assert config.output.root.endswith("/base/seed42")
+
+
+def test_k1_pilot_pair_differs_only_in_declared_intervention_and_output() -> None:
+    independent = load_config(
+        "methods/sssc/configs/method1/ph_seed42_span_independent_k1_pilot.yaml"
+    )
+    shared = load_config(
+        "methods/sssc/configs/method1/ph_seed42_span_shared_k1_pilot.yaml"
+    )
+    assert independent.auxiliary.negatives_per_caption == 1
+    assert shared.auxiliary.negatives_per_caption == 1
+    left = asdict(independent)
+    right = asdict(shared)
+    for value in (left, right):
+        value.pop("source_path")
+        value["auxiliary"].pop("arm")
+        value["auxiliary"].pop("support_mode")
+        value["output"].pop("root")
+    assert left == right

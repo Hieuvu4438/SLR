@@ -189,6 +189,13 @@ def train_stage(
         raise TrainingError("the correctness-reference trainer currently requires float32")
     if max_steps is not None and max_steps < 1:
         raise ValueError("max_steps must be positive")
+    if (
+        method_stage
+        and config.auxiliary.negatives_per_caption == 1
+        and max_steps is not None
+        and max_steps > 200
+    ):
+        raise TrainingError("the K=1 engineering pilot is capped at 200 optimizer steps")
 
     runtime, device, owned_process_group = _initialize_runtime(requested_device)
     try:

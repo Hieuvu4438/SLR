@@ -73,7 +73,8 @@
     "M5_core_method": {
       "status": "IN_PROGRESS",
       "train_wrapper": "PASS_SYNTHETIC",
-      "random_support_identity_seed": "PASS_SYNTHETIC"
+      "random_support_identity_seed": "PASS_SYNTHETIC",
+      "paired_k1_pilot_configs": "PASS_CONFIG_CONTRACT"
     },
     "M6_real_smoke_pilot": {
       "status": "PASS_ENGINEERING",

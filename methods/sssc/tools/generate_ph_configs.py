@@ -18,6 +18,10 @@ ARMS = {
     "fsc_local": ("candidate", "fsc_local"),
     "fsc_local_caption_hn": ("candidate", "fsc_local_caption_hn"),
 }
+PILOTS = {
+    "span_independent_k1_pilot": ("span_independent", "independent"),
+    "span_shared_k1_pilot": ("span_shared", "shared"),
+}
 
 
 def main() -> None:
@@ -39,6 +43,19 @@ def main() -> None:
             destination.write_text(
                 yaml.safe_dump(value, sort_keys=False, allow_unicode=True), encoding="utf-8"
             )
+    for name, (arm, support_mode) in PILOTS.items():
+        value = copy.deepcopy(source)
+        value["seed"] = 42
+        value["reference"]["checkpoint"] = "runs/method1/ph/base/seed42/best_dev.pt"
+        value["reference"]["cache_dir"] = "artifacts/method1/reference/ph/seed42"
+        value["auxiliary"]["arm"] = arm
+        value["auxiliary"]["support_mode"] = support_mode
+        value["auxiliary"]["negatives_per_caption"] = 1
+        value["output"]["root"] = f"runs/method1/ph/{name}/seed42"
+        destination = ROOT / "configs" / "method1" / f"ph_seed42_{name}.yaml"
+        destination.write_text(
+            yaml.safe_dump(value, sort_keys=False, allow_unicode=True), encoding="utf-8"
+        )
 
 
 if __name__ == "__main__":

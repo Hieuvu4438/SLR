@@ -42,6 +42,10 @@ eight implemented base/core/strong-control arms for seeds 42/43/44. The generate
 contain no runtime inheritance; paired files differ only in seed, arm/support mode, and their
 seed/arm-specific checkpoint/cache/output paths.
 
+It also materializes the isolated seed-42 K=1 shared/independent S4 pilot pair. Run each with
+an explicit `--max-steps` no greater than 200; these pilot outputs have distinct paths and
+cannot satisfy the completed-run teacher gate.
+
 The implementation starts from pinned UPRet commit
 `046366227417e1d8ec14145965403462df345984`. The local audit checkout is kept at
 `third_party/UPRet/` and ignored by the parent repository; tracked compatibility changes are
