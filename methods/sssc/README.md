@@ -19,6 +19,7 @@ allowed in this method.
 
 ## Current stage
 
-M0/M1 implementation is in progress. Synthetic commands must work without CUDA or private
-assets. Real training commands fail closed until the requested resource and provenance checks
-pass.
+M0 has passed, the real PH manifest has passed its complete input audit, and the corrected
+baseline/model, shared-support loss, two-rank reductions, optimizer, and checkpoint contracts
+have CPU tests. Reference caching, mining, complete-pool training/evaluation orchestration, and
+real training remain gated. Commands without a completed correctness milestone fail closed.

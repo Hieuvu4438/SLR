@@ -235,6 +235,11 @@ class Method1Config:
             raise ConfigError(
                 f"arm={self.auxiliary.arm} requires support_mode={expected_mode}"
             )
+        expected_gate = self.auxiliary.arm.endswith("_gate")
+        if self.auxiliary.reliability_gate != expected_gate:
+            raise ConfigError(
+                f"arm={self.auxiliary.arm} requires reliability_gate={expected_gate}"
+            )
         if self.auxiliary.edits_per_negative != 1 or self.miner.edits_per_negative != 1:
             raise ConfigError("version 1 supports exactly one lexical edit per negative")
         if self.auxiliary.negatives_per_caption < 1:
@@ -247,6 +252,16 @@ class Method1Config:
             raise ConfigError("initial contrastive protocol requires gradient_accumulation_steps=1")
         if self.training.optimizer != "upstream_bertadam":
             raise ConfigError("initial baseline must retain upstream_bertadam")
+        if (
+            self.training.learning_rate,
+            self.training.betas,
+            self.training.epsilon,
+            self.training.weight_decay,
+            self.training.warmup_fraction,
+            self.training.schedule,
+            self.training.max_grad_norm,
+        ) != (0.00001, (0.9, 0.98), 0.000001, 0.001, 0.1, "upstream_warmup_cosine", 1.0):
+            raise ConfigError("training optimizer fields must match the fixed UPRet defaults")
         if not self.training.restart_optimizer_for_finetuning:
             raise ConfigError("fine-tuning optimizer/schedule must restart for every arm")
         if self.evaluation.test_during_training:

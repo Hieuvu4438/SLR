@@ -79,19 +79,45 @@ def cyclically_shift_support(
     support: torch.Tensor,
     video_valid: torch.Tensor,
     *,
-    shift_seed: int,
+    seed: int,
+    epoch: int,
+    video_uids: Sequence[str],
+    edit_uids: Sequence[Sequence[Sequence[str | None]]],
 ) -> torch.Tensor:
-    """Apply a deterministic non-identity cyclic shift within valid clip positions."""
+    """Shift every edit's support using its persistent video/edit identity.
+
+    A one-valid-clip row is deliberately unchanged: it is an uninformative random-support
+    diagnostic but preserving it keeps the support mass contract exact.
+    """
     if support.ndim != 4 or video_valid.shape != (support.shape[0], support.shape[-1]):
         raise ValueError("support must be [B,K,E,L] and video_valid [B,L]")
-    output = torch.zeros_like(support)
+    batch, negatives, edits, _ = support.shape
+    if len(video_uids) != batch or len(edit_uids) != batch:
+        raise ValueError("video_uids/edit_uids must align with the support batch")
+    output = support.clone()
+    output.masked_fill_(~video_valid[:, None, None, :], 0.0)
     for batch_index in range(support.shape[0]):
+        if len(edit_uids[batch_index]) != negatives or any(
+            len(row) != edits for row in edit_uids[batch_index]
+        ):
+            raise ValueError("edit_uids must have shape [B,K,E]")
         indexes = torch.nonzero(video_valid[batch_index], as_tuple=False).flatten()
         n_valid = int(indexes.numel())
         if n_valid < 2:
             continue
-        shift = 1 + stable_seed(shift_seed, batch_index, "random_support") % (n_valid - 1)
-        output[batch_index, ..., indexes] = support[batch_index, ..., indexes].roll(
-            shifts=int(shift), dims=-1
-        )
+        for negative_index in range(negatives):
+            for edit_index in range(edits):
+                edit_uid = edit_uids[batch_index][negative_index][edit_index]
+                if edit_uid is None:
+                    continue
+                shift = 1 + stable_seed(
+                    seed,
+                    epoch,
+                    video_uids[batch_index],
+                    edit_uid,
+                    "random_support",
+                ) % (n_valid - 1)
+                output[batch_index, negative_index, edit_index, indexes] = support[
+                    batch_index, negative_index, edit_index, indexes
+                ].roll(shifts=int(shift), dims=-1)
     return output

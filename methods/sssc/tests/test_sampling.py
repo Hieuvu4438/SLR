@@ -40,9 +40,37 @@ def test_epoch_edit_sampling_is_distinct_deterministic_and_padded() -> None:
 
 
 def test_random_support_shift_preserves_mass_and_avoids_identity() -> None:
-    support = torch.tensor([[[[0.1, 0.2, 0.7, 0.0]]]])
+    support = torch.tensor([[[[0.1, 0.2, 0.7, 0.0], [0.6, 0.3, 0.1, 0.0]]]])
     valid = torch.tensor([[True, True, True, False]])
-    shifted = cyclically_shift_support(support, valid, shift_seed=9)
+    shifted = cyclically_shift_support(
+        support,
+        valid,
+        seed=9,
+        epoch=2,
+        video_uids=["video:7"],
+        edit_uids=[[["edit:a", "edit:b"]]],
+    )
     torch.testing.assert_close(shifted.sum(-1), support.sum(-1))
     assert not torch.equal(shifted[..., :3], support[..., :3])
-    assert shifted[..., 3].item() == 0.0
+    assert not bool(shifted[..., 3].any())
+
+
+def test_random_support_seed_uses_persistent_ids_and_one_clip_is_unchanged() -> None:
+    support = torch.tensor(
+        [
+            [[ [0.1, 0.2, 0.3, 0.4] ]],
+            [[ [1.0, 0.0, 0.0, 0.0] ]],
+        ]
+    )
+    valid = torch.tensor([[True, True, True, True], [True, False, False, False]])
+    kwargs = {
+        "seed": 42,
+        "epoch": 3,
+        "video_uids": ["v0", "v1"],
+        "edit_uids": [[["e0"]], [["e1"]]],
+    }
+    first = cyclically_shift_support(support, valid, **kwargs)
+    second = cyclically_shift_support(support, valid, **kwargs)
+    torch.testing.assert_close(first, second)
+    assert not torch.equal(first[0], support[0])
+    torch.testing.assert_close(first[1], support[1])
