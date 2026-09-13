@@ -28,7 +28,20 @@
       "tokenizer_contract": "PASS_SYNTHETIC",
       "feature_mixture_contract": "PASS_SYNTHETIC"
     },
-    "M2_corrected_baseline": {"status": "NOT_STARTED"},
+    "M2_corrected_baseline": {
+      "status": "IN_PROGRESS",
+      "source_patch": "methods/sssc/patches/upret_corrected_v1.patch",
+      "source_patch_sha256": "592860d2f9162e27cd7288e13dbe60bbce5eb3b34b6317d72f7df4e109bcc04e",
+      "model_initialization": "artifacts/method1/audit/model_initialization.json",
+      "clip_keys_matched": 300,
+      "full_cpu_forward_backward": "PASS_B2",
+      "corrected_dense_blocked_score_parity": "PASS_SYNTHETIC",
+      "remaining": [
+        "dev-only trainer/checkpoint selection",
+        "two-rank base-loss gradient parity",
+        "real full-gallery evaluator"
+      ]
+    },
     "M3_training_infrastructure": {"status": "IN_PROGRESS"},
     "M4_reference_miner": {"status": "NOT_STARTED"},
     "M5_core_method": {"status": "IN_PROGRESS"},

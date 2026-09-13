@@ -1,0 +1,354 @@
+diff --git a/dataloaders/data_dataloaders.py b/dataloaders/data_dataloaders.py
+index 4499f35..224459e 100644
+--- a/dataloaders/data_dataloaders.py
++++ b/dataloaders/data_dataloaders.py
+@@ -185,7 +185,6 @@ def dataloader_csl_test(args, tokenizer, subset="test"):
+ DATALOADER_DICT = {}
+ 
+ DATALOADER_DICT["h2s"] = {"train":dataloader_h2s_train, "dev":dataloader_h2s_test, "test":dataloader_h2s_test}
+-DATALOADER_DICT["ph"] = {"train":dataloader_ph_train, "dev":dataloader_h2s_test, "test":dataloader_ph_test}
++DATALOADER_DICT["ph"] = {"train":dataloader_ph_train, "dev":dataloader_ph_test, "test":dataloader_ph_test}
+ DATALOADER_DICT["csl"] = {"train":dataloader_csl_train, "dev":dataloader_csl_test, "test":dataloader_csl_test}
+ 
+-
+diff --git a/dataloaders/dataloader_H2_retrieval_train.py b/dataloaders/dataloader_H2_retrieval_train.py
+index 1b4dd0e..e9d9bb2 100644
+--- a/dataloaders/dataloader_H2_retrieval_train.py
++++ b/dataloaders/dataloader_H2_retrieval_train.py
+@@ -4,12 +4,6 @@ from __future__ import unicode_literals
+ from __future__ import print_function
+ 
+ 
+-import nltk
+-nltk.download('stopwords')
+-nltk.download('wordnet')
+-nltk.download('punkt')
+-nltk.download('averaged_perceptron_tagger')
+-nltk.download('omw-1.4')
+ import torch
+ import os
+ from torch.utils.data import Dataset
+@@ -19,7 +13,11 @@ from dataloaders.rawvideo_util import RawVideoExtractor
+ import random
+ 
+ 
+-from textaugment import EDA
++
++
++def _create_eda():
++    from textaugment import EDA
++    return EDA()
+ from random import choice
+ 
+ class H2_DataLoader_train(Dataset):
+@@ -65,7 +63,7 @@ class H2_DataLoader_train(Dataset):
+         with open(sentance_id_path_dict[self.subset], 'rb') as f:
+             captions = pickle.load(f)
+         self.captions=captions
+-        self.emd = EDA()
++        self.emd = _create_eda()
+         self.alpha=args.alpha
+         self.text_aug_choosen=args.text_aug_choosen
+ 
+diff --git a/dataloaders/dataloader_csl_retrieval_train.py b/dataloaders/dataloader_csl_retrieval_train.py
+index a877bf0..94b4add 100644
+--- a/dataloaders/dataloader_csl_retrieval_train.py
++++ b/dataloaders/dataloader_csl_retrieval_train.py
+@@ -4,12 +4,6 @@ from __future__ import unicode_literals
+ from __future__ import print_function
+ 
+ 
+-import nltk
+-nltk.download('stopwords')
+-nltk.download('wordnet')
+-nltk.download('punkt')
+-nltk.download('averaged_perceptron_tagger')
+-nltk.download('omw-1.4')
+ import torch
+ import os
+ from torch.utils.data import Dataset
+@@ -18,7 +12,11 @@ import pickle
+ from dataloaders.rawvideo_util import RawVideoExtractor
+ import random
+ 
+-from textaugment import EDA
++
++
++def _create_eda():
++    from textaugment import EDA
++    return EDA()
+ from random import choice
+ 
+ class csl_DataLoader_train(Dataset):
+@@ -64,7 +62,7 @@ class csl_DataLoader_train(Dataset):
+         with open(sentance_id_path_dict[self.subset], 'rb') as f:
+             captions = pickle.load(f)
+         self.captions=captions
+-        self.emd = EDA()
++        self.emd = _create_eda()
+         self.alpha=args.alpha
+         self.text_aug_choosen=args.text_aug_choosen
+ 
+diff --git a/dataloaders/dataloader_ph_retrieval_train.py b/dataloaders/dataloader_ph_retrieval_train.py
+index eaaa47e..59da6e4 100644
+--- a/dataloaders/dataloader_ph_retrieval_train.py
++++ b/dataloaders/dataloader_ph_retrieval_train.py
+@@ -9,13 +9,11 @@ import numpy as np
+ import pickle
+ from dataloaders.rawvideo_util import RawVideoExtractor
+ import random
+-import nltk
+-nltk.download('stopwords')
+-nltk.download('wordnet')
+-nltk.download('punkt')
+-nltk.download('averaged_perceptron_tagger')
+-nltk.download('omw-1.4')
+-from textaugment import EDA
++
++
++def _create_eda():
++    from textaugment import EDA
++    return EDA()
+ 
+ class ph_DataLoader_train(Dataset):
+     """MSVD dataset loader."""
+@@ -60,7 +58,7 @@ class ph_DataLoader_train(Dataset):
+         with open(sentance_id_path_dict[self.subset], 'rb') as f:
+             captions = pickle.load(f)
+         self.captions=captions
+-        self.emd = EDA()
++        self.emd = _create_eda()
+         #video_ids: video_id
+         #video_dict: video_path
+         #
+@@ -82,7 +80,7 @@ class ph_DataLoader_train(Dataset):
+         for sentance_id in sentance_ids:
+ 
+             video_path=os.path.join(self.features_path,captions[sentance_id]['video_name']+'.pkl')
+-            video_path_retrain=os.path.join(self.features_path,captions[sentance_id]['video_name']+'.pkl')
++            video_path_retrain=os.path.join(self.features_path_retrain,captions[sentance_id]['video_name']+'.pkl')
+ 
+             if sentance_id not in self.video_dict:
+                 self.video_dict[sentance_id]=[video_path]
+diff --git a/main_task_retrieval.py b/main_task_retrieval.py
+index a0358ae..f594c4b 100644
+--- a/main_task_retrieval.py
++++ b/main_task_retrieval.py
+@@ -18,16 +18,32 @@ from modules.optimization import BertAdam
+ from util import parallel_apply, get_logger
+ from dataloaders.data_dataloaders import DATALOADER_DICT
+ global logger
+-import pdb
+-torch.distributed.init_process_group(backend="nccl")
++
++
++def _parse_bool(value):
++    if isinstance(value, bool):
++        return value
++    normalized = value.strip().lower()
++    if normalized in {"1", "true", "yes", "on"}:
++        return True
++    if normalized in {"0", "false", "no", "off"}:
++        return False
++    raise argparse.ArgumentTypeError("expected an explicit boolean")
++
++
++def _init_distributed_from_environment():
++    world_size = int(os.environ.get("WORLD_SIZE", "1"))
++    if world_size > 1 and not torch.distributed.is_initialized():
++        backend = "nccl" if torch.cuda.is_available() else "gloo"
++        torch.distributed.init_process_group(backend=backend)
+ 
+ def get_args(description='CLCL on Retrieval Task'):
+     parser = argparse.ArgumentParser(description=description)
+     parser.add_argument("--do_pretrain", action='store_true', help="Whether to run training.")
+     parser.add_argument("--do_train",action='store_true' , help="Whether to run training.")
+     parser.add_argument("--do_eval",action='store_true', help="Whether to run eval on the dev set.")
+-    parser.add_argument("--distributed", default=True, help="Whether to imply ditributed learning, must set as True for correct gathering.")
+-    parser.add_argument("--debug", default=False, help="Whether to debug.")
++    parser.add_argument("--distributed", type=_parse_bool, default=True, help="Whether to imply ditributed learning, must set as True for correct gathering.")
++    parser.add_argument("--debug", type=_parse_bool, default=False, help="Whether to debug.")
+ 
+ 
+     ##########  DA  ##########
+@@ -46,7 +62,7 @@ def get_args(description='CLCL on Retrieval Task'):
+ 
+ 
+     ##########  TA  ##########
+-    parser.add_argument('--text_aug', default=True, help='whether to use text augmentation')
++    parser.add_argument('--text_aug', type=_parse_bool, default=True, help='whether to use text augmentation')
+     parser.add_argument('--text_aug_choosen', type=str, default='random_swap', help='feature path',choices=['synonym_replacement','random_deletion','random_swap','all'])
+     parser.add_argument('--aug_choose', type=str, default='t2v')
+     ##########  TA  ##########
+@@ -56,7 +72,7 @@ def get_args(description='CLCL on Retrieval Task'):
+     parser.add_argument('--visual_num_hidden_layers', type=int, default=12, help="Layer NO. of visual.")
+     parser.add_argument('--text_num_hidden_layers', type=int, default=12, help="Layer NO. of text.")
+     parser.add_argument('--freeze_layer_num', type=int, default=0, help="Layer NO. of CLIP need to freeze.")
+-    parser.add_argument('--not_load_visual', default=False, help="Layer NO. of CLIP need to freeze.")
++    parser.add_argument('--not_load_visual', type=_parse_bool, default=False, help="Layer NO. of CLIP need to freeze.")
+     ##########  Net Archi  ##########
+ 
+ 
+@@ -108,7 +124,7 @@ def get_args(description='CLCL on Retrieval Task'):
+     parser.add_argument("--cache_dir", default="", type=str,
+                         help="Where do you want to store the pre-trained models downloaded from s3")
+ 
+-    parser.add_argument('--fp16', default=True,
++    parser.add_argument('--fp16', type=_parse_bool, default=True,
+                         help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit")
+     parser.add_argument('--fp16_opt_level', type=str, default='O1',
+                         help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
+@@ -125,7 +141,7 @@ def get_args(description='CLCL on Retrieval Task'):
+     parser.add_argument('--sampled_use_mil', action='store_true', help="Whether MIL, has a high priority than use_mil.")
+     parser.add_argument('--cross_num_hidden_layers', type=int, default=4, help="Layer NO. of cross.")
+ 
+-    parser.add_argument('--loose_type', default=True, help="Default using tight type for retrieval.")
++    parser.add_argument('--loose_type', type=_parse_bool, default=True, help="Default using tight type for retrieval.")
+     parser.add_argument('--expand_msrvtt_sentences', action='store_true', help="")
+ 
+     parser.add_argument('--train_frame_order', type=int, default=0, choices=[0, 1, 2],
+@@ -649,7 +665,7 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu,istrain):
+                 filter_inds = [itm - s_ for itm in cut_off_points_ if itm >= s_ and itm < e_]
+ 
+                 if len(filter_inds) > 0:
+-                    input_ids, segment_ids, input_mask = input_ids[filter_inds, ...], segment_ids[filter_inds, ...], segment_ids[input_mask, ...]
++                    input_ids, segment_ids, input_mask = input_ids[filter_inds, ...], segment_ids[filter_inds, ...], input_mask[filter_inds, ...]
+                     text_mask,sequence_output, sequence_cls= model.get_text_feat(input_ids, segment_ids, input_mask,get_hidden=True)
+                     batch_sequence_output_list.append(sequence_output)
+                     batch_sequence_output_list_cls.append(sequence_cls)
+@@ -726,6 +742,7 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu,istrain):
+ 
+ def main():
+     global logger
++    _init_distributed_from_environment()
+     args = get_args()
+     args = set_seed_logger(args)
+     device, n_gpu = init_device(args, args.local_rank)
+diff --git a/modules/modeling.py b/modules/modeling.py
+index 70705c9..7a12af0 100644
+--- a/modules/modeling.py
++++ b/modules/modeling.py
+@@ -15,11 +15,8 @@ from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
+ 
+ logger = logging.getLogger(__name__)
+ allgather = AllGather.apply
+-import pdb
+ from .PDE import DisTrans
+ from .PDE import DistributionUncertainty
+-from sklearn.manifold import TSNE
+-import matplotlib.pyplot as plt
+ import numpy as np
+ 
+ class CLIP4ClipPreTrainedModel(PreTrainedModel, nn.Module):
+@@ -596,7 +593,8 @@ class CLIP4Clip(CLIP4ClipPreTrainedModel):
+         if self.training:
+             B_t,N_t,C = text_feat_aug.shape
+             shift_size = C // 4
+-            txt_mu,txt_logsigma,_ = self.dist_text_trans(text_feat_aug,weight=None)
++            text_padding_mask = (~text_mask_aug).to(text_feat_aug.dtype)[:, None, None, :] * -1000000.0
++            txt_mu,txt_logsigma,_ = self.dist_text_trans(text_feat_aug,mask=text_padding_mask,weight=None)
+             #txt_mu,txt_logsigma = text_feat_aug,text_feat_aug
+             samples = [txt_mu]
+ 
+@@ -607,11 +605,12 @@ class CLIP4Clip(CLIP4ClipPreTrainedModel):
+ 
+             dis_text_feat = torch.stack(samples)
+             dis_text_feat = dis_text_feat.permute(1,2,3,0) # bs T D 2
+-            dis_text_feat = self._mean_pooling_for_similarity_sequence(dis_text_feat, text_mask).permute(2,0,1)# 2 bs D
++            dis_text_feat = self._mean_pooling_for_similarity_sequence(dis_text_feat, text_mask_aug).permute(2,0,1)# 2 bs D
+             #dis_text_feat = dis_text_feat.mean(dim=1).permute(2,0,1)
+ 
+             B_v,N_v,C = video_feat.shape
+-            vid_mu, vid_logsigma, _ = self.dist_video_trans(video_feat, weight=None)
++            video_padding_mask = (~video_mask).to(video_feat.dtype)[:, None, None, :] * -1000000.0
++            vid_mu, vid_logsigma, _ = self.dist_video_trans(video_feat, mask=video_padding_mask, weight=None)
+             #vid_mu,vid_logsigma = video_feat,video_feat
+             samples = [vid_mu]
+             for _ in range(self.sample_num-1):
+@@ -639,9 +638,8 @@ class CLIP4Clip(CLIP4ClipPreTrainedModel):
+             with torch.no_grad():
+                     KK = torch.exp(-wdist / self.eps)
+                     T = self.Sinkhorn(KK,xx,yy)
+-            if torch.isnan(T).any():
+-                print("Nan")
+-                return
++            if not torch.isfinite(T).all():
++                raise FloatingPointError("non-finite UPRet sample transport plan")
+             
+             sim_ot = T*sim
+             sim_ot = sim_ot.contiguous().view(B_v,B_t,self.sample_num,self.sample_num) # a b v t
+@@ -653,13 +651,13 @@ class CLIP4Clip(CLIP4ClipPreTrainedModel):
+             sim_ot = (t2v_sim_ot + v2t_sim_ot)/2.0
+                
+ 
+-        video_feat = video_feat / video_feat.norm(dim=-1, keepdim=True)
++        video_feat = F.normalize(video_feat.float(), dim=-1, eps=1e-6)
+         video_feat = video_feat.squeeze(1)
+ 
+-        text_feat = text_feat / text_feat.norm(dim=-1, keepdim=True)
++        text_feat = F.normalize(text_feat.float(), dim=-1, eps=1e-6)
+         text_feat = text_feat.squeeze(1)
+ 
+-        text_feat_aug = text_feat_aug / text_feat_aug.norm(dim=-1, keepdim=True)
++        text_feat_aug = F.normalize(text_feat_aug.float(), dim=-1, eps=1e-6)
+         text_feat_aug = text_feat_aug.squeeze(1)
+ 
+ 
+@@ -667,14 +665,22 @@ class CLIP4Clip(CLIP4ClipPreTrainedModel):
+         i2t_sim=torch.einsum("ais,bjs->abij", [video_feat, text_feat])
+         i2t_sim_aug=torch.einsum("ais,bjs->abij", [video_feat, text_feat_aug])
+ 
+-        after_softmax_i2t = torch.nansum(i2t_sim * torch.softmax(i2t_sim/0.07, dim=3), dim=3) 
++        i2t_inner_valid = text_mask[None, :, None, :].expand_as(i2t_sim)
++        i2t_probability = torch.softmax(
++            (i2t_sim / 0.07).masked_fill(~i2t_inner_valid, float("-inf")), dim=3
++        ).masked_fill(~i2t_inner_valid, 0.0)
++        after_softmax_i2t = torch.sum(i2t_sim * i2t_probability, dim=3)
+         #after_softmax_i2t1 = torch.nansum(i2t_sim * torch.softmax(i2t_sim/0.07, dim=3), dim=3)
+   
+         I2T_sim = torch.einsum("abi,ai->abi",[after_softmax_i2t,video_weight])
+         I2T_sim = torch.einsum("abi,ai->abi",[I2T_sim,video_mask])
+         I2T_sim = torch.einsum("abi->ab",I2T_sim)
+         
+-        after_softmax_t2i = torch.nansum(i2t_sim_aug * torch.softmax(i2t_sim_aug/0.07, dim=2), dim=2) 
++        t2i_inner_valid = video_mask[:, None, :, None].expand_as(i2t_sim_aug)
++        t2i_probability = torch.softmax(
++            (i2t_sim_aug / 0.07).masked_fill(~t2i_inner_valid, float("-inf")), dim=2
++        ).masked_fill(~t2i_inner_valid, 0.0)
++        after_softmax_t2i = torch.sum(i2t_sim_aug * t2i_probability, dim=2)
+         T2I_sim = torch.einsum("abj,bj->abj",[after_softmax_t2i,text_weight])
+         T2I_sim = torch.einsum("abj,bj->abj",[T2I_sim,text_mask_aug])
+         T2I_sim= torch.einsum("abj->ab",T2I_sim)
+@@ -740,13 +746,8 @@ class CLIP4Clip(CLIP4ClipPreTrainedModel):
+             text_mask = text_mask.view(-1, text_mask.shape[-1])
+             video_mask = video_mask.view(-1, video_mask.shape[-1])
+ 
+-        pdb.set_trace()
+-        if not self.training:
+-            self.get_vis(self._mean_pooling_for_similarity_sequence(text_feat,text_mask),
+-                         self._mean_pooling_for_similarity_visual(video_feat,video_mask))
+-
+         contrastive_direction = ()
+-        if text_feat_aug==None:
++        if text_feat_aug is None:
+             text_feat_aug=text_feat
+             text_mask_aug=text_mask
+         if self.sim_header=='Filip' and is_train==True:
+@@ -767,4 +768,3 @@ class CLIP4Clip(CLIP4ClipPreTrainedModel):
+ 
+ 
+ 
+-
+diff --git a/modules/until_module.py b/modules/until_module.py
+index f1bb3f4..3a10c20 100644
+--- a/modules/until_module.py
++++ b/modules/until_module.py
+@@ -275,6 +275,8 @@ class AllGather(torch.autograd.Function):
+ 
+     @staticmethod
+     def backward(ctx, grad_output):
++        grad_output = grad_output.contiguous()
++        torch.distributed.all_reduce(grad_output, op=torch.distributed.ReduceOp.SUM)
+         return (
+             grad_output[ctx.batch_size * ctx.rank : ctx.batch_size * (ctx.rank + 1)],
+             None,
