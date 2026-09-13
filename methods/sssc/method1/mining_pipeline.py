@@ -190,6 +190,7 @@ def mine_reference_negatives(
     }
     filtered: dict[str, tuple] = {}
     rejection_counts = Counter(mined_all.rejection_counts)
+    difference_norms: list[float] = []
     for text_uid in sorted(mined_all.edits_by_text_uid):
         accepted = []
         for edit in mined_all.edits_by_text_uid[text_uid]:
@@ -199,6 +200,7 @@ def mine_reference_negatives(
             if not np.isfinite(difference) or difference <= 1e-6:
                 rejection_counts["near_zero_normalized_text_difference"] += 1
                 continue
+            difference_norms.append(float(difference))
             if len(accepted) < config.miner.cached_negatives_per_caption:
                 accepted.append(edit)
             else:
@@ -210,6 +212,21 @@ def mine_reference_negatives(
     ]
     if not retained_edits:
         raise MinerError("all mined edits failed frozen text-difference validation")
+    difference_array = np.asarray(difference_norms, dtype=np.float64)
+    difference_diagnostics = {
+        "normalized_text_difference": {
+            "count": len(difference_norms),
+            "mean": float(difference_array.mean()),
+            "p10": float(np.quantile(difference_array, 0.1)),
+            "median": float(np.median(difference_array)),
+            "p90": float(np.quantile(difference_array, 0.9)),
+            "below_margin_count": int(np.sum(difference_array < config.auxiliary.margin)),
+            "below_margin_fraction": float(
+                np.mean(difference_array < config.auxiliary.margin)
+            ),
+            "margin": config.auxiliary.margin,
+        }
+    }
     cache_meta = json.loads((cache_root / "cache_meta.json").read_text(encoding="utf-8"))
     resource_hashes = {
         "reference_identity_sha256": identity.digest,
@@ -249,6 +266,7 @@ def mine_reference_negatives(
             candidate_graph=graph,
             mined=mined,
             resource_hashes=resource_hashes,
+            diagnostics=difference_diagnostics,
         )
         ordered_edit_uids = [edit.edit_uid for edit in retained_edits]
         negative_array = np.stack(
@@ -272,6 +290,7 @@ def mine_reference_negatives(
         "prototype_count": len(prototypes),
         "edit_count": len(retained_edits),
         "captions_with_edits": sum(bool(values) for values in filtered.values()),
+        "diagnostics": difference_diagnostics,
         "mining_content_sha256": mining_report["content_sha256"],
         "negative_cache_content_sha256": negative_report["content_sha256"],
     }

@@ -138,8 +138,12 @@ def test_mining_artifacts_are_hashed_and_immutable(
         candidate_graph={"rain": (("snow", 0.8),)},
         mined=mined,
         resource_hashes={"reference": "abc"},
+        diagnostics={"normalized_text_difference": {"below_margin_fraction": 0.25}},
     )
     assert report["edit_count"] == 1
+    assert report["diagnostics"]["normalized_text_difference"][
+        "below_margin_fraction"
+    ] == 0.25
     assert (tmp_path / "mining" / "mining_report.json").is_file()
     with pytest.raises(RuntimeError, match="overwrite"):
         write_mining_artifacts(

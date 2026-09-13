@@ -330,6 +330,7 @@ def write_mining_artifacts(
     candidate_graph: Mapping[str, Sequence[tuple[str, float]]],
     mined: MinedCaptionEdits,
     resource_hashes: Mapping[str, Any],
+    diagnostics: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     destination = Path(cache_root) / "mining"
     if destination.exists():
@@ -403,6 +404,7 @@ def write_mining_artifacts(
             "edit_count": edit_count,
             "rejection_counts": mined.rejection_counts,
             "prototype_report": dict(prototype_report),
+            "diagnostics": dict(diagnostics or {}),
             "files": files,
         }
         report["content_sha256"] = sha256_json(report)
