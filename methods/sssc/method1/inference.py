@@ -14,6 +14,7 @@ from .data import _load_records
 from .evaluation import evaluate_grouped_retrieval
 from .model_factory import build_upret_model, load_exact_student_state
 from .reference_pipeline import _video_batch
+from .selection import record_test_observation, validate_selection_lock
 from .schemas import GroupRecord, TextRecord, VideoRecord
 from .token_spans import tokenize_with_spans
 from .upstream import create_upret_tokenizer
@@ -183,6 +184,8 @@ def evaluate_checkpoint(
     device: str | torch.device = "cpu",
     persist: bool = True,
 ) -> dict[str, Any]:
+    if split == "test":
+        validate_selection_lock(config, checkpoint)
     audit_resources(config, "inference")
     model, model_report = build_upret_model(config, upret_root=upret_root)
     checkpoint_payload = load_exact_student_state(model, checkpoint)
@@ -208,6 +211,8 @@ def evaluate_checkpoint(
         )
         atomic_json_dump(report, output)
         report["metrics_path"] = str(output.resolve())
+    if split == "test":
+        record_test_observation(config, checkpoint, report)
     return report
 
 
@@ -218,6 +223,7 @@ def export_student(
     *,
     upret_root: str | Path = "third_party/UPRet",
 ) -> dict[str, Any]:
+    validate_selection_lock(config, checkpoint, allow_test_observed=True)
     audit_resources(config, "inference")
     model, model_report = build_upret_model(config, upret_root=upret_root)
     source = load_exact_student_state(model, checkpoint)

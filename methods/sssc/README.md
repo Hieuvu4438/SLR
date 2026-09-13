@@ -18,6 +18,7 @@ PYTHONPATH=methods/sssc:shared python -m method1.cli diagnose --config CONFIG --
 PYTHONPATH=methods/sssc:shared torchrun --standalone --nproc_per_node=W -m method1.cli train-base --config CONFIG
 PYTHONPATH=methods/sssc:shared torchrun --standalone --nproc_per_node=W -m method1.cli train-method --config CONFIG
 PYTHONPATH=methods/sssc:shared python -m method1.cli evaluate --config CONFIG --checkpoint CKPT --split dev
+PYTHONPATH=methods/sssc:shared python -m method1.cli lock-selection --config CONFIG --checkpoint CKPT
 PYTHONPATH=methods/sssc:shared python -m method1.cli export --config CONFIG --checkpoint CKPT --output OUTPUT
 PYTHONPATH=methods/sssc:shared python -m method1.cli compare-runs --runs RUN_A RUN_B
 ```
@@ -68,3 +69,7 @@ gated on the completed dev-selected baseline.
 query order, and query-group identities. It reports paired rank changes plus a deterministic
 10,000-draw group-cluster bootstrap, so repeated recordings in grouped datasets are not
 treated as independent observations.
+
+Test evaluation and export require an immutable `selection_lock.json` created from that
+run's completed `best_dev.pt`. Dev evaluation remains unlocked. This enforces the test-once
+boundary in the supported CLI instead of relying on operator memory.

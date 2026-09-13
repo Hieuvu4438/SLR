@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import torch
+import pytest
 from torch import nn
 
 import method1.inference as inference_module
@@ -12,6 +13,7 @@ from method1.config import load_config
 from method1.baseline import directional_scores_dense
 from method1.inference import evaluate_checkpoint, export_student
 from method1.model_factory import load_exact_student_state
+from method1.selection import SelectionLockError
 
 
 class ZeroHead(nn.Module):
@@ -32,6 +34,15 @@ class WeightedInferenceModel(nn.Module):
         super().__init__()
         self.video_weight_fc = nn.Linear(2, 1)
         self.text_weight_fc = nn.Linear(2, 1)
+
+
+def test_test_evaluation_fails_without_selection_lock(tmp_path: Path) -> None:
+    config = load_config("methods/sssc/configs/method1/ph_local.yaml")
+    config = replace(config, output=replace(config.output, root=str(tmp_path / "run")))
+    checkpoint = tmp_path / "candidate.pt"
+    checkpoint.write_bytes(b"candidate")
+    with pytest.raises(SelectionLockError, match="selection lock"):
+        evaluate_checkpoint(config, checkpoint, split="test", persist=False)
 
 
 def test_complete_pool_inference_uses_grouped_max_and_persists_identities(
@@ -106,6 +117,9 @@ def test_export_contains_only_student_inference_dependencies(tmp_path: Path, mon
     checkpoint.write_bytes(b"training-checkpoint")
     output = tmp_path / "export.pt"
     model = FakeInferenceModel()
+    monkeypatch.setattr(
+        inference_module, "validate_selection_lock", lambda *args, **kwargs: {}
+    )
     monkeypatch.setattr(inference_module, "audit_resources", lambda *args: {})
     monkeypatch.setattr(
         inference_module,
@@ -140,6 +154,9 @@ def test_exported_student_has_identical_fixed_fixture_scores(
         checkpoint,
     )
     output = tmp_path / "export.pt"
+    monkeypatch.setattr(
+        inference_module, "validate_selection_lock", lambda *args, **kwargs: {}
+    )
     monkeypatch.setattr(inference_module, "audit_resources", lambda *args: {})
     monkeypatch.setattr(
         inference_module,

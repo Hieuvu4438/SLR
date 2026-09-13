@@ -114,7 +114,8 @@
       "complete_pool_ranking_and_ids": "PASS_SYNTHETIC",
       "student_only_export": "PASS_SYNTHETIC",
       "pre_export_post_export_score_equality": "PASS_SYNTHETIC_BITWISE",
-      "real_test_evaluation": "LOCKED_UNTIL_SELECTION"
+      "real_test_evaluation": "LOCKED_UNTIL_SELECTION",
+      "dev_only_selection_lock": "PASS_SYNTHETIC"
     }
   },
   "last_verified": "2026-09-13"

@@ -19,6 +19,7 @@ from .manifests import build_manifests
 from .mining_pipeline import mine_reference_negatives
 from .reference_pipeline import create_reference_cache
 from .sampling import mix_and_sample_features
+from .selection import create_selection_lock
 from .token_spans import tokenize_with_spans
 from .train_pipeline import train_stage
 from .upstream import create_upret_tokenizer
@@ -58,6 +59,7 @@ def _parser() -> argparse.ArgumentParser:
         "evaluate",
         "export",
         "compare-runs",
+        "lock-selection",
     ):
         command = subparsers.add_parser(name)
         if name == "compare-runs":
@@ -77,6 +79,8 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--checkpoint", required=True)
             command.add_argument("--device", default="auto")
             command.add_argument("--upret-root", default="third_party/UPRet")
+        if name == "lock-selection":
+            command.add_argument("--checkpoint", required=True)
         if name in {"evaluate", "diagnose"}:
             command.add_argument("--split", choices=("dev", "test"), required=True)
         if name == "diagnose":
@@ -272,6 +276,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         elif args.command == "compare-runs":
             _emit(compare_runs(args.runs[0], args.runs[1]))
+        elif args.command == "lock-selection":
+            _emit(create_selection_lock(load_config(args.config), args.checkpoint))
         else:
             _emit(
                 {
