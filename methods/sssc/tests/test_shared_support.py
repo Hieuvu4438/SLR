@@ -35,6 +35,40 @@ def test_shared_independent_algebraic_fixture() -> None:
     assert independent.diagnostics["delta"].item() == pytest.approx(0.0, abs=2e-6)
 
 
+def test_active_and_inactive_hinge_have_expected_gradient() -> None:
+    active_values = _fixture()
+    active = span_contrast_terms(
+        *active_values, mode="shared", tau=0.07, margin=1.1
+    )
+    active.numerator.backward()
+    assert active.numerator.item() == pytest.approx(0.1, abs=2e-6)
+    assert bool(active.diagnostics["active"].item()) is True
+    assert active_values[0].grad is not None
+    assert float(active_values[0].grad.abs().sum()) > 0
+
+    inactive_values = _fixture()
+    inactive = span_contrast_terms(
+        *inactive_values, mode="shared", tau=0.07, margin=0.5
+    )
+    inactive.numerator.backward()
+    assert inactive.numerator.item() == 0.0
+    assert bool(inactive.diagnostics["active"].item()) is False
+    torch.testing.assert_close(
+        inactive_values[0].grad, torch.zeros_like(inactive_values[0]), atol=0, rtol=0
+    )
+
+
+def test_confidence_reduction_uses_one_weighted_numerator_and_denominator() -> None:
+    values = list(_fixture())
+    values[2] = values[2].repeat(1, 2, 1, 1)
+    values[3] = values[3].repeat(1, 2, 1, 1)
+    values[5] = values[5].repeat(1, 2, 1)
+    values[6] = torch.tensor([[[0.25], [0.75]]])
+    terms = span_contrast_terms(*values, mode="shared", tau=0.07, margin=1.1)
+    assert terms.denominator.item() == 1.0
+    assert terms.numerator.item() == pytest.approx(0.1, abs=2e-6)
+
+
 def test_gradient_reaches_only_student_video() -> None:
     values = list(_fixture())
     values[2].requires_grad_(True)

@@ -109,10 +109,15 @@ def test_cache_round_trip_mmap_and_strict_identity(tmp_path: Path) -> None:
     loaded = validate_reference_cache(destination, expected_identity=_identity())
     assert isinstance(loaded["reference_video_tokens"], np.memmap)
     np.testing.assert_array_equal(loaded["reference_video_tokens"], arrays["reference_video_tokens"])
-    with pytest.raises(ReferenceCacheError, match="identity"):
-        validate_reference_cache(
-            destination, expected_identity=_identity(teacher_checkpoint_sha256="other")
-        )
+    for identity_change in (
+        {"teacher_checkpoint_sha256": "other"},
+        {"tokenizer_sha256": "other"},
+        {"mixture_sampler_sha256": "other"},
+    ):
+        with pytest.raises(ReferenceCacheError, match="identity"):
+            validate_reference_cache(
+                destination, expected_identity=_identity(**identity_change)
+            )
     with pytest.raises(ReferenceCacheError, match="overwrite"):
         write_reference_cache(
             destination,

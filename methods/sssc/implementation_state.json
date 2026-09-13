@@ -39,6 +39,7 @@
       "model_initialization": "artifacts/method1/audit/model_initialization.json",
       "clip_keys_matched": 300,
       "full_cpu_forward_backward": "PASS_B2",
+      "chosen_amp_equivalence": "NOT_APPLICABLE_FIXED_CONFIG_USES_FLOAT32_ONLY",
       "corrected_dense_blocked_score_parity": "PASS_SYNTHETIC",
       "two_rank_gather_gradient_parity": "PASS_GLOO",
       "two_rank_full_stochastic_base_gradient_parity": "PASS_GLOO",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 from pathlib import Path
 
 import pytest
@@ -231,3 +232,13 @@ def test_periodic_checkpoint_resume_matches_continuous_updates(
         torch.testing.assert_close(
             resumed_checkpoint["student_state_dict"][key], expected, atol=0, rtol=0
         )
+    resumed_step = json.loads(
+        (tmp_path / "interrupted" / "latest_train_step.json").read_text(encoding="utf-8")
+    )
+    continuous_step = json.loads(
+        (tmp_path / "continuous" / "latest_train_step.json").read_text(encoding="utf-8")
+    )
+    assert resumed_step["batch_identity_sha256"] == continuous_step[
+        "batch_identity_sha256"
+    ]
+    assert resumed_step["loss"] == continuous_step["loss"]
