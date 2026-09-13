@@ -42,6 +42,9 @@ Published test values and the exact matched-resource/broad-SOTA claim gates are
 kept in `docs/benchmark_ledger.md`. In particular, a running PH dev score is never
 comparable to those published test values.
 
+The exact PH execution sequence, frozen source identity, resume command and
+test-once handoff are in `docs/campaign_runbook.md`.
+
 `tools/generate_ph_configs.py` deterministically materializes 24 standalone PH configs: all
 eight implemented base/core/strong-control arms for seeds 42/43/44. The generated YAML files
 contain no runtime inheritance; paired files differ only in seed, arm/support mode, and their

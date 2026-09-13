@@ -35,7 +35,7 @@
       }
     },
     "M2_corrected_baseline": {
-      "status": "IN_PROGRESS",
+      "status": "RUNNING_REAL_S1_SEED42",
       "source_patch": "methods/sssc/patches/upret_corrected_v1.patch",
       "source_patch_sha256": "592860d2f9162e27cd7288e13dbe60bbce5eb3b34b6317d72f7df4e109bcc04e",
       "model_initialization": "artifacts/method1/audit/model_initialization.json",
@@ -47,6 +47,8 @@
       "two_rank_full_stochastic_base_gradient_parity": "PASS_GLOO",
       "upstream_real_batch_stochastic_logit_parity": "PASS_PH_B3_EXACT_AFTER_RNG_ORDER_REPAIR",
       "invalidated_run": "runs/method1/ph/base/seed42_invalid_rng_order_20260913",
+      "clean_run": "runs/method1/ph/base/seed42",
+      "semantic_source_sha256": "ffdb3b671b0e594a756d8c364a12b98e8fb138c5d60d12317ef5c0189c8c909f",
       "complete_pool_evaluator": "PASS_SYNTHETIC",
       "remaining": [
         "real full-gallery evaluator"
