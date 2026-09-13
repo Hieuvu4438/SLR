@@ -27,6 +27,7 @@ from .distributed import DistributedRuntime
 from .inference import evaluate_loaded_student
 from .model_factory import build_upret_model, load_exact_student_state
 from .optimizer import build_upret_optimizer
+from .provenance import runtime_environment_report
 from .reference_pipeline import reference_cache_identity
 from .trainer import Method1TrainModel, complete_optimizer_step
 from .upstream import create_upret_tokenizer
@@ -307,12 +308,18 @@ def train_stage(
         optimizer.zero_grad()
         output_root.mkdir(parents=True, exist_ok=True)
         if runtime.rank == 0:
+            environment_path = output_root / "environment.json"
+            atomic_json_dump(runtime_environment_report(), environment_path)
             atomic_json_dump(
                 {
                     "schema_version": 1,
                     "resolved_config": {key: value for key, value in asdict(config).items() if key != "source_path"},
                     "config_sha256": config.digest,
                     "artifact_hashes": artifacts,
+                    "environment": {
+                        "path": str(environment_path.resolve()),
+                        "sha256": sha256_file(environment_path),
+                    },
                     "optimizer_groups": list(optimizer_build.parameter_groups),
                     "planned_steps": planned_steps,
                     "effective_step_budget": optimizer_steps,

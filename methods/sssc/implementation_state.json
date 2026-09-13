@@ -57,6 +57,7 @@
       "two_rank_auxiliary_edge_cases": "PASS_GLOO_UNEQUAL_NONINTEGER_ALL_EMPTY",
       "periodic_exact_resume": "PASS_SYNTHETIC_BITWISE_TWO_STEPS",
       "per_rank_rng_checkpoint": "PASS_SYNTHETIC",
+      "runtime_environment_provenance": "PASS_HOST_CAPTURE",
       "one_step_train_dev_checkpoint_pipeline": "PASS_SYNTHETIC",
       "pilot_checkpoint_teacher_gate": "PASS_SYNTHETIC"
     },
