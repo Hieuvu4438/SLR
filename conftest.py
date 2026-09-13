@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parent
 CICO_ROOT = ROOT / "third_party" / "SLRT" / "CiCo" / "CLCL"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "methods" / "dive" / "src"))
+sys.path.insert(0, str(ROOT / "methods" / "sssc"))
 
 
 @pytest.fixture(scope="session")

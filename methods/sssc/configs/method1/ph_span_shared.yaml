@@ -1,0 +1,119 @@
+schema_version: 1
+method_version: sssc_v1
+baseline_version: upret_main_corrected_v1
+upstream_commit: 046366227417e1d8ec14145965403462df345984
+seed: 42
+
+data:
+  dataset: ph
+  language: en
+  source_annotations:
+    train: ${SLRET_DATA_ROOT}/annotations/ph_cico/train.pkl
+    dev: ${SLRET_DATA_ROOT}/annotations/ph_cico/dev.pkl
+    test: ${SLRET_DATA_ROOT}/annotations/ph_cico/test.pkl
+  official_membership_json: ${SLRET_DATA_ROOT}/annotations/ph_cico/official_membership.json
+  manifest_dir: ${SLRET_DATA_ROOT}/manifests/ph_cico
+  agnostic_root: ${SLRET_DATA_ROOT}/features/ph_domain_agnostic
+  aware_root: ${SLRET_DATA_ROOT}/features/ph_domain_aware
+  agnostic_weight: 0.9
+  combine_type: sum
+  feature_dim: 1024
+  feature_len: 64
+  feature_sampling: legacy_linspace
+  text_max_positions: 32
+  text_overlength_policy: legacy_uniform_bpe
+  auxiliary_full_caption_only: true
+  group_member_sampling: stateless_uniform
+  baseline_text_augmentation: random_swap
+  baseline_text_augmentation_probability: 0.5
+
+model:
+  pretrained_clip_name: ViT-B/32
+  clip_checkpoint_path: ${SLRET_DATA_ROOT}/initialization/ViT-B-32.pt
+  bpe_path: ${SLRET_DATA_ROOT}/initialization/bpe_simple_vocab_16e6.txt.gz
+  visual_layers: 12
+  text_layers: 12
+  embedding_dim: 512
+  linear_patch: 2d
+  sim_header: Filip
+  loose_type: true
+  freeze_layer_num: 0
+  inner_similarity_temperature: 0.07
+  dual_mix: 0.5
+  mix_design: balance
+  distribution_samples: 2
+  sample_ot_epsilon: 0.1
+  sample_ot_max_iterations: 100
+  sample_ot_logit_weight: 1.0
+
+reference:
+  mode: cached
+  checkpoint: ${SLRET_RUN_ROOT}/ph/base/seed42/best_dev.pt
+  cache_dir: ${SLRET_RUN_ROOT}/ph/reference/seed42
+  cache_dtype: float32
+  require_exact_hashes: true
+
+miner:
+  version: visual_prototype_v1
+  edits_per_negative: 1
+  retained_occurrence_fraction: 0.5
+  minimum_concentration: 0.000001
+  minimum_retained_occurrences: 10
+  minimum_distinct_groups: 5
+  candidate_cosine_minimum: 0.7
+  candidates_per_word: 20
+  cached_negatives_per_caption: 20
+  reject_existing_train_caption: true
+  reject_word_already_in_caption: true
+
+auxiliary:
+  arm: span_shared
+  support_mode: shared
+  negatives_per_caption: 5
+  edits_per_negative: 1
+  tau_support: 0.07
+  margin: 0.05
+  aux_weight: 0.10
+  normalize_text_difference: false
+  normalize_support_pool: false
+  reliability_gate: false
+
+training:
+  base_epochs: 200
+  finetune_epochs: 20
+  global_contrastive_batch: 512
+  gradient_accumulation_steps: 1
+  optimizer: upstream_bertadam
+  learning_rate: 0.00001
+  betas: [0.9, 0.98]
+  epsilon: 0.000001
+  weight_decay: 0.001
+  warmup_fraction: 0.1
+  schedule: upstream_warmup_cosine
+  restart_optimizer_for_finetuning: true
+  max_grad_norm: 1.0
+  mixed_precision: none
+  deterministic_debug: false
+  autograd_global_gather: true
+  replicated_distribution_rng: true
+  train_video_pair_block: 32
+  train_text_pair_block: 64
+  checkpoint_deterministic_score_blocks: true
+  num_workers: 4
+
+evaluation:
+  encode_batch_size: 64
+  complete_candidate_pool: true
+  group_aggregation: max
+  tie_policy: stable_manifest_order
+  selection_metric: mean_bidirectional_r1
+  tie_break_metric: mean_bidirectional_r5
+  report_ranks: true
+  report_top_k: 10
+  test_during_training: false
+
+output:
+  root: ${SLRET_RUN_ROOT}/ph/shared/seed42
+  save_last: true
+  save_best_dev: true
+  atomic_checkpoints: true

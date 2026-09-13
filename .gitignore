@@ -7,6 +7,7 @@
 /checkpoints/
 /third_party/SLRT/
 /third_party/SEDS/
+/third_party/UPRet/
 *.pth
 *.pt
 *.ckpt

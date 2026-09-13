@@ -1,0 +1,9 @@
+# Reproducibility target from the Method 1 specification (Python 3.10).
+ftfy==6.3.1
+numpy==1.26.4
+PyYAML==6.0.3
+pytest==8.4.2
+regex==2025.9.18
+torch==2.5.1
+torchvision==0.20.1
+tqdm==4.67.1
