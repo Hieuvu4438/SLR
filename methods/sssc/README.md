@@ -38,6 +38,10 @@ layout and currently fail the input audit because the established dev and comple
 feature releases are unavailable. They are readiness contracts, not claims of completed
 confirmation experiments.
 
+Published test values and the exact matched-resource/broad-SOTA claim gates are
+kept in `docs/benchmark_ledger.md`. In particular, a running PH dev score is never
+comparable to those published test values.
+
 `tools/generate_ph_configs.py` deterministically materializes 24 standalone PH configs: all
 eight implemented base/core/strong-control arms for seeds 42/43/44. The generated YAML files
 contain no runtime inheritance; paired files differ only in seed, arm/support mode, and their

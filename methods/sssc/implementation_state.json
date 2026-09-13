@@ -51,7 +51,7 @@
       ]
     },
     "M3_training_infrastructure": {
-      "status": "IN_PROGRESS",
+      "status": "PASS_IMPLEMENTATION",
       "optimizer_contract": "PASS_SYNTHETIC",
       "atomic_checkpoint_resume_identity": "PASS_SYNTHETIC",
       "dev_selector": "PASS_SYNTHETIC",
@@ -77,7 +77,7 @@
       "real_cache_blocker": "dev-selected corrected baseline checkpoint is not yet available"
     },
     "M5_core_method": {
-      "status": "IN_PROGRESS",
+      "status": "PASS_IMPLEMENTATION",
       "train_wrapper": "PASS_SYNTHETIC",
       "random_support_identity_seed": "PASS_SYNTHETIC",
       "paired_k1_pilot_configs": "PASS_CONFIG_CONTRACT",
@@ -118,5 +118,6 @@
       "dev_only_selection_lock": "PASS_SYNTHETIC"
     }
   },
+  "benchmark_claim_ledger": "methods/sssc/docs/benchmark_ledger.md",
   "last_verified": "2026-09-13"
 }
