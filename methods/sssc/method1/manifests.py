@@ -67,27 +67,41 @@ def iter_jsonl(path: str | Path) -> Iterator[dict[str, Any]]:
 
 
 def derive_official_membership(config: Method1Config) -> dict[str, list[str]]:
-    if config.data.dataset != "ph":
-        raise ManifestError("automatic official membership derivation is implemented only for PHX")
-    if not config.data.official_split_annotations:
-        raise ManifestError(
-            "official membership file is missing and official_split_annotations were not configured"
-        )
     memberships: dict[str, list[str]] = {}
-    for split in ("train", "dev", "test"):
-        path = Path(config.data.official_split_annotations[split])
-        if not path.is_file():
-            raise ManifestError(f"official {split} annotation is missing: {path}")
-        with path.open("r", encoding="utf-8") as handle:
-            rows = csv.DictReader(handle, delimiter="|")
-            if rows.fieldnames is None or "name" not in rows.fieldnames:
-                raise ManifestError(f"official annotation has no name column: {path}")
-            identifiers = [str(row["name"]).strip() for row in rows]
+    sources: dict[str, dict[str, Any]] = {}
+    if config.data.dataset == "ph":
+        if not config.data.official_split_annotations:
+            raise ManifestError(
+                "official membership file is missing and official_split_annotations were not configured"
+            )
+        for split in ("train", "dev", "test"):
+            path = Path(config.data.official_split_annotations[split])
+            if not path.is_file():
+                raise ManifestError(f"official {split} annotation is missing: {path}")
+            with path.open("r", encoding="utf-8") as handle:
+                rows = csv.DictReader(handle, delimiter="|")
+                if rows.fieldnames is None or "name" not in rows.fieldnames:
+                    raise ManifestError(f"official annotation has no name column: {path}")
+                identifiers = [str(row["name"]).strip() for row in rows]
+            sources[split] = {"path": str(path), "sha256": sha256_file(path)}
+            memberships[split] = identifiers
+    else:
+        # H2/CSL release pickles already encode the established ordered group membership.
+        # This is a mechanical identity extraction, never a random resplit.
+        for split in ("train", "dev", "test"):
+            path = Path(config.data.source_annotations[split])
+            if not path.is_file():
+                raise ManifestError(f"source {split} annotation is missing: {path}")
+            raw = _trusted_pickle(path)
+            if not isinstance(raw, dict):
+                raise ManifestError(f"source annotation must be a dictionary: {path}")
+            memberships[split] = [str(identifier) for identifier in raw]
+            sources[split] = {"path": str(path), "sha256": sha256_file(path)}
+    for split, identifiers in memberships.items():
         if not identifiers or any(not identifier for identifier in identifiers):
             raise ManifestError(f"official {split} membership is empty or malformed")
         if len(set(identifiers)) != len(identifiers):
             raise ManifestError(f"official {split} membership contains duplicate IDs")
-        memberships[split] = identifiers
     overlap = {
         f"{left}_{right}": sorted(set(memberships[left]) & set(memberships[right]))
         for left, right in (("train", "dev"), ("train", "test"), ("dev", "test"))
@@ -97,14 +111,13 @@ def derive_official_membership(config: Method1Config) -> dict[str, list[str]]:
     destination = Path(config.data.official_membership_json)
     payload = {
         "schema_version": 1,
-        "dataset": "ph",
-        "source": {
-            split: {
-                "path": config.data.official_split_annotations[split],
-                "sha256": sha256_file(config.data.official_split_annotations[split]),
-            }
-            for split in memberships
-        },
+        "dataset": config.data.dataset,
+        "derivation": (
+            "official_csv_name_column"
+            if config.data.dataset == "ph"
+            else "ordered_keys_from_established_release_pickles"
+        ),
+        "source": sources,
         "membership": memberships,
         "ordered_hashes": {split: ordered_hash(values) for split, values in memberships.items()},
     }

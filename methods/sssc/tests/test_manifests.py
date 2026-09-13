@@ -65,3 +65,58 @@ def test_grouped_manifest_builder_preserves_membership(
     assert report["files"]["videos.jsonl"]["count"] == 6
     groups = list(iter_jsonl(tmp_path / "manifests" / "groups.jsonl"))
     assert [len(group["video_uids"]) for group in groups] == [2, 2, 2]
+
+
+def test_grouped_release_membership_is_mechanically_derived_without_resplitting(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("SLRET_DATA_ROOT", str(tmp_path / "placeholder"))
+    monkeypatch.setenv("SLRET_RUN_ROOT", str(tmp_path / "runs"))
+    base = load_config("methods/sssc/configs/method1/ph_span_shared.yaml")
+    annotation_paths = {}
+    agnostic_root = tmp_path / "agnostic"
+    aware_root = tmp_path / "aware"
+    expected_order = {}
+    for split in ("train", "dev", "test"):
+        expected_order[split] = [f"{split}-z", f"{split}-a"]
+        records = {
+            group_id: [
+                {
+                    "video_name": f"video-{group_id}",
+                    "text": f"Caption {group_id}",
+                    "ori_text": "",
+                }
+            ]
+            for group_id in expected_order[split]
+        }
+        annotation_path = tmp_path / f"{split}.pkl"
+        with annotation_path.open("wb") as handle:
+            pickle.dump(records, handle)
+        annotation_paths[split] = str(annotation_path)
+        for root in (agnostic_root, aware_root):
+            (root / split).mkdir(parents=True)
+            for group_id in expected_order[split]:
+                with (root / split / f"video-{group_id}.pkl").open("wb") as handle:
+                    pickle.dump(
+                        {"feature": np.ones((2, 1024), dtype=np.float32)}, handle
+                    )
+    membership_path = tmp_path / "derived_membership.json"
+    config = replace(
+        base,
+        data=replace(
+            base.data,
+            dataset="csl",
+            source_annotations=annotation_paths,
+            official_membership_json=str(membership_path),
+            official_split_annotations={},
+            manifest_dir=str(tmp_path / "manifests"),
+            agnostic_root=str(agnostic_root),
+            aware_root=str(aware_root),
+            agnostic_weight=0.8,
+        ),
+    )
+    report = build_manifests(config)
+    assert report["status"] == "ready"
+    membership = json.loads(membership_path.read_text(encoding="utf-8"))
+    assert membership["membership"] == expected_order
+    assert membership["derivation"] == "ordered_keys_from_established_release_pickles"

@@ -26,7 +26,11 @@
         }
       },
       "tokenizer_contract": "PASS_SYNTHETIC",
-      "feature_mixture_contract": "PASS_SYNTHETIC"
+      "feature_mixture_contract": "PASS_SYNTHETIC",
+      "confirmation_dataset_readiness": {
+        "h2": "BLOCKED_MISSING_DEV_AND_FULL_CICO_FEATURES",
+        "csl": "BLOCKED_MISSING_ESTABLISHED_TEST_FEATURES_AND_DEV_GROUP_SOURCE"
+      }
     },
     "M2_corrected_baseline": {
       "status": "IN_PROGRESS",

@@ -12,6 +12,8 @@ Audit date: 2026-09-13.
 | PH domain-adapted I3D | Locally trained P14T stream | Present under ignored artifacts | Candidate aware stream; not yet proven equivalent to a published CiCo release |
 | CLIP ViT-B/32 init | SHA-256 `40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af` | Present at `artifacts/pretrained/ViT-B-32.pt` | Permitted initialization; passed Method 1 input audit |
 | UPRet trained checkpoint | per-seed corrected baseline | Missing | Must be trained and selected on dev before reference caches |
+| How2Sign annotations | UPRet train/test plus audited realigned sources | Partial | Full CiCo I3D agnostic/aware train/dev/test features are absent; raw-video audit also reports 118/2/6 missing train/dev/test clips |
+| CSL-Daily English annotations | UPRet translated-English train/test; local translated train/dev assets | Partial | Local agnostic/aware features cover train/dev only; established UPRet test features are absent and aware-stream publication equivalence is unresolved |
 
 Reference-cache and miner commands are implemented but remain deliberately unexecuted on real
 PH data until that dev-selected checkpoint exists. Their immutable identities include the
@@ -22,3 +24,8 @@ auxiliary bundle.
 The UPRet repository snapshot contains no visible license file. Source adaptation remains
 attributed and patch-based; redistribution/license compatibility is unresolved and must be
 reviewed before public release.
+
+The H2/CSL confirmation configs intentionally point at their expected isolated Method 1
+resource locations. `audit --stage input` fails closed while those split assets are missing;
+no random dev split, duplicated video, copied feature, or fabricated metric is used to make
+the confirmation datasets appear runnable.

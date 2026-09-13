@@ -30,6 +30,13 @@ The latter two fail closed unless the configured checkpoint is a dev-selected
 teacher. Only completion of the full configured epoch/step budget adds the
 `training_run_complete` gate required by reference caching and Method 1 arms.
 
+The H2 and CSL confirmation baseline configs are
+`configs/method1/h2_seed42_base_initial.yaml` and
+`configs/method1/csl_seed42_base_initial.yaml`. They describe the expected isolated resource
+layout and currently fail the input audit because the established dev and complete paired
+feature releases are unavailable. They are readiness contracts, not claims of completed
+confirmation experiments.
+
 `tools/generate_ph_configs.py` deterministically materializes 24 standalone PH configs: all
 eight implemented base/core/strong-control arms for seeds 42/43/44. The generated YAML files
 contain no runtime inheritance; paired files differ only in seed, arm/support mode, and their

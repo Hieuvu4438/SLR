@@ -56,7 +56,18 @@ def audit_resources(config: Method1Config, stage: str) -> dict[str, Any]:
             directory = Path(root)
             if not directory.is_dir():
                 raise AuditError(f"{name} is missing: {directory}")
-            resources[name] = str(directory.resolve())
+            split_directories = {}
+            for split in ("train", "dev", "test"):
+                split_directory = directory / split
+                if not split_directory.is_dir():
+                    raise AuditError(
+                        f"{name} has no established {split} feature directory: {split_directory}"
+                    )
+                split_directories[split] = str(split_directory.resolve())
+            resources[name] = {
+                "path": str(directory.resolve()),
+                "split_directories": split_directories,
+            }
         membership = Path(config.data.official_membership_json)
         resources["official_membership"] = (
             _file_check(str(membership), label="official membership")
