@@ -8,6 +8,11 @@ These controls are comparison baselines, not Shared-Support Sign Contrast novelt
 | `fsc_local` | FSC-CLIP commit `604015db3f009a8f7485f1fb7e21d8343c67664a`: detached token-to-patch support, patch-wise min–max, normalized pooled visual token, masked token log-sum-exp and hard-negative class loss | UPRet clips act as patches; invalid clips are excluded before min/max; constant affinity falls back to uniform-valid support; initial focal γ=1 and negative-label smoothing .1 | PASS_SYNTHETIC |
 | `fsc_local_caption_hn` | Combination of the two transferred controls | Adds both explicitly weighted losses once each on top of the unchanged corrected UPRet base | PASS_SYNTHETIC |
 
+Independent numerical fixtures pin the transferred operations: the SAN-style test derives
+the original/negative logits from token-softmax then valid-clip mean, while the FSC-style test
+derives one-hot min–max local support and the exact equal-logit focal value. These fixtures do
+not call a second copy of the production scorer to construct their expectations.
+
 Primary source locations:
 
 - SAN: `https://github.com/joonmy/SAN/blob/82aba9cbc1beb403abef6e9a3875ca52479805c8/models.py`

@@ -78,6 +78,57 @@ def test_fsc_minmax_uniform_fallback_is_finite_and_mass_preserving() -> None:
     assert torch.isfinite(captions.grad).all()
 
 
+def test_san_inspired_fixture_matches_token_softmax_then_clip_mean() -> None:
+    video = torch.tensor([[[1.0, 0.0], [0.0, 1.0]]])
+    captions = torch.tensor(
+        [
+            [
+                [[1.0, 0.0], [0.0, 1.0]],
+                [[1.0, 0.0], [1.0, 0.0]],
+            ]
+        ]
+    )
+    tau = 0.07
+    terms = caption_hard_negative_terms(
+        video,
+        torch.ones(1, 2, dtype=torch.bool),
+        captions,
+        torch.ones(1, 2, 2, dtype=torch.bool),
+        torch.ones(1, 1, dtype=torch.bool),
+        logit_scale=torch.tensor(0.0),
+        temperature=tau,
+    )
+    original_score = torch.sigmoid(torch.tensor(1.0 / tau))
+    negative_score = torch.tensor(0.5)
+    expected = torch.nn.functional.softplus(negative_score - original_score)
+    torch.testing.assert_close(terms.numerator, expected)
+    assert terms.denominator.item() == 1.0
+
+
+def test_fsc_source_style_fixture_matches_detached_minmax_focal_value() -> None:
+    video = torch.tensor([[[1.0, 0.0], [0.0, 1.0]]])
+    captions = torch.tensor([[[[1.0, 0.0]], [[0.0, 1.0]]]])
+    terms = fsc_local_hard_negative_terms(
+        video,
+        torch.ones(1, 2, dtype=torch.bool),
+        captions,
+        torch.ones(1, 2, 1, dtype=torch.bool),
+        torch.ones(1, 1, dtype=torch.bool),
+        logit_scale=torch.tensor(0.0),
+        loss_name="focal_loss",
+        focal_gamma=1.0,
+        label_smoothing=0.1,
+    )
+    # Both candidate-local matches are exactly one. Equal class probabilities therefore
+    # yield focal factor .5; the smoothed target still has total mass one.
+    expected = 0.5 * torch.log(torch.tensor(2.0))
+    torch.testing.assert_close(terms.numerator, expected)
+    torch.testing.assert_close(
+        terms.diagnostics["candidate_support"],
+        torch.tensor([[[[1.0, 0.0]], [[0.0, 1.0]]]]),
+    )
+
+
 @pytest.mark.parametrize("control", [caption_hard_negative_terms, fsc_local_hard_negative_terms])
 def test_strong_control_all_invalid_negatives_returns_graph_zero(control) -> None:
     values = list(_fixture())

@@ -91,6 +91,7 @@
       "caption_hn": "PASS_SYNTHETIC",
       "fsc_local": "PASS_SYNTHETIC",
       "fsc_local_caption_hn": "PASS_SYNTHETIC",
+      "strong_control_source_equivalence_fixtures": "PASS_SYNTHETIC_NUMERICAL",
       "frozen_support_diagnostics": "PASS_SYNTHETIC",
       "selected_vs_equal_random_input_feature_removal": "PASS_SYNTHETIC",
       "single_process_base_aux_gradient_cosine": "PASS_SYNTHETIC",
