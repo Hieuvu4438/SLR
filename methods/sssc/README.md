@@ -28,6 +28,11 @@ The latter two fail closed unless the configured checkpoint is a dev-selected
 teacher. Only completion of the full configured epoch/step budget adds the
 `training_run_complete` gate required by reference caching and Method 1 arms.
 
+`tools/generate_ph_configs.py` deterministically materializes 24 standalone PH configs: all
+eight implemented base/core/strong-control arms for seeds 42/43/44. The generated YAML files
+contain no runtime inheritance; paired files differ only in seed, arm/support mode, and their
+seed/arm-specific checkpoint/cache/output paths.
+
 The implementation starts from pinned UPRet commit
 `046366227417e1d8ec14145965403462df345984`. The local audit checkout is kept at
 `third_party/UPRet/` and ignored by the parent repository; tracked compatibility changes are

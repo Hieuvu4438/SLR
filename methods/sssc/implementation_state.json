@@ -75,7 +75,15 @@
       "complete_dev_pool": "PASS_519x519",
       "artifact": "runs/method1/ph/base_engineering_smoke/seed42/dev_step_1.json"
     },
-    "M7_controls": {"status": "NOT_STARTED"},
+    "M7_controls": {
+      "status": "IN_PROGRESS",
+      "caption_hn": "PASS_SYNTHETIC",
+      "fsc_local": "PASS_SYNTHETIC",
+      "fsc_local_caption_hn": "PASS_SYNTHETIC",
+      "source_attribution": "methods/sssc/docs/control_ledger.md",
+      "ph_seed_arm_configs": 24,
+      "real_control_runs": "BLOCKED_ON_SELECTED_BASELINE_AND_CACHES"
+    },
     "M8_experiments_export": {
       "status": "IN_PROGRESS",
       "complete_pool_ranking_and_ids": "PASS_SYNTHETIC",

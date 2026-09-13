@@ -34,6 +34,11 @@ class TinyStudent(nn.Module):
         self.clip.logit_scale = nn.Parameter(torch.tensor(8.0))
         self.head = nn.Linear(2, 1)
 
+    def get_text_feat(self, input_ids, token_type_ids, text_valid, **kwargs):
+        raw = torch.stack((input_ids.float(), input_ids.float() + 1.0), dim=-1)
+        tokens = self.clip.projection(raw)
+        return text_valid, tokens, tokens[:, 0]
+
 
 def test_optimizer_matches_upstream_group_and_hyperparameter_contract() -> None:
     config = load_config(CONFIG)
@@ -148,3 +153,53 @@ def test_optimizer_step_clips_and_clamps_logit_scale() -> None:
     norm = complete_optimizer_step(student, optimizer, max_grad_norm=1.0)
     assert torch.isfinite(norm)
     assert student.clip.logit_scale.item() == pytest.approx(float(torch.log(torch.tensor(100.0))))
+
+
+@pytest.mark.parametrize(
+    ("arm", "expected_keys"),
+    [
+        ("caption_hn", {"caption_auxiliary", "caption_weight_count"}),
+        ("fsc_local", {"fsc_auxiliary", "fsc_weight_count"}),
+        (
+            "fsc_local_caption_hn",
+            {
+                "caption_auxiliary",
+                "caption_weight_count",
+                "fsc_auxiliary",
+                "fsc_weight_count",
+            },
+        ),
+    ],
+)
+def test_train_wrapper_dispatches_strong_controls(monkeypatch, arm, expected_keys) -> None:
+    config = load_config(CONFIG)
+    student = TinyStudent()
+    auxiliary = replace(config.auxiliary, arm=arm, support_mode="candidate")
+    video = student.head.weight.reshape(1, 1, 2).expand(1, 3, 2)
+    encoding = LocalEncoding(
+        video_raw=video,
+        video_ignore_raw=torch.tensor([[True, False, False]]),
+        text_raw=student.clip.projection(torch.tensor([[[1.0, 0.0], [0.0, 1.0]]])),
+        text_valid=torch.ones(1, 2, dtype=torch.bool),
+        text_aug_raw=torch.ones(1, 2, 2),
+        text_aug_valid=torch.ones(1, 2, dtype=torch.bool),
+    )
+    monkeypatch.setattr(trainer_module, "encode_local", lambda _student, _batch: encoding)
+    monkeypatch.setattr(
+        trainer_module,
+        "baseline_loss_from_local",
+        lambda core, enc, **kwargs: core.head.weight.square().sum(),
+    )
+    wrapper = Method1TrainModel(
+        student, auxiliary, DistributedRuntime(), baseline_seed=config.seed
+    )
+    batch = {
+        "negative_input_ids": torch.tensor([[[2, 3], [1, 4]]]),
+        "negative_text_valid": torch.ones(1, 2, 2, dtype=torch.bool),
+        "edit_valid": torch.tensor([[[True], [False]]]),
+    }
+    result = wrapper(batch, optimizer_step=1)
+    assert expected_keys <= set(result)
+    result["loss"].backward()
+    assert student.head.weight.grad is not None
+    assert student.clip.projection.weight.grad is not None

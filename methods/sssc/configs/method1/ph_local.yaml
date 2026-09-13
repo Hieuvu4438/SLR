@@ -81,6 +81,12 @@ auxiliary:
   normalize_text_difference: false
   normalize_support_pool: false
   reliability_gate: false
+  caption_loss_weight: 0.4
+  fsc_loss_weight: 0.4
+  fsc_loss_name: focal_loss
+  fsc_focal_gamma: 1.0
+  fsc_label_smoothing: 0.1
+  fsc_similarity_normalizer: minmax
 
 training:
   base_epochs: 200

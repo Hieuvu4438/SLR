@@ -121,8 +121,17 @@ class Method1AuxiliaryCache:
         if seen_edits != set(self.negative_index):
             raise AuxiliaryCacheError("negative span cache and edit table identities differ")
         self.edits_by_text = {key: tuple(values) for key, values in edits_by_text.items()}
+        self.edits_by_uid = {
+            edit.edit_uid: edit for edits in self.edits_by_text.values() for edit in edits
+        }
         self.reference_identity_sha256 = expected_identity.digest
         self.mining_content_sha256 = stored_content_hash
+
+    def edit(self, edit_uid: str) -> EditRecord:
+        try:
+            return self.edits_by_uid[edit_uid]
+        except KeyError as error:
+            raise AuxiliaryCacheError(f"unknown cached edit: {edit_uid}") from error
 
     def training_fields(
         self,

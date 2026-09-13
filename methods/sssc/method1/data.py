@@ -188,16 +188,40 @@ class Method1Dataset(Dataset[dict[str, Any]]):
             "lexical_spans": encoded.lexical_spans,
         }
         if self.auxiliary_cache is not None:
-            item.update(
-                self.auxiliary_cache.training_fields(
-                    video_uid=video_uid,
-                    text_uid=text.text_uid,
-                    caption_hash=text.caption_hash,
-                    seed=self.config.seed,
-                    epoch=self.epoch,
-                    negatives_per_caption=self.config.auxiliary.negatives_per_caption,
-                )
+            auxiliary_fields = self.auxiliary_cache.training_fields(
+                video_uid=video_uid,
+                text_uid=text.text_uid,
+                caption_hash=text.caption_hash,
+                seed=self.config.seed,
+                epoch=self.epoch,
+                negatives_per_caption=self.config.auxiliary.negatives_per_caption,
             )
+            item.update(auxiliary_fields)
+            if self.config.auxiliary.arm in {
+                "caption_hn",
+                "fsc_local",
+                "fsc_local_caption_hn",
+            }:
+                negative_ids: list[torch.Tensor] = []
+                negative_valid: list[torch.Tensor] = []
+                for edit_slot in auxiliary_fields["edit_uids"]:
+                    edit_uid = edit_slot[0]
+                    if edit_uid is None:
+                        negative = encoded
+                    else:
+                        edit = self.auxiliary_cache.edit(edit_uid)
+                        negative = tokenize_with_spans(
+                            edit.negative_canonical_text,
+                            text_uid=text.text_uid,
+                            tokenizer=self.tokenizer,
+                            max_positions=self.config.data.text_max_positions,
+                        )
+                        if negative.caption_hash != edit.negative_caption_hash:
+                            raise DataError(f"cached negative caption changed: {edit_uid}")
+                    negative_ids.append(torch.tensor(negative.input_ids, dtype=torch.long))
+                    negative_valid.append(torch.tensor(negative.text_valid, dtype=torch.bool))
+                item["negative_input_ids"] = torch.stack(negative_ids)
+                item["negative_text_valid"] = torch.stack(negative_valid)
         return item
 
 
@@ -213,6 +237,7 @@ class Method1Collator:
         "token_type_ids",
     )
     _AUXILIARY_TENSOR_KEYS = ("x_ref", "q_pos", "q_neg", "edit_valid", "confidence")
+    _CONTROL_TENSOR_KEYS = ("negative_input_ids", "negative_text_valid")
 
     def __call__(self, items: Sequence[dict[str, Any]]) -> dict[str, Any]:
         if not items:
@@ -257,6 +282,16 @@ class Method1Collator:
                 for item_uids in output["edit_uids"]
             ):
                 raise DataError("edit_uids must preserve [B,K,1] identity slots")
+            has_controls = ["negative_input_ids" in item for item in items]
+            if any(has_controls) and not all(has_controls):
+                raise DataError("cannot collate mixed strong-control and span-only items")
+            if all(has_controls):
+                for key in self._CONTROL_TENSOR_KEYS:
+                    output[key] = torch.stack([item[key] for item in items])
+                if output["negative_input_ids"].shape != (batch_size, k, 32):
+                    raise DataError("negative input IDs must collate as [B,K,32]")
+                if output["negative_text_valid"].shape != (batch_size, k, 32):
+                    raise DataError("negative text validity must collate as [B,K,32]")
         if output["video_features"].ndim != 4 or output["video_features"].shape[1:] != (
             1024,
             64,

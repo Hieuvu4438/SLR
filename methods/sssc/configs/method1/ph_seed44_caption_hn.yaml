@@ -2,19 +2,22 @@ schema_version: 1
 method_version: sssc_v1
 baseline_version: upret_main_corrected_v1
 upstream_commit: 046366227417e1d8ec14145965403462df345984
-seed: 42
-
+seed: 44
 data:
   dataset: ph
   language: en
   source_annotations:
-    train: ${SLRET_DATA_ROOT}/annotations/ph_cico/train.pkl
-    dev: ${SLRET_DATA_ROOT}/annotations/ph_cico/dev.pkl
-    test: ${SLRET_DATA_ROOT}/annotations/ph_cico/test.pkl
-  official_membership_json: ${SLRET_DATA_ROOT}/annotations/ph_cico/official_membership.json
-  manifest_dir: ${SLRET_DATA_ROOT}/manifests/ph_cico
-  agnostic_root: ${SLRET_DATA_ROOT}/features/ph_domain_agnostic
-  aware_root: ${SLRET_DATA_ROOT}/features/ph_domain_aware
+    train: third_party/UPRet/data_ph/train.pkl
+    dev: third_party/UPRet/data_ph/dev.pkl
+    test: third_party/UPRet/data_ph/test.pkl
+  official_membership_json: artifacts/method1/input/ph_official_membership.json
+  official_split_annotations:
+    train: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.train.corpus.csv
+    dev: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.dev.corpus.csv
+    test: /home/dongvk/datasets/phoenix14T/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/annotations/manual/PHOENIX-2014-T.test.corpus.csv
+  manifest_dir: artifacts/method1/manifests/ph
+  agnostic_root: artifacts/features_reextracted/ph_domain_agnostic
+  aware_root: artifacts/features_reextracted/ph_domain_adapted_p14t
   agnostic_weight: 0.9
   combine_type: sum
   feature_dim: 1024
@@ -26,11 +29,10 @@ data:
   group_member_sampling: stateless_uniform
   baseline_text_augmentation: random_swap
   baseline_text_augmentation_probability: 0.5
-
 model:
   pretrained_clip_name: ViT-B/32
-  clip_checkpoint_path: ${SLRET_DATA_ROOT}/initialization/ViT-B-32.pt
-  bpe_path: ${SLRET_DATA_ROOT}/initialization/bpe_simple_vocab_16e6.txt.gz
+  clip_checkpoint_path: artifacts/pretrained/ViT-B-32.pt
+  bpe_path: third_party/UPRet/modules/bpe_simple_vocab_16e6.txt.gz
   visual_layers: 12
   text_layers: 12
   embedding_dim: 512
@@ -45,19 +47,17 @@ model:
   sample_ot_epsilon: 0.1
   sample_ot_max_iterations: 100
   sample_ot_logit_weight: 1.0
-
 reference:
   mode: cached
-  checkpoint: ${SLRET_RUN_ROOT}/ph/base/seed42/best_dev.pt
-  cache_dir: ${SLRET_RUN_ROOT}/ph/reference/seed42
+  checkpoint: runs/method1/ph/base/seed44/best_dev.pt
+  cache_dir: artifacts/method1/reference/ph/seed44
   cache_dtype: float32
   require_exact_hashes: true
-
 miner:
   version: visual_prototype_v1
   edits_per_negative: 1
   retained_occurrence_fraction: 0.5
-  minimum_concentration: 0.000001
+  minimum_concentration: 1.0e-06
   minimum_retained_occurrences: 10
   minimum_distinct_groups: 5
   candidate_cosine_minimum: 0.7
@@ -65,15 +65,14 @@ miner:
   cached_negatives_per_caption: 20
   reject_existing_train_caption: true
   reject_word_already_in_caption: true
-
 auxiliary:
-  arm: span_shared
-  support_mode: shared
+  arm: caption_hn
+  support_mode: candidate
   negatives_per_caption: 5
   edits_per_negative: 1
   tau_support: 0.07
   margin: 0.05
-  aux_weight: 0.10
+  aux_weight: 0.1
   normalize_text_difference: false
   normalize_support_pool: false
   reliability_gate: false
@@ -83,16 +82,17 @@ auxiliary:
   fsc_focal_gamma: 1.0
   fsc_label_smoothing: 0.1
   fsc_similarity_normalizer: minmax
-
 training:
   base_epochs: 200
   finetune_epochs: 20
   global_contrastive_batch: 512
   gradient_accumulation_steps: 1
   optimizer: upstream_bertadam
-  learning_rate: 0.00001
-  betas: [0.9, 0.98]
-  epsilon: 0.000001
+  learning_rate: 1.0e-05
+  betas:
+  - 0.9
+  - 0.98
+  epsilon: 1.0e-06
   weight_decay: 0.001
   warmup_fraction: 0.1
   schedule: upstream_warmup_cosine
@@ -106,7 +106,6 @@ training:
   train_text_pair_block: 64
   checkpoint_deterministic_score_blocks: true
   num_workers: 4
-
 evaluation:
   encode_batch_size: 64
   complete_candidate_pool: true
@@ -117,9 +116,8 @@ evaluation:
   report_ranks: true
   report_top_k: 10
   test_during_training: false
-
 output:
-  root: ${SLRET_RUN_ROOT}/ph/shared/seed42
+  root: runs/method1/ph/caption_hn/seed44
   save_last: true
   save_best_dev: true
   atomic_checkpoints: true

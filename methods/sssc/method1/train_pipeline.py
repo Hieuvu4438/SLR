@@ -153,6 +153,9 @@ def train_stage(
         "span_independent",
         "span_shared",
         "span_random_support",
+        "caption_hn",
+        "fsc_local",
+        "fsc_local_caption_hn",
     }:
         raise TrainingError("train-method currently implements the four mandatory core arms")
     if config.training.mixed_precision != "none":
@@ -332,6 +335,18 @@ def train_stage(
                             "loss": float(result["loss"].detach()),
                             "base": float(result["base"]),
                             "auxiliary": float(result.get("auxiliary", torch.tensor(0.0))),
+                            "caption_auxiliary": float(
+                                result.get("caption_auxiliary", torch.tensor(0.0))
+                            ),
+                            "fsc_auxiliary": float(
+                                result.get("fsc_auxiliary", torch.tensor(0.0))
+                            ),
+                            "negative_encoding_slots": int(
+                                result.get("negative_encoding_slots", torch.tensor(0))
+                            ),
+                            "valid_negative_count": int(
+                                result.get("valid_negative_count", torch.tensor(0))
+                            ),
                             "gradient_norm": float(gradient_norm),
                             "batch_identity_sha256": sha256_json(
                                 list(zip(batch["video_uid"], batch["text_uid"], batch.get("edit_uids", [])))

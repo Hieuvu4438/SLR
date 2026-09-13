@@ -113,6 +113,12 @@ class AuxiliaryConfig:
     normalize_text_difference: bool = False
     normalize_support_pool: bool = False
     reliability_gate: bool = False
+    caption_loss_weight: float = 0.4
+    fsc_loss_weight: float = 0.4
+    fsc_loss_name: str = "focal_loss"
+    fsc_focal_gamma: float = 1.0
+    fsc_label_smoothing: float = 0.1
+    fsc_similarity_normalizer: str = "minmax"
 
 
 @dataclass(frozen=True)
@@ -248,6 +254,16 @@ class Method1Config:
             raise ConfigError("K cannot exceed cached_negatives_per_caption")
         if self.auxiliary.normalize_text_difference or self.auxiliary.normalize_support_pool:
             raise ConfigError("the fixed shared-support objective forbids extra direction/pool normalization")
+        if self.auxiliary.caption_loss_weight <= 0 or self.auxiliary.fsc_loss_weight <= 0:
+            raise ConfigError("strong-control loss weights must be positive")
+        if self.auxiliary.fsc_loss_name not in {"cross_entropy", "focal_loss"}:
+            raise ConfigError("fsc_loss_name must be cross_entropy or focal_loss")
+        if self.auxiliary.fsc_focal_gamma < 0:
+            raise ConfigError("fsc_focal_gamma must be non-negative")
+        if not 0 <= self.auxiliary.fsc_label_smoothing < 1:
+            raise ConfigError("fsc_label_smoothing must be in [0,1)")
+        if self.auxiliary.fsc_similarity_normalizer != "minmax":
+            raise ConfigError("the initial FSC control requires minmax similarity normalization")
         if self.training.gradient_accumulation_steps != 1:
             raise ConfigError("initial contrastive protocol requires gradient_accumulation_steps=1")
         if self.training.optimizer != "upstream_bertadam":
