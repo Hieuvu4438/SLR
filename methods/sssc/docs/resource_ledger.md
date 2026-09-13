@@ -10,8 +10,14 @@ Audit date: 2026-09-13.
 | UPRet PH English captions | 7,096 train, contaminated 7,615 dev container, 642 test | Present in pinned checkout | Must filter dev using official 519 keys |
 | PH domain-agnostic I3D | Oxford BSL5K-derived cache | Present under ignored artifacts; provenance already audited by proposal 1/OCEM | Candidate stream; verify hashes again for Method 1 manifests |
 | PH domain-adapted I3D | Locally trained P14T stream | Present under ignored artifacts | Candidate aware stream; not yet proven equivalent to a published CiCo release |
-| CLIP ViT-B/32 init | local file `artifacts/pretrained/ViT-B-32.pt` | Present | Permitted initialization; checksum gate pending Method 1 audit command |
+| CLIP ViT-B/32 init | SHA-256 `40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af` | Present at `artifacts/pretrained/ViT-B-32.pt` | Permitted initialization; passed Method 1 input audit |
 | UPRet trained checkpoint | per-seed corrected baseline | Missing | Must be trained and selected on dev before reference caches |
+
+Reference-cache and miner commands are implemented but remain deliberately unexecuted on real
+PH data until that dev-selected checkpoint exists. Their immutable identities include the
+teacher, tokenizer, caption/video manifests, mixture/sampler semantics, and implementation
+version; the mining table and negative-span vectors are published together as one atomic
+auxiliary bundle.
 
 The UPRet repository snapshot contains no visible license file. Source adaptation remains
 attributed and patch-based; redistribution/license compatibility is unresolved and must be

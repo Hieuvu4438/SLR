@@ -50,7 +50,15 @@
       "dev_selector": "PASS_SYNTHETIC",
       "two_rank_weighted_auxiliary": "PASS_GLOO"
     },
-    "M4_reference_miner": {"status": "NOT_STARTED"},
+    "M4_reference_miner": {
+      "status": "IN_PROGRESS",
+      "frozen_reference_encoding": "PASS_SYNTHETIC",
+      "hashed_mmap_cache": "PASS_SYNTHETIC",
+      "group_balanced_visual_prototypes": "PASS_SYNTHETIC",
+      "train_only_caption_filter": "PASS_SYNTHETIC",
+      "atomic_auxiliary_bundle": "IMPLEMENTED_UNEXECUTED_REAL",
+      "real_cache_blocker": "dev-selected corrected baseline checkpoint is not yet available"
+    },
     "M5_core_method": {
       "status": "IN_PROGRESS",
       "train_wrapper": "PASS_SYNTHETIC",

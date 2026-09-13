@@ -13,6 +13,8 @@ from .config import ConfigError, load_config
 from .evaluation import evaluate_grouped_retrieval
 from .losses.shared_support import span_contrast_terms
 from .manifests import build_manifests
+from .mining_pipeline import mine_reference_negatives
+from .reference_pipeline import create_reference_cache
 from .sampling import mix_and_sample_features
 from .token_spans import tokenize_with_spans
 from .upstream import create_upret_tokenizer
@@ -60,6 +62,10 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--config", required=True)
         if name in {"train-base", "train-method"}:
             command.add_argument("--max-steps", type=int)
+        if name in {"cache-reference", "mine-negatives"}:
+            command.add_argument("--device", default="auto")
+            command.add_argument("--upret-root", default="third_party/UPRet")
+            command.add_argument("--batch-size", type=int)
         if name in {"evaluate", "export"}:
             command.add_argument("--checkpoint", required=True)
         if name in {"evaluate", "diagnose"}:
@@ -172,6 +178,36 @@ def main(argv: Sequence[str] | None = None) -> int:
             _emit(_verify_tokenizer(args), args.output)
         elif args.command == "smoke":
             _emit(_synthetic_smoke(args.config), args.output)
+        elif args.command == "cache-reference":
+            config = load_config(args.config)
+            device = (
+                "cuda" if args.device == "auto" and torch.cuda.is_available() else args.device
+            )
+            if device == "auto":
+                device = "cpu"
+            _emit(
+                create_reference_cache(
+                    config,
+                    upret_root=args.upret_root,
+                    device=device,
+                    batch_size=args.batch_size,
+                )
+            )
+        elif args.command == "mine-negatives":
+            config = load_config(args.config)
+            device = (
+                "cuda" if args.device == "auto" and torch.cuda.is_available() else args.device
+            )
+            if device == "auto":
+                device = "cpu"
+            _emit(
+                mine_reference_negatives(
+                    config,
+                    upret_root=args.upret_root,
+                    device=device,
+                    batch_size=args.batch_size,
+                )
+            )
         else:
             _emit(
                 {

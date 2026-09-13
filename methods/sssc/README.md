@@ -8,6 +8,17 @@ root. The Python package is deliberately named `method1` so the required interfa
 PYTHONPATH=methods/sssc:shared python -m method1.cli --help
 ```
 
+Implemented data/reference entry points are:
+
+```bash
+PYTHONPATH=methods/sssc:shared python -m method1.cli build-manifests --config CONFIG
+PYTHONPATH=methods/sssc:shared python -m method1.cli cache-reference --config CONFIG --device cuda
+PYTHONPATH=methods/sssc:shared python -m method1.cli mine-negatives --config CONFIG --device cuda
+```
+
+The latter two fail closed unless the configured checkpoint is a dev-selected
+`base_initial` checkpoint and every manifest/cache identity matches.
+
 The implementation starts from pinned UPRet commit
 `046366227417e1d8ec14145965403462df345984`. The local audit checkout is kept at
 `third_party/UPRet/` and ignored by the parent repository; tracked compatibility changes are

@@ -11,6 +11,7 @@ import torch
 from torch.utils.data import Dataset, Sampler
 
 from .config import Method1Config
+from .auxiliary_cache import Method1AuxiliaryCache
 from .manifests import iter_jsonl
 from .sampling import choose_group_member, mix_and_sample_features
 from .schemas import GroupRecord, TextRecord, VideoRecord
@@ -86,6 +87,7 @@ class Method1Dataset(Dataset[dict[str, Any]]):
         split: str,
         tokenizer: Any,
         augment: bool,
+        auxiliary_cache: Method1AuxiliaryCache | None = None,
     ) -> None:
         if split not in {"train", "dev", "test"}:
             raise DataError(f"unsupported split: {split}")
@@ -110,6 +112,7 @@ class Method1Dataset(Dataset[dict[str, Any]]):
         self.split = split
         self.tokenizer = tokenizer
         self.augment = bool(augment)
+        self.auxiliary_cache = auxiliary_cache
         self.epoch = 0
 
     def set_epoch(self, epoch: int) -> None:
@@ -168,7 +171,7 @@ class Method1Dataset(Dataset[dict[str, Any]]):
         )
         video_ignore = np.ones(self.config.data.feature_len + 1, dtype=np.bool_)
         video_ignore[1:] = ~valid
-        return {
+        item = {
             "video_uid": video_uid,
             "text_uid": text.text_uid,
             "group_uid": group.group_uid,
@@ -184,6 +187,18 @@ class Method1Dataset(Dataset[dict[str, Any]]):
             "canonical_text": text.canonical_text,
             "lexical_spans": encoded.lexical_spans,
         }
+        if self.auxiliary_cache is not None:
+            item.update(
+                self.auxiliary_cache.training_fields(
+                    video_uid=video_uid,
+                    text_uid=text.text_uid,
+                    caption_hash=text.caption_hash,
+                    seed=self.config.seed,
+                    epoch=self.epoch,
+                    negatives_per_caption=self.config.auxiliary.negatives_per_caption,
+                )
+            )
+        return item
 
 
 class Method1Collator:
@@ -197,6 +212,7 @@ class Method1Collator:
         "text_aug_valid",
         "token_type_ids",
     )
+    _AUXILIARY_TENSOR_KEYS = ("x_ref", "q_pos", "q_neg", "edit_valid", "confidence")
 
     def __call__(self, items: Sequence[dict[str, Any]]) -> dict[str, Any]:
         if not items:
@@ -214,6 +230,33 @@ class Method1Collator:
         }
         for key in self._TENSOR_KEYS:
             output[key] = torch.stack([item[key] for item in items])
+        has_auxiliary = ["x_ref" in item for item in items]
+        if any(has_auxiliary) and not all(has_auxiliary):
+            raise DataError("cannot collate a mixture of base-only and auxiliary items")
+        if all(has_auxiliary):
+            output["edit_uids"] = [item["edit_uids"] for item in items]
+            for key in self._AUXILIARY_TENSOR_KEYS:
+                output[key] = torch.stack([item[key] for item in items])
+            batch_size = len(items)
+            k = output["q_pos"].shape[1]
+            if output["x_ref"].shape != (batch_size, 64, 512):
+                raise DataError("collated x_ref must be [B,64,512]")
+            if output["q_pos"].shape != (batch_size, k, 1, 512) or output[
+                "q_neg"
+            ].shape != (batch_size, k, 1, 512):
+                raise DataError("collated span vectors must be [B,K,1,512]")
+            if output["edit_valid"].shape != (batch_size, k, 1):
+                raise DataError("collated edit validity must be [B,K,1]")
+            if any(
+                tensor.dtype != torch.float32
+                for tensor in (output["x_ref"], output["q_pos"], output["q_neg"], output["confidence"])
+            ) or output["edit_valid"].dtype != torch.bool:
+                raise DataError("auxiliary caches must collate as float32 with boolean validity")
+            if any(
+                len(item_uids) != k or any(len(edit_uids) != 1 for edit_uids in item_uids)
+                for item_uids in output["edit_uids"]
+            ):
+                raise DataError("edit_uids must preserve [B,K,1] identity slots")
         if output["video_features"].ndim != 4 or output["video_features"].shape[1:] != (
             1024,
             64,
