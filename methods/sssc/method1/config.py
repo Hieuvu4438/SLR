@@ -43,6 +43,7 @@ class DataConfig:
     agnostic_root: str
     aware_root: str
     agnostic_weight: float
+    official_split_annotations: dict[str, str] = field(default_factory=dict)
     combine_type: str = "sum"
     feature_dim: int = 1024
     feature_len: int = 64
@@ -196,6 +197,12 @@ class Method1Config:
             raise ConfigError(f"unsupported dataset: {self.data.dataset}")
         if set(self.data.source_annotations) != {"train", "dev", "test"}:
             raise ConfigError("source_annotations must contain exactly train/dev/test")
+        if self.data.official_split_annotations and set(self.data.official_split_annotations) != {
+            "train",
+            "dev",
+            "test",
+        }:
+            raise ConfigError("official_split_annotations must be empty or contain train/dev/test")
         if self.data.combine_type != "sum":
             raise ConfigError("first implementation requires combine_type=sum")
         expected_weight = 0.9 if self.data.dataset == "ph" else 0.8
