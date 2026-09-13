@@ -66,7 +66,15 @@
       "train_wrapper": "PASS_SYNTHETIC",
       "random_support_identity_seed": "PASS_SYNTHETIC"
     },
-    "M6_real_smoke_pilot": {"status": "NOT_STARTED"},
+    "M6_real_smoke_pilot": {
+      "status": "PASS_ENGINEERING",
+      "dataset": "ph",
+      "regime": "world1_cpu_global_batch2_one_step_nonreportable",
+      "base_loss": 1.0128757953643799,
+      "gradient_norm_before_outer_clip": 80.7323226928711,
+      "complete_dev_pool": "PASS_519x519",
+      "artifact": "runs/method1/ph/base_engineering_smoke/seed42/dev_step_1.json"
+    },
     "M7_controls": {"status": "NOT_STARTED"},
     "M8_experiments_export": {
       "status": "IN_PROGRESS",

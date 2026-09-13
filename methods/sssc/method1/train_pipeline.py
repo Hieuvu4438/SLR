@@ -119,6 +119,21 @@ def _move_batch(batch: dict[str, Any], device: torch.device) -> dict[str, Any]:
     }
 
 
+def _compact_metrics(metrics: dict[str, Any] | None) -> dict[str, Any] | None:
+    if metrics is None:
+        return None
+    return {
+        "candidate_counts": metrics.get("candidate_counts"),
+        "ties": metrics.get("ties"),
+        "V2T": {
+            key: value for key, value in metrics.get("V2T", {}).items() if key != "ranks"
+        },
+        "T2V": {
+            key: value for key, value in metrics.get("T2V", {}).items() if key != "ranks"
+        },
+    }
+
+
 def train_stage(
     config: Method1Config,
     *,
@@ -408,7 +423,7 @@ def train_stage(
             "full_protocol_complete": full_protocol_complete,
             "output_root": str(output_root.resolve()),
             "best_dev": str(best_path.resolve()) if best_path.is_file() else None,
-            "dev_metrics": final_metrics if runtime.rank == 0 else None,
+            "dev_metrics": _compact_metrics(final_metrics) if runtime.rank == 0 else None,
             "rank": runtime.rank,
             "world_size": runtime.world_size,
         }
