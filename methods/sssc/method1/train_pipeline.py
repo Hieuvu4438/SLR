@@ -184,7 +184,7 @@ def train_stage(
         "fsc_local",
         "fsc_local_caption_hn",
     }:
-        raise TrainingError("train-method currently implements the four mandatory core arms")
+        raise TrainingError("train-method received an unsupported or deferred arm")
     if config.training.mixed_precision != "none":
         raise TrainingError("the correctness-reference trainer currently requires float32")
     if max_steps is not None and max_steps < 1:

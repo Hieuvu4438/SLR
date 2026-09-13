@@ -74,7 +74,8 @@
       "status": "IN_PROGRESS",
       "train_wrapper": "PASS_SYNTHETIC",
       "random_support_identity_seed": "PASS_SYNTHETIC",
-      "paired_k1_pilot_configs": "PASS_CONFIG_CONTRACT"
+      "paired_k1_pilot_configs": "PASS_CONFIG_CONTRACT",
+      "optional_reliability_gate": "DEFERRED_FAIL_CLOSED_PENDING_SUPPORT_INSTABILITY_EVIDENCE"
     },
     "M6_real_smoke_pilot": {
       "status": "PASS_ENGINEERING",

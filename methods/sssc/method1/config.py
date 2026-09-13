@@ -20,8 +20,6 @@ SUPPORTED_ARMS = {
     "span_independent",
     "span_shared",
     "span_random_support",
-    "span_independent_gate",
-    "span_shared_gate",
     "caption_hn",
     "fsc_local",
     "fsc_local_caption_hn",
@@ -233,19 +231,16 @@ class Method1Config:
             raise ConfigError(f"unsupported auxiliary arm: {self.auxiliary.arm}")
         expected_mode = {
             "span_shared": "shared",
-            "span_shared_gate": "shared",
             "span_independent": "independent",
-            "span_independent_gate": "independent",
             "span_random_support": "random",
         }.get(self.auxiliary.arm)
         if expected_mode is not None and self.auxiliary.support_mode != expected_mode:
             raise ConfigError(
                 f"arm={self.auxiliary.arm} requires support_mode={expected_mode}"
             )
-        expected_gate = self.auxiliary.arm.endswith("_gate")
-        if self.auxiliary.reliability_gate != expected_gate:
+        if self.auxiliary.reliability_gate:
             raise ConfigError(
-                f"arm={self.auxiliary.arm} requires reliability_gate={expected_gate}"
+                "reliability gate is deferred until the ungated support-instability gate"
             )
         if self.auxiliary.edits_per_negative != 1 or self.miner.edits_per_negative != 1:
             raise ConfigError("version 1 supports exactly one lexical edit per negative")

@@ -20,9 +20,7 @@ from .schemas import SchemaError
 _BASE_ONLY_ARMS = {"base_initial", "base_continuation"}
 _SPAN_ARMS = {
     "span_shared",
-    "span_shared_gate",
     "span_independent",
-    "span_independent_gate",
     "span_random_support",
 }
 _STRONG_CONTROL_ARMS = {"caption_hn", "fsc_local", "fsc_local_caption_hn"}

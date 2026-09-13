@@ -4,6 +4,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import pytest
+import yaml
 
 from method1.config import ConfigError, load_config
 
@@ -53,3 +54,14 @@ def test_k1_pilot_pair_differs_only_in_declared_intervention_and_output() -> Non
         value["auxiliary"].pop("support_mode")
         value["output"].pop("root")
     assert left == right
+
+
+def test_reliability_gate_fails_closed_until_instability_evidence(
+    tmp_path: Path,
+) -> None:
+    value = yaml.safe_load(BASE_CONFIG.read_text(encoding="utf-8"))
+    value["auxiliary"]["reliability_gate"] = True
+    path = tmp_path / "premature_gate.yaml"
+    path.write_text(yaml.safe_dump(value), encoding="utf-8")
+    with pytest.raises(ConfigError, match="deferred"):
+        load_config(path)
