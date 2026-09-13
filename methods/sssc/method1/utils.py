@@ -61,3 +61,22 @@ def atomic_json_dump(value: Any, path: str | Path) -> None:
         except FileNotFoundError:
             pass
         raise
+
+
+def atomic_jsonl_dump(values: Iterable[Any], path: str | Path) -> None:
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{destination.name}.", dir=destination.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            for value in values:
+                handle.write(canonical_json(value) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, destination)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise

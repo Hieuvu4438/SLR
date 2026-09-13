@@ -10,6 +10,8 @@ import torch
 
 from .audit import audit_resources
 from .config import ConfigError, load_config
+from .comparison import compare_runs
+from .diagnostics import support_diagnostics
 from .evaluation import evaluate_grouped_retrieval
 from .inference import evaluate_checkpoint, export_student
 from .losses.shared_support import span_contrast_terms
@@ -79,6 +81,8 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--split", choices=("dev", "test"), required=True)
         if name == "diagnose":
             command.add_argument("--kind", choices=("support",), required=True)
+            command.add_argument("--device", default="auto")
+            command.add_argument("--upret-root", default="third_party/UPRet")
         if name == "export":
             command.add_argument("--output", required=True)
     return parser
@@ -251,6 +255,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                     upret_root=args.upret_root,
                 )
             )
+        elif args.command == "diagnose":
+            config = load_config(args.config)
+            device = (
+                "cuda" if args.device == "auto" and torch.cuda.is_available() else args.device
+            )
+            if device == "auto":
+                device = "cpu"
+            _emit(
+                support_diagnostics(
+                    config,
+                    split=args.split,
+                    upret_root=args.upret_root,
+                    device=device,
+                )
+            )
+        elif args.command == "compare-runs":
+            _emit(compare_runs(args.runs[0], args.runs[1]))
         else:
             _emit(
                 {

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
 import torch
 from torch import nn
 from torch.utils.data import Dataset
@@ -99,6 +100,23 @@ class TinyDataset(Dataset):
         }
 
 
+class FourItemDataset(TinyDataset):
+    def __len__(self) -> int:
+        return 4
+
+
+class InterruptAfterFirstBatchDataset(FourItemDataset):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.requests = 0
+
+    def __getitem__(self, index: int):
+        self.requests += 1
+        if self.requests > 2:
+            raise RuntimeError("simulated interruption after periodic checkpoint")
+        return super().__getitem__(index)
+
+
 def test_one_step_training_pipeline_writes_completed_selected_checkpoint(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -143,3 +161,73 @@ def test_one_step_training_pipeline_writes_completed_selected_checkpoint(
     assert checkpoint["arm"] == "base_initial"
     assert checkpoint["dev_selection"]["mean_bidirectional_r1"] == 20.0
     assert (tmp_path / "run" / "training_complete.json").is_file()
+
+
+def test_periodic_checkpoint_resume_matches_continuous_updates(
+    tmp_path: Path, monkeypatch
+) -> None:
+    base = load_config("methods/sssc/configs/method1/ph_base_initial.yaml")
+
+    def configured(output: Path):
+        return replace(
+            base,
+            training=replace(
+                base.training,
+                base_epochs=1,
+                global_contrastive_batch=2,
+                num_workers=0,
+                checkpoint_deterministic_score_blocks=False,
+                checkpoint_every_steps=1,
+            ),
+            output=replace(base.output, root=str(output)),
+        )
+
+    def build(*args, **kwargs):
+        torch.manual_seed(77)
+        return TinyStudent(), {"trainable_count": 10, "total_count": 10}
+
+    monkeypatch.setattr(pipeline, "build_upret_model", build)
+    monkeypatch.setattr(pipeline, "create_upret_tokenizer", lambda *args: object())
+    monkeypatch.setattr(
+        pipeline,
+        "evaluate_loaded_student",
+        lambda *args, **kwargs: {
+            "T2V": {"R1": 10.0, "R5": 20.0},
+            "V2T": {"R1": 30.0, "R5": 40.0},
+        },
+    )
+
+    interrupted_config = configured(tmp_path / "interrupted")
+    monkeypatch.setattr(pipeline, "Method1Dataset", InterruptAfterFirstBatchDataset)
+    with pytest.raises(RuntimeError, match="simulated interruption"):
+        pipeline.train_stage(interrupted_config, stage="base", requested_device="cpu")
+    periodic_path = tmp_path / "interrupted" / "last.pt"
+    periodic = torch.load(periodic_path, map_location="cpu", weights_only=True)
+    assert periodic["global_step"] == 1
+    assert periodic["next_batch_index"] == 1
+    assert periodic["training_run_complete"] is False
+
+    monkeypatch.setattr(pipeline, "Method1Dataset", FourItemDataset)
+    resumed = pipeline.train_stage(
+        interrupted_config,
+        stage="base",
+        requested_device="cpu",
+        resume=periodic_path,
+    )
+    assert resumed["status"] == "complete"
+    continuous_config = configured(tmp_path / "continuous")
+    continuous = pipeline.train_stage(
+        continuous_config, stage="base", requested_device="cpu"
+    )
+    assert continuous["status"] == "complete"
+    resumed_checkpoint = torch.load(
+        tmp_path / "interrupted" / "best_dev.pt", map_location="cpu", weights_only=True
+    )
+    continuous_checkpoint = torch.load(
+        tmp_path / "continuous" / "best_dev.pt", map_location="cpu", weights_only=True
+    )
+    assert resumed_checkpoint["global_step"] == continuous_checkpoint["global_step"] == 2
+    for key, expected in continuous_checkpoint["student_state_dict"].items():
+        torch.testing.assert_close(
+            resumed_checkpoint["student_state_dict"][key], expected, atol=0, rtol=0
+        )

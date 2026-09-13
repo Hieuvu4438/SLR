@@ -49,6 +49,9 @@
       "atomic_checkpoint_resume_identity": "PASS_SYNTHETIC",
       "dev_selector": "PASS_SYNTHETIC",
       "two_rank_weighted_auxiliary": "PASS_GLOO",
+      "two_rank_auxiliary_edge_cases": "PASS_GLOO_UNEQUAL_NONINTEGER_ALL_EMPTY",
+      "periodic_exact_resume": "PASS_SYNTHETIC_BITWISE_TWO_STEPS",
+      "per_rank_rng_checkpoint": "PASS_SYNTHETIC",
       "one_step_train_dev_checkpoint_pipeline": "PASS_SYNTHETIC",
       "pilot_checkpoint_teacher_gate": "PASS_SYNTHETIC"
     },
@@ -80,6 +83,8 @@
       "caption_hn": "PASS_SYNTHETIC",
       "fsc_local": "PASS_SYNTHETIC",
       "fsc_local_caption_hn": "PASS_SYNTHETIC",
+      "frozen_support_diagnostics": "PASS_SYNTHETIC",
+      "paired_run_comparison": "PASS_SYNTHETIC",
       "source_attribution": "methods/sssc/docs/control_ledger.md",
       "ph_seed_arm_configs": 24,
       "real_control_runs": "BLOCKED_ON_SELECTED_BASELINE_AND_CACHES"

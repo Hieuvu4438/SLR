@@ -144,6 +144,7 @@ class TrainingConfig:
     train_text_pair_block: int = 64
     checkpoint_deterministic_score_blocks: bool = True
     num_workers: int = 4
+    checkpoint_every_steps: int = 100
 
 
 @dataclass(frozen=True)
@@ -280,6 +281,8 @@ class Method1Config:
             raise ConfigError("training optimizer fields must match the fixed UPRet defaults")
         if not self.training.restart_optimizer_for_finetuning:
             raise ConfigError("fine-tuning optimizer/schedule must restart for every arm")
+        if self.training.checkpoint_every_steps < 1:
+            raise ConfigError("checkpoint_every_steps must be positive")
         if self.evaluation.test_during_training:
             raise ConfigError("test_during_training must remain false")
         if not self.evaluation.complete_candidate_pool:

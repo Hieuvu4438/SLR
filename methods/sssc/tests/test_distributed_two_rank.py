@@ -133,6 +133,26 @@ def _two_rank_worker(rank: int, init_file: str, output_dir: str) -> None:
             "auxiliary_log": float(logs["auxiliary"]),
             "auxiliary_count": float(logs["auxiliary_weight_count"]),
         }
+        weighted_cases = {}
+        for label, local_count in (
+            ("unequal_with_empty_rank", 3.0 if rank == 0 else 0.0),
+            ("noninteger", 0.5 if rank == 0 else 1.25),
+            ("all_empty", 0.0),
+        ):
+            auxiliary_model.zero_grad(set_to_none=True)
+            count = torch.tensor(local_count)
+            numerator = auxiliary_model(count)
+            current_backward, current_logs = ddp_weighted_auxiliary(
+                AuxiliaryTerms(numerator, count.detach(), {}),
+                DistributedRuntime(rank=rank, world_size=2),
+            )
+            current_backward.backward()
+            weighted_cases[label] = {
+                "gradient": float(auxiliary_model.module.weight.grad),
+                "log": float(current_logs["auxiliary"]),
+                "count": float(current_logs["auxiliary_weight_count"]),
+            }
+        payload["weighted_cases"] = weighted_cases
         torch.manual_seed(123)
         full_model = DistributedDataParallel(FullBaseProbe())
         videos, texts = _full_probe_inputs()
@@ -179,6 +199,15 @@ def test_two_rank_gather_and_weighted_auxiliary_match_global_reference(
         assert result["auxiliary_gradient"] == pytest.approx(4.0)
         assert result["auxiliary_log"] == pytest.approx(4.0)
         assert result["auxiliary_count"] == pytest.approx(4.0)
+        assert result["weighted_cases"]["unequal_with_empty_rank"] == pytest.approx(
+            {"gradient": 4.0, "log": 4.0, "count": 3.0}
+        )
+        assert result["weighted_cases"]["noninteger"] == pytest.approx(
+            {"gradient": 4.0, "log": 4.0, "count": 1.75}
+        )
+        assert result["weighted_cases"]["all_empty"] == pytest.approx(
+            {"gradient": 0.0, "log": 0.0, "count": 0.0}
+        )
         assert result["full_loss"] == pytest.approx(float(reference_loss.detach()), rel=1e-6)
         assert set(result["full_gradients"]) == set(reference_gradients)
         for name, gradient in reference_gradients.items():

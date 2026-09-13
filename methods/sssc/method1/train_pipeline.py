@@ -16,6 +16,7 @@ from .auxiliary_cache import Method1AuxiliaryCache
 from .checkpoints import (
     DevSelection,
     atomic_torch_save,
+    capture_rng_state,
     make_training_checkpoint,
     restore_rng_state,
     validate_resume_identity,
@@ -134,6 +135,32 @@ def _compact_metrics(metrics: dict[str, Any] | None) -> dict[str, Any] | None:
     }
 
 
+def _collect_rng_states(runtime: DistributedRuntime) -> list[dict[str, Any]]:
+    local_state = capture_rng_state()
+    if runtime.world_size == 1:
+        return [local_state]
+    states: list[dict[str, Any] | None] = [None for _ in range(runtime.world_size)]
+    dist.all_gather_object(states, local_state)
+    if any(state is None for state in states):
+        raise TrainingError("failed to gather per-rank RNG states")
+    return [state for state in states if state is not None]
+
+
+def _local_batch_identity(batch: dict[str, Any]) -> list[Any]:
+    if "edit_uids" in batch:
+        return list(zip(batch["video_uid"], batch["text_uid"], batch["edit_uids"]))
+    return list(zip(batch["video_uid"], batch["text_uid"]))
+
+
+def _batch_identity_hash(batch: dict[str, Any], runtime: DistributedRuntime) -> str:
+    local = _local_batch_identity(batch)
+    if runtime.world_size == 1:
+        return sha256_json(local)
+    gathered: list[Any] = [None for _ in range(runtime.world_size)]
+    dist.all_gather_object(gathered, local)
+    return sha256_json(gathered)
+
+
 def train_stage(
     config: Method1Config,
     *,
@@ -240,7 +267,13 @@ def train_stage(
             validate_resume_identity(resumed, config=config, artifact_hashes=artifacts)
             student.load_state_dict(resumed["student_state_dict"], strict=True)
             optimizer.load_state_dict(resumed["optimizer_state_dict"])
-            restore_rng_state(resumed["rng_state"])
+            rng_states = resumed.get("rng_state_by_rank")
+            if rng_states is not None:
+                if len(rng_states) != runtime.world_size:
+                    raise TrainingError("resume checkpoint RNG world size differs")
+                restore_rng_state(rng_states[runtime.rank])
+            else:
+                restore_rng_state(resumed["rng_state"])
             start_epoch = int(resumed["epoch"])
             next_batch_index = int(resumed["next_batch_index"])
             global_step = int(resumed["global_step"])
@@ -323,6 +356,22 @@ def train_stage(
                 )
                 global_step += 1
                 final_next_batch = batch_index + 1
+                debug_batch_hash = (
+                    _batch_identity_hash(batch, runtime)
+                    if config.training.deterministic_debug
+                    else None
+                )
+                if runtime.rank == 0 and debug_batch_hash is not None:
+                    atomic_json_dump(
+                        {
+                            "schema_version": 1,
+                            "epoch": epoch,
+                            "batch_index": batch_index,
+                            "global_step": global_step,
+                            "batch_identity_sha256": debug_batch_hash,
+                        },
+                        output_root / "debug_batches" / f"step_{global_step:08d}.json",
+                    )
                 if runtime.rank == 0 and (
                     global_step == 1 or global_step % 10 == 0 or global_step == optimizer_steps
                 ):
@@ -348,20 +397,48 @@ def train_stage(
                                 result.get("valid_negative_count", torch.tensor(0))
                             ),
                             "gradient_norm": float(gradient_norm),
-                            "batch_identity_sha256": sha256_json(
-                                list(zip(batch["video_uid"], batch["text_uid"], batch.get("edit_uids", [])))
-                                if "edit_uids" in batch
-                                else list(zip(batch["video_uid"], batch["text_uid"]))
-                            ),
+                            "batch_identity_sha256": debug_batch_hash
+                            or sha256_json(_local_batch_identity(batch)),
                         },
                         output_root / "latest_train_step.json",
                     )
+                if (
+                    config.output.save_last
+                    and global_step % config.training.checkpoint_every_steps == 0
+                ):
+                    rng_states = _collect_rng_states(runtime)
+                    if runtime.rank == 0:
+                        next_epoch = epoch + 1 if final_next_batch >= steps_per_epoch else epoch
+                        resumed_batch = 0 if next_epoch == epoch + 1 else final_next_batch
+                        periodic = make_training_checkpoint(
+                            config=config,
+                            student=student,
+                            optimizer=optimizer,
+                            epoch=next_epoch,
+                            next_batch_index=resumed_batch,
+                            global_step=global_step,
+                            sampler_state={
+                                "seed": config.seed,
+                                "epoch": epoch,
+                                "permutation_sha256": permutation_hash,
+                                "global_batch_size": config.training.global_contrastive_batch,
+                                "dropped_tail": sampler.dropped_tail,
+                            },
+                            artifact_hashes=artifacts,
+                            implementation_revision=implementation_revision,
+                            dev_metrics=None,
+                            rng_state=rng_states[0],
+                        )
+                        periodic["rng_state_by_rank"] = rng_states
+                        periodic["training_run_complete"] = False
+                        atomic_torch_save(periodic, output_root / "last.pt")
                 if global_step >= optimizer_steps:
                     stopped = True
                     break
 
             if runtime.world_size > 1:
                 dist.barrier()
+            rng_states = _collect_rng_states(runtime)
             if runtime.rank == 0:
                 final_metrics = evaluate_loaded_student(
                     config,
@@ -390,7 +467,10 @@ def train_stage(
                     artifact_hashes=artifacts,
                     implementation_revision=implementation_revision,
                     dev_metrics=final_metrics,
+                    rng_state=rng_states[0],
                 )
+                checkpoint["rng_state_by_rank"] = rng_states
+                checkpoint["training_run_complete"] = False
                 if config.output.save_last:
                     atomic_torch_save(checkpoint, output_root / "last.pt")
                 if config.output.save_best_dev and selection.beats(best_selection):

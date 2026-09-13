@@ -119,6 +119,7 @@ def make_training_checkpoint(
     implementation_revision: str,
     dev_metrics: Mapping[str, Any] | None,
     scaler: Any | None = None,
+    rng_state: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if min(epoch, next_batch_index, global_step) < 0:
         raise CheckpointError("checkpoint progress fields must be non-negative")
@@ -140,7 +141,7 @@ def make_training_checkpoint(
         "next_batch_index": int(next_batch_index),
         "global_step": int(global_step),
         "sampler_state": dict(sampler_state),
-        "rng_state": capture_rng_state(),
+        "rng_state": dict(rng_state) if rng_state is not None else capture_rng_state(),
         "resolved_config": resolved_config,
         "config_sha256": config.digest,
         "artifact_hashes": dict(artifact_hashes),

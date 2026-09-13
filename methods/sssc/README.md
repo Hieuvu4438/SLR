@@ -14,10 +14,12 @@ Implemented data/reference entry points are:
 PYTHONPATH=methods/sssc:shared python -m method1.cli build-manifests --config CONFIG
 PYTHONPATH=methods/sssc:shared python -m method1.cli cache-reference --config CONFIG --device cuda
 PYTHONPATH=methods/sssc:shared python -m method1.cli mine-negatives --config CONFIG --device cuda
+PYTHONPATH=methods/sssc:shared python -m method1.cli diagnose --config CONFIG --split dev --kind support --device cuda
 PYTHONPATH=methods/sssc:shared torchrun --standalone --nproc_per_node=W -m method1.cli train-base --config CONFIG
 PYTHONPATH=methods/sssc:shared torchrun --standalone --nproc_per_node=W -m method1.cli train-method --config CONFIG
 PYTHONPATH=methods/sssc:shared python -m method1.cli evaluate --config CONFIG --checkpoint CKPT --split dev
 PYTHONPATH=methods/sssc:shared python -m method1.cli export --config CONFIG --checkpoint CKPT --output OUTPUT
+PYTHONPATH=methods/sssc:shared python -m method1.cli compare-runs --runs RUN_A RUN_B
 ```
 
 The latter two fail closed unless the configured checkpoint is a dev-selected
@@ -44,7 +46,9 @@ allowed in this method.
 
 ## Current stage
 
-M0 has passed, the real PH manifest has passed its complete input audit, and the corrected
-baseline/model, shared-support loss, two-rank reductions, optimizer, and checkpoint contracts
-have CPU tests. Reference caching, mining, complete-pool training/evaluation orchestration, and
-real training remain gated. Commands without a completed correctness milestone fail closed.
+M0 has passed, the real PH manifest and one-step complete-pool engineering smoke have passed,
+and the corrected baseline/model, shared-support loss, two-rank reductions, exact periodic
+resume, reference/mining caches, strong controls, diagnostics, paired comparisons, and
+student-only export have synthetic contract tests. Full PH baseline training and every
+reportable method/control run remain unexecuted; reference construction correctly remains
+gated on the completed dev-selected baseline.
