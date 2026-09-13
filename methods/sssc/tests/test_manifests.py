@@ -77,6 +77,8 @@ def test_grouped_manifest_builder_preserves_membership(
         handle.write(json.dumps(groups[0]) + "\n")
     with pytest.raises(ManifestError, match="hash mismatch"):
         validate_manifest_bundle(tmp_path / "manifests")
+    with pytest.raises(ManifestError, match="overwrite"):
+        build_manifests(config)
 
 
 def test_grouped_release_membership_is_mechanically_derived_without_resplitting(

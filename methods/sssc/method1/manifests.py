@@ -4,6 +4,7 @@ import csv
 import json
 import os
 import pickle
+import shutil
 import tempfile
 from dataclasses import asdict
 from pathlib import Path
@@ -227,6 +228,9 @@ def _group_items(raw_group: Any) -> list[dict[str, Any]]:
 
 
 def build_manifests(config: Method1Config) -> dict[str, Any]:
+    destination = Path(config.data.manifest_dir)
+    if destination.exists():
+        raise ManifestError(f"refusing to overwrite existing manifest bundle: {destination}")
     memberships = load_official_membership(config)
     all_texts: list[TextRecord] = []
     all_videos: list[VideoRecord] = []
@@ -342,46 +346,56 @@ def build_manifests(config: Method1Config) -> dict[str, Any]:
         if overlap:
             raise ManifestError(f"raw video membership overlaps {left}/{right}: {sorted(overlap)[:5]}")
 
-    destination = Path(config.data.manifest_dir)
-    destination.mkdir(parents=True, exist_ok=True)
-    files = {
-        "texts.jsonl": _write_jsonl(all_texts, destination / "texts.jsonl"),
-        "videos.jsonl": _write_jsonl(all_videos, destination / "videos.jsonl"),
-        "groups.jsonl": _write_jsonl(all_groups, destination / "groups.jsonl"),
-    }
-    splits_payload = {"schema_version": 1, "splits": split_records}
-    atomic_json_dump(splits_payload, destination / "splits.json")
-    resources = {
-        "schema_version": 1,
-        "dataset": config.data.dataset,
-        "release": "configured_audited_release",
-        "source_annotation_sha256": source_hashes,
-        "official_membership_sha256": sha256_file(config.data.official_membership_json),
-        "agnostic_root": str(Path(config.data.agnostic_root).resolve()),
-        "aware_root": str(Path(config.data.aware_root).resolve()),
-        "agnostic_weight": config.data.agnostic_weight,
-        "feature_sampling": config.data.feature_sampling,
-        "feature_len": config.data.feature_len,
-        "known_unknowns": [
-            "contextual feature rows do not provide ground-truth sign boundaries",
-            "configured feature provenance must be qualified against the released CiCo regime",
-        ],
-        "config_sha256": config.digest,
-    }
-    atomic_json_dump(resources, destination / "resources.json")
-    meta = {
-        "schema_version": 1,
-        "status": "ready",
-        "files": files,
-        "splits_sha256": sha256_file(destination / "splits.json"),
-        "resources_sha256": sha256_file(destination / "resources.json"),
-        "content_sha256": sha256_json(
-            {
-                "files": files,
-                "splits": splits_payload,
-                "resources": resources,
-            }
-        ),
-    }
-    atomic_json_dump(meta, destination / "manifest_meta.json")
-    return meta
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{destination.name}.building.", dir=destination.parent)
+    )
+    try:
+        files = {
+            "texts.jsonl": _write_jsonl(all_texts, staging / "texts.jsonl"),
+            "videos.jsonl": _write_jsonl(all_videos, staging / "videos.jsonl"),
+            "groups.jsonl": _write_jsonl(all_groups, staging / "groups.jsonl"),
+        }
+        splits_payload = {"schema_version": 1, "splits": split_records}
+        atomic_json_dump(splits_payload, staging / "splits.json")
+        resources = {
+            "schema_version": 1,
+            "dataset": config.data.dataset,
+            "release": "configured_audited_release",
+            "source_annotation_sha256": source_hashes,
+            "official_membership_sha256": sha256_file(
+                config.data.official_membership_json
+            ),
+            "agnostic_root": str(Path(config.data.agnostic_root).resolve()),
+            "aware_root": str(Path(config.data.aware_root).resolve()),
+            "agnostic_weight": config.data.agnostic_weight,
+            "feature_sampling": config.data.feature_sampling,
+            "feature_len": config.data.feature_len,
+            "known_unknowns": [
+                "contextual feature rows do not provide ground-truth sign boundaries",
+                "configured feature provenance must be qualified against the released CiCo regime",
+            ],
+            "manifest_implementation_version": "canonical_manifest_v1",
+            "data_config_sha256": sha256_json(asdict(config.data)),
+        }
+        atomic_json_dump(resources, staging / "resources.json")
+        meta = {
+            "schema_version": 1,
+            "status": "ready",
+            "files": files,
+            "splits_sha256": sha256_file(staging / "splits.json"),
+            "resources_sha256": sha256_file(staging / "resources.json"),
+            "content_sha256": sha256_json(
+                {
+                    "files": files,
+                    "splits": splits_payload,
+                    "resources": resources,
+                }
+            ),
+        }
+        atomic_json_dump(meta, staging / "manifest_meta.json")
+        os.replace(staging, destination)
+        return meta
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
