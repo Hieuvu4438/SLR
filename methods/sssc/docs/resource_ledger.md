@@ -32,6 +32,9 @@ L2 error is `0.23802`. Consequently, results from this manifest are matched loca
 measurements, not an exact published-CiCo/UPRet reproduction and not eligible for the broad
 SOTA gate. The release archive is test-only, so using its test features would also create a
 train/test feature-regime mismatch and is not used for model selection.
+The reproducible audit command is `tools/audit_ph_release_features.py`; its ignored report is
+`artifacts/method1/audit/ph_release_feature_alignment.json` with content SHA-256
+`463d41bb2be5d541b0789ffe26eb53ae5ef756eac2ead6a184335667b3f804a9`.
 
 The UPRet repository snapshot contains no visible license file. Source adaptation remains
 attributed and patch-based; redistribution/license compatibility is unresolved and must be

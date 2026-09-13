@@ -43,6 +43,9 @@
       },
       "active_feature_regime": "LOCAL_REEXTRACTED_AGNOSTIC_PLUS_P14T_ADAPTED_AWARE_NOT_EXACT_CICO_RELEASE",
       "complete_ph_test_feature_alignment_audit": {
+        "tool": "methods/sssc/tools/audit_ph_release_features.py",
+        "artifact": "artifacts/method1/audit/ph_release_feature_alignment.json",
+        "content_sha256": "463d41bb2be5d541b0789ffe26eb53ae5ef756eac2ead6a184335667b3f804a9",
         "videos": 642,
         "rows": 54997,
         "all_stream_lengths_match": true,
