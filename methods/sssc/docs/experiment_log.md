@@ -17,6 +17,12 @@ This file records executed runs only. Engineering checks are not reportable retr
   test-only feature substitution.
 - These are source/resource audits, not retrieval results. They do not invalidate the active
   S1 implementation, but they preclude an exact published-resource or broad SOTA claim.
+- A B=3 variable-length, variable-mask comparison ran the pinned UPRet scorer/loss and the
+  Method 1 baseline wrapper from the same initialized model and scoped stochastic realization.
+  Both scalar losses were exactly `1.14267098903656`; across 62 input/scorer/PDE gradient
+  tensors the maximum absolute difference was `8.731149137020111e-10` (maximum difference
+  relative to its tensor peak `9.01e-7`). This rules out the wrapped loss/gradient algebra as
+  the source of the observed S1 dev plateau.
 
 ## 2026-09-13 — PH seed-42 S1 attempt invalidated by stochastic-parity audit
 
