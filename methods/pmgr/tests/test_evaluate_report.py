@@ -151,19 +151,45 @@ def test_phase_b_report_uses_matched_controls_and_ignores_event_rows(tmp_path):
         "C1": "single_mixed_ce",
         "C2": "all_uniform_ce",
         "C3": "all_set_ce",
-        "C3_population": "all_set_ce_population_weighted",
+        "C23_population": "all_set_ce_population_weighted",
         "C4": "group_ce",
     }
-    r1 = {"C0": 60.0, "C1": 61.0, "C2": 62.0, "C3": 63.0, "C3_population": 62.5, "C4": 63.4}
+    r1 = {
+        "C0": 60.0,
+        "C1": 61.0,
+        "C2": 62.0,
+        "C3": 63.0,
+        "C23_population": 62.5,
+        "C4": 63.4,
+    }
     runs = {}
     for arm, mode in modes.items():
         runs[arm] = tmp_path / arm
         _write_run(runs[arm], mode, r1[arm])
     report = build_phase_b_report(runs)
     assert report["strongest_equal_input_positive_control"] == "C3"
+    assert report["strongest_ordinary_positive_control"] == "C3"
+    assert report["selected_population_weighted_mode"] == "all_set_ce_population_weighted"
     assert report["c4_delta_mean_bidirectional_r1_points"] == pytest.approx(0.4)
     assert report["status"] == "population_hypothesis_no_go"
     assert report["research_supported"] is False
     assert report["arms"]["C4"]["exposures"]["effective_steps"] == 1
     assert report["arms"]["C4"]["exposures"]["encoded_video_items"] == 16
     assert report["arms"]["C4"]["exposures"]["peak_allocated_gpu_bytes"] == 1024
+
+
+def test_phase_b_report_rejects_population_variant_of_weaker_positive_control(tmp_path):
+    modes = {
+        "C0": "legacy_cico",
+        "C1": "single_mixed_ce",
+        "C2": "all_uniform_ce",
+        "C3": "all_set_ce",
+        "C23_population": "all_set_ce_population_weighted",
+        "C4": "group_ce",
+    }
+    runs = {}
+    for arm, mode in modes.items():
+        runs[arm] = tmp_path / arm
+        _write_run(runs[arm], mode, 65.0 if arm == "C2" else 60.0)
+    with pytest.raises(ValueError, match="does not match the stronger"):
+        build_phase_b_report(runs)

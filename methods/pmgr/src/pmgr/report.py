@@ -13,12 +13,15 @@ ARM_CONTRACTS = {
     "C1": "single_mixed_ce",
     "C2": "all_uniform_ce",
     "C3": "all_set_ce",
-    "C3_population": "all_set_ce_population_weighted",
+    "C23_population": (
+        "all_uniform_ce_population_weighted",
+        "all_set_ce_population_weighted",
+    ),
     "C4": "group_ce",
 }
 
 
-def _read_run(path: Path, expected_mode: str) -> dict[str, Any]:
+def _read_run(path: Path, expected_mode: str | tuple[str, ...]) -> dict[str, Any]:
     summary_path = path / "summary.json"
     config_path = path / "resolved_config.json"
     metrics_path = path / "best_dev_metrics.json"
@@ -30,8 +33,10 @@ def _read_run(path: Path, expected_mode: str) -> dict[str, Any]:
     best = json.loads(metrics_path.read_text(encoding="utf-8"))
     if summary.get("status") != "training_complete":
         raise ValueError(f"run did not complete training: {path}")
-    if config.get("loss", {}).get("mode") != expected_mode:
-        raise ValueError(f"run {path} is not the expected {expected_mode} arm")
+    actual_mode = config.get("loss", {}).get("mode")
+    allowed_modes = (expected_mode,) if isinstance(expected_mode, str) else expected_mode
+    if actual_mode not in allowed_modes:
+        raise ValueError(f"run {path} is not one of the expected {allowed_modes} arms")
     if best.get("metrics", {}).get("split") != "validation":
         raise ValueError(f"run {path} lacks validation-selected metrics")
     metrics = best["metrics"]
@@ -65,7 +70,7 @@ def _read_run(path: Path, expected_mode: str) -> dict[str, Any]:
             )
     return {
         "path": str(path),
-        "loss_mode": expected_mode,
+        "loss_mode": actual_mode,
         "checkpoint": summary["checkpoint"],
         "best_epoch": best["epoch"],
         "primary_mean_bidirectional_r1": primary,
@@ -80,7 +85,19 @@ def build_phase_b_report(runs: dict[str, Path]) -> dict[str, Any]:
     if set(runs) != set(ARM_CONTRACTS):
         raise ValueError(f"phase-B report requires arms {sorted(ARM_CONTRACTS)}")
     arms = {name: _read_run(runs[name], mode) for name, mode in ARM_CONTRACTS.items()}
-    equal_input_controls = ("C2", "C3", "C3_population")
+    strongest_positive = max(
+        ("C2", "C3"),
+        key=lambda name: arms[name]["primary_mean_bidirectional_r1"],
+    )
+    expected_population_mode = {
+        "C2": "all_uniform_ce_population_weighted",
+        "C3": "all_set_ce_population_weighted",
+    }[strongest_positive]
+    if arms["C23_population"]["loss_mode"] != expected_population_mode:
+        raise ValueError(
+            "population-weighted arm does not match the stronger C2/C3 positive control"
+        )
+    equal_input_controls = ("C2", "C3", "C23_population")
     strongest = max(
         equal_input_controls,
         key=lambda name: arms[name]["primary_mean_bidirectional_r1"],
@@ -95,6 +112,8 @@ def build_phase_b_report(runs: dict[str, Path]) -> dict[str, Any]:
         "split": "validation",
         "test_accessed": False,
         "arms": arms,
+        "strongest_ordinary_positive_control": strongest_positive,
+        "selected_population_weighted_mode": expected_population_mode,
         "strongest_equal_input_positive_control": strongest,
         "c4_delta_mean_bidirectional_r1_points": delta,
         "planning_threshold_points": 0.5,

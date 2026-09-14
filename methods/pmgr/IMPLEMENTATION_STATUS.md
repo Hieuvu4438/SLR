@@ -22,7 +22,7 @@ correctness from measured retrieval evidence.
 | WP4 direct trainer | complete | real-data FP32 CPU smoke, finite gradients, exact resume, step-level recovery and zero-difference checkpoint reload |
 | WP5 replay | complete | direct/replay loss, score, parameter-gradient and next-update parity; C0 dual-channel replay |
 | WP6 distributed | complete | two-worker Gloo real/synthetic smokes, variable video counts and manual SUM equivalence |
-| WP7 pilot | queued | GPU preflight and C0/C1/C2/C3/C3-population/C4 run automatically after GPU 0 is idle |
+| WP7 pilot | queued | GPU preflight and C0/C1/C2/C3/stronger-positive-population/C4 run automatically after GPU 0 is idle |
 | WP8 full study | gated | C6--C8, seeds, transfer and final test remain blocked on the Phase-B stop/go result |
 
 ## Measured baseline-only results

@@ -92,7 +92,7 @@ wait_for_gpu() {
 }
 
 validate_run() {
-  local run_dir=$1 expected_status=$2
+  local run_dir=$1 expected_status=$2 expected_mode=${3:-}
   if [[ ! -f "$run_dir/summary.json" || ! -f "$run_dir/resolved_config.json" ]]; then
     printf '%s run_pending run=%s expected_status=%s\n' \
       "$(date --iso-8601=seconds)" "$run_dir" "$expected_status" >>"$log_path"
@@ -103,19 +103,22 @@ validate_run() {
       "$(date --iso-8601=seconds)" "$run_dir" >>"$log_path"
     return 1
   fi
-  python - "$run_dir" "$expected_status" <<'PY' >>"$log_path" 2>&1
+  python - "$run_dir" "$expected_status" "$expected_mode" <<'PY' >>"$log_path" 2>&1
 import json
 import sys
 from pathlib import Path
 
 run = Path(sys.argv[1])
 expected = sys.argv[2]
+expected_mode = sys.argv[3]
 summary = json.loads((run / "summary.json").read_text(encoding="utf-8"))
 config = json.loads((run / "resolved_config.json").read_text(encoding="utf-8"))
 if summary.get("status") != expected:
     raise ValueError(f"{run}: {summary.get('status')} != {expected}")
 if config["paths"].get("test_index") is not None or config["paths"].get("test_manifest") is not None:
     raise ValueError("pilot configuration unexpectedly unlocks test")
+if expected_mode and config["loss"]["mode"] != expected_mode:
+    raise ValueError(f"{run}: {config['loss']['mode']} != {expected_mode}")
 if summary.get("checkpoint_reload_score_max_abs") != 0.0:
     raise ValueError("checkpoint reload score parity failed")
 print(json.dumps({"run": str(run), "status": expected, "test_accessed": False}))
@@ -139,7 +142,7 @@ python -m pmgr.runtime audit --config "$base_config" \
   --output artifacts/pmgr/phase_b_launch_audit.json >>"$log_path" 2>&1
 
 preflight_run=runs/pmgr_csl_phase_b_preflight_g512
-if ! validate_run "$preflight_run" max_updates_reached; then
+if ! validate_run "$preflight_run" max_updates_reached group_ce; then
   wait_for_gpu
   check_code_state
   check_disk
@@ -150,12 +153,12 @@ if ! validate_run "$preflight_run" max_updates_reached; then
   printf '%s preflight_start effective_groups=512\n' "$(date --iso-8601=seconds)" >>"$log_path"
   timeout "$run_timeout_seconds" env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
     python -m pmgr.train "${preflight_args[@]}" >>"$log_path" 2>&1
-  validate_run "$preflight_run" max_updates_reached
+  validate_run "$preflight_run" max_updates_reached group_ce
 fi
 
 run_arm() {
   local arm=$1 mode=$2 run_dir=$3
-  if validate_run "$run_dir" training_complete; then
+  if validate_run "$run_dir" training_complete "$mode"; then
     printf '%s arm_skip_complete arm=%s run=%s\n' \
       "$(date --iso-8601=seconds)" "$arm" "$run_dir" >>"$log_path"
     return 0
@@ -171,7 +174,7 @@ run_arm() {
     "$(date --iso-8601=seconds)" "$arm" "$mode" "$run_dir" >>"$log_path"
   timeout "$run_timeout_seconds" env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
     python -m pmgr.train "${args[@]}" >>"$log_path" 2>&1
-  validate_run "$run_dir" training_complete
+  validate_run "$run_dir" training_complete "$mode"
   printf '%s arm_complete arm=%s mode=%s run=%s\n' \
     "$(date --iso-8601=seconds)" "$arm" "$mode" "$run_dir" >>"$log_path"
 }
@@ -180,7 +183,25 @@ run_arm C0 legacy_cico runs/pmgr_csl_c0_legacy_seed0
 run_arm C1 single_mixed_ce runs/pmgr_csl_c1_single_mixed_seed0
 run_arm C2 all_uniform_ce runs/pmgr_csl_c2_uniform_seed0
 run_arm C3 all_set_ce runs/pmgr_csl_c3_set_seed0
-run_arm C3_population all_set_ce_population_weighted runs/pmgr_csl_c3_set_population_seed0
+
+population_mode=$(python - <<'PY'
+import json
+from pathlib import Path
+
+def primary(run):
+    value = json.loads((Path(run) / "best_dev_metrics.json").read_text(encoding="utf-8"))
+    metrics = value["metrics"]
+    return 0.5 * (metrics["T2V"]["R1"] + metrics["V2T"]["R1"])
+
+c2 = primary("runs/pmgr_csl_c2_uniform_seed0")
+c3 = primary("runs/pmgr_csl_c3_set_seed0")
+print("all_uniform_ce_population_weighted" if c2 >= c3 else "all_set_ce_population_weighted")
+PY
+)
+population_run="runs/pmgr_csl_c23_${population_mode}_seed0"
+printf '%s population_control_selected mode=%s run=%s\n' \
+  "$(date --iso-8601=seconds)" "$population_mode" "$population_run" >>"$log_path"
+run_arm C23_population "$population_mode" "$population_run"
 run_arm C4 group_ce runs/pmgr_csl_c4_group_seed0
 
 python -m pmgr.report \
@@ -188,7 +209,7 @@ python -m pmgr.report \
   --c1 runs/pmgr_csl_c1_single_mixed_seed0 \
   --c2 runs/pmgr_csl_c2_uniform_seed0 \
   --c3 runs/pmgr_csl_c3_set_seed0 \
-  --c3-population runs/pmgr_csl_c3_set_population_seed0 \
+  --c23-population "$population_run" \
   --c4 runs/pmgr_csl_c4_group_seed0 \
   --output "$report_path" >>"$log_path" 2>&1
 
