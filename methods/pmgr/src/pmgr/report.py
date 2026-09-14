@@ -37,8 +37,16 @@ def _read_run(path: Path, expected_mode: str) -> dict[str, Any]:
     metrics = best["metrics"]
     primary = 0.5 * (metrics["T2V"]["R1"] + metrics["V2T"]["R1"])
     log_path = path / "train.jsonl"
-    exposures = {"loaded_videos": 0, "candidate_pairs": 0, "effective_steps": 0,
-                 "seconds_per_update": 0.0}
+    exposures = {
+        "loaded_videos": 0,
+        "candidate_pairs": 0,
+        "encoded_video_items": 0,
+        "encoded_text_views": 0,
+        "effective_steps": 0,
+        "accelerator_seconds": 0.0,
+        "seconds_per_update": 0.0,
+        "peak_allocated_gpu_bytes": 0,
+    }
     with log_path.open(encoding="utf-8") as handle:
         for line in handle:
             value = json.loads(line)
@@ -46,8 +54,15 @@ def _read_run(path: Path, expected_mode: str) -> dict[str, Any]:
                 continue
             exposures["loaded_videos"] += int(value["loaded_videos"])
             exposures["candidate_pairs"] += int(value["candidate_pairs"])
+            exposures["encoded_video_items"] += int(value["encoded_video_items"])
+            exposures["encoded_text_views"] += int(value["encoded_text_views"])
             exposures["effective_steps"] += 1
+            exposures["accelerator_seconds"] += float(value["accelerator_seconds"])
             exposures["seconds_per_update"] += float(value["seconds_per_update"])
+            exposures["peak_allocated_gpu_bytes"] = max(
+                exposures["peak_allocated_gpu_bytes"],
+                int(value["peak_allocated_gpu_bytes"]),
+            )
     return {
         "path": str(path),
         "loss_mode": expected_mode,

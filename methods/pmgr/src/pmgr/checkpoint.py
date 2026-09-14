@@ -32,11 +32,15 @@ def save_checkpoint(
     effective_step: int,
     best: dict[str, Any] | None,
     provenance: dict[str, Any],
+    sampler_state: dict[str, Any],
+    progress: dict[str, Any],
+    validation_history: list[dict[str, Any]],
+    resume_invariants: dict[str, Any],
 ) -> dict[str, Any]:
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "format": "pmgr-training-v1",
+        "format": "pmgr-training-v2",
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
         "epoch": int(epoch),
@@ -47,6 +51,10 @@ def save_checkpoint(
         "config": config,
         "config_hash": config_hash(config),
         "provenance": provenance,
+        "sampler_state": sampler_state,
+        "progress": progress,
+        "validation_history": validation_history,
+        "resume_invariants": resume_invariants,
         "schedule_state": {"effective_step": int(effective_step)},
         "resume_policy": "resume_exact",
     }
@@ -62,10 +70,30 @@ def save_checkpoint(
     return {"path": str(output), "sha256": sha256_file(output), "bytes": output.stat().st_size}
 
 
-def validate_resume(raw: Any, config: dict[str, Any]) -> None:
-    if not isinstance(raw, dict) or raw.get("format") != "pmgr-training-v1":
+def validate_resume(
+    raw: Any,
+    config: dict[str, Any],
+    *,
+    resume_invariants: dict[str, Any] | None = None,
+) -> None:
+    if not isinstance(raw, dict) or raw.get("format") != "pmgr-training-v2":
         raise ValueError("exact resume requires a PMGR training checkpoint")
     if raw.get("config_hash") != config_hash(config):
         raise ValueError("resume config hash differs; use a new weights-only experiment")
     if raw.get("resume_policy") != "resume_exact" or "rng" not in raw:
         raise ValueError("checkpoint lacks exact-resume state")
+    required = ("sampler_state", "progress", "validation_history", "resume_invariants")
+    missing = [name for name in required if name not in raw]
+    if missing:
+        raise ValueError("checkpoint lacks ledger fields: " + ", ".join(missing))
+    sampler = raw["sampler_state"]
+    if (
+        sampler.get("epoch") != raw.get("epoch")
+        or sampler.get("cursor") != raw.get("sampler_cursor")
+        or not isinstance(sampler.get("permutation"), list)
+    ):
+        raise ValueError("checkpoint sampler ledger is inconsistent")
+    if raw["progress"].get("effective_steps") != raw.get("effective_step"):
+        raise ValueError("checkpoint progress ledger is inconsistent")
+    if resume_invariants is not None and raw["resume_invariants"] != resume_invariants:
+        raise ValueError("resume invariant changed; start a new weights-only experiment")

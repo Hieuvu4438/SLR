@@ -23,6 +23,7 @@ from pmgr.evaluate import evaluate_model
 from pmgr.losses import objective_loss
 from pmgr.model import build_retriever, load_tokenizer
 from pmgr.optimizer import build_inherited_bert_adam
+from pmgr.provenance import build_resume_invariants
 from pmgr.replay import two_level_backward
 from pmgr.scoring import mixed_pair_scores
 from slr_common.utils import atomic_json_dump, git_worktree_state, restore_rng_state, sha256_file
@@ -90,6 +91,19 @@ def _selection(metrics: dict[str, Any]) -> tuple[float, float]:
     return primary, secondary
 
 
+def _sampler_state(
+    sampler: GroupBatchSampler, *, epoch: int, cursor: int
+) -> dict[str, Any]:
+    return {
+        "epoch": int(epoch),
+        "cursor": int(cursor),
+        "permutation": sampler.permutation(epoch=epoch),
+        "drop_last": sampler.drop_last,
+        "batch_size": sampler.batch_size,
+        "group_count": sampler.group_count,
+    }
+
+
 def train(
     config: dict[str, Any],
     output_dir: Path,
@@ -111,6 +125,21 @@ def train(
         atomic_json_dump(config, output_dir / "resolved_config.json")
     if distributed:
         dist.barrier()
+    resume_invariants: dict[str, Any] | None = None
+    invariant_error: BaseException | None = None
+    if rank == 0:
+        try:
+            resume_invariants = build_resume_invariants(
+                config, repository_root=Path.cwd(), world_size=world_size
+            )
+        except BaseException as error:
+            invariant_error = error
+    coordinated_error(invariant_error, device)
+    if distributed:
+        invariant_objects = [resume_invariants]
+        dist.broadcast_object_list(invariant_objects, src=0)
+        resume_invariants = invariant_objects[0]
+    assert resume_invariants is not None
     checkpoint_path = resume or Path(config["paths"]["initialization_checkpoint"])
     model, raw = build_retriever(config, checkpoint=checkpoint_path, device=device)
     tokenizer = load_tokenizer(config)
@@ -139,23 +168,40 @@ def train(
     cursor = 0
     effective_step = 0
     best: dict[str, Any] | None = None
+    progress: dict[str, Any] = {
+        "effective_steps": 0,
+        "groups_processed": 0,
+        "videos_processed": 0,
+        "candidate_pairs_processed": 0,
+        "video_encoder_items_processed": 0,
+        "text_views_encoded": 0,
+        "accelerator_seconds": 0.0,
+        "wall_seconds": 0.0,
+    }
+    validation_history: list[dict[str, Any]] = []
     if resume is not None:
-        validate_resume(raw, config)
+        validate_resume(raw, config, resume_invariants=resume_invariants)
         optimizer.load_state_dict(raw["optimizer"])
         start_epoch = int(raw["epoch"])
         cursor = int(raw["sampler_cursor"])
         effective_step = int(raw["effective_step"])
         best = raw.get("best")
+        progress = dict(raw["progress"])
+        validation_history = list(raw["validation_history"])
+        expected_sampler_state = _sampler_state(sampler, epoch=start_epoch, cursor=cursor)
+        if raw["sampler_state"] != expected_sampler_state:
+            raise ValueError("resume sampler permutation or cursor changed")
         restore_rng_state(raw["rng"])
     provenance = {
         "repository": git_worktree_state(Path.cwd()),
+        "resume_invariants": resume_invariants,
         "upstream_commit": config["upstream_commit"],
         "initialization": {
             "path": str(checkpoint_path), "sha256": sha256_file(checkpoint_path),
             "mode": "resume_exact" if resume else config["initialization_mode"],
         },
-        "train_index_sha256": sha256_file(config["paths"]["train_index"]),
-        "validation_index_sha256": sha256_file(config["paths"]["validation_index"]),
+        "train_index_sha256": resume_invariants["resources"]["train_index"]["sha256"],
+        "validation_index_sha256": resume_invariants["resources"]["validation_index"]["sha256"],
         "config_sha256": config_hash(config),
         "optimizer": "pinned_CiCo_BertAdam_warmup_cosine",
         "engine": config["engine"]["mode"],
@@ -165,14 +211,38 @@ def train(
     }
     log_path = output_dir / "train.jsonl"
     started = time.time()
+    prior_wall_seconds = float(progress["wall_seconds"])
+
+    def save_training_checkpoint(path: Path, *, epoch: int, cursor: int):
+        current_progress = dict(progress)
+        current_progress["wall_seconds"] = prior_wall_seconds + time.time() - started
+        return save_checkpoint(
+            path,
+            model=model,
+            optimizer=optimizer,
+            config=config,
+            epoch=epoch,
+            sampler_cursor=cursor,
+            effective_step=effective_step,
+            best=best,
+            provenance=provenance,
+            sampler_state=_sampler_state(sampler, epoch=epoch, cursor=cursor),
+            progress=current_progress,
+            validation_history=validation_history,
+            resume_invariants=resume_invariants,
+        )
+
     stopped = False
     last_batch: dict[str, Any] | None = None
     last_scores: torch.Tensor | None = None
     next_epoch, next_cursor = start_epoch, cursor
+    checkpoint = None
     for epoch in range(start_epoch, int(config["training"]["epochs"])):
         sampler.set_epoch(epoch, cursor=cursor if epoch == start_epoch else 0)
         for batch_position, indexes in enumerate(sampler, start=sampler.cursor):
             update_started = time.time()
+            if device.type == "cuda":
+                torch.cuda.reset_peak_memory_stats(device)
             collator.set_position(epoch, effective_step)
             if distributed:
                 groups_per_rank = len(indexes) // world_size
@@ -193,6 +263,12 @@ def train(
             coordinated_error(load_error, device)
             assert batch is not None
             data_loading_seconds = time.time() - load_started
+            compute_started = time.time()
+            cuda_start = cuda_end = None
+            if device.type == "cuda":
+                cuda_start = torch.cuda.Event(enable_timing=True)
+                cuda_end = torch.cuda.Event(enable_timing=True)
+                cuda_start.record()
             model.train()
             optimizer.zero_grad(set_to_none=True)
             if config["engine"]["mode"] == "direct":
@@ -231,6 +307,13 @@ def train(
             optimizer.step()
             with torch.no_grad():
                 model.logit_scale.clamp_(max=math.log(float(config["scoring"]["maximum_contrast_scale"])))
+            if cuda_end is not None:
+                cuda_end.record()
+                cuda_end.synchronize()
+                assert cuda_start is not None
+                accelerator_seconds = float(cuda_start.elapsed_time(cuda_end) / 1000.0)
+            else:
+                accelerator_seconds = time.time() - compute_started
             effective_step += 1
             next_epoch, next_cursor = epoch, batch_position + 1
             if next_cursor == len(sampler):
@@ -259,6 +342,21 @@ def train(
                 "gradient_norm_before_clip": float(gradient_norm),
                 "encoder_forward_calls": encoder_forward_calls,
                 "score_block_replays": score_block_replays,
+                "encoded_video_items": (
+                    2 * replay.global_video_count
+                    if distributed
+                    else (2 if config["engine"]["mode"] == "two_level_replay" else 1)
+                    * len(batch["video_ids"])
+                ),
+                "encoded_text_views": (
+                    (4 if config["engine"]["mode"] == "two_level_replay" else 2)
+                    * (
+                        replay.global_group_count
+                        if distributed
+                        else len(batch["group_ids"])
+                    )
+                ),
+                "accelerator_seconds": accelerator_seconds,
                 "seconds_per_update": time.time() - update_started,
                 "data_loading_seconds": data_loading_seconds,
                 "peak_allocated_gpu_bytes": torch.cuda.max_memory_allocated(device) if device.type == "cuda" else 0,
@@ -274,11 +372,30 @@ def train(
                 ),
                 "world_size": world_size,
             }
+            progress["effective_steps"] = effective_step
+            progress["groups_processed"] += int(record["effective_groups"])
+            progress["videos_processed"] += int(record["loaded_videos"])
+            progress["candidate_pairs_processed"] += int(record["candidate_pairs"])
+            progress["video_encoder_items_processed"] += int(record["encoded_video_items"])
+            progress["text_views_encoded"] += int(record["encoded_text_views"])
+            progress["accelerator_seconds"] += float(record["accelerator_seconds"])
             if rank == 0:
                 with log_path.open("a", encoding="utf-8") as handle:
                     handle.write(json.dumps(record, sort_keys=True) + "\n")
             last_batch = batch
-            if max_updates is not None and effective_step >= max_updates:
+            reached_limit = max_updates is not None and effective_step >= max_updates
+            # At an ordinary epoch boundary, validation must enter the same recovery
+            # checkpoint. Other steps can be committed immediately.
+            save_recovery = reached_limit or next_cursor != 0
+            if rank == 0 and save_recovery:
+                checkpoint = save_training_checkpoint(
+                    output_dir / "checkpoints" / "last.pt",
+                    epoch=next_epoch,
+                    cursor=next_cursor,
+                )
+            if distributed and save_recovery:
+                dist.barrier()
+            if reached_limit:
                 stopped = True
                 break
         cursor = 0
@@ -307,18 +424,19 @@ def train(
             primary, secondary = _selection(metrics)
             candidate = {"epoch": epoch, "effective_step": effective_step, "primary": primary,
                          "secondary": secondary, "metrics": metrics}
+            validation_history.append(candidate)
             if best is None or (primary, secondary) > (best["primary"], best["secondary"]):
                 best = candidate
-                save_checkpoint(
-                    output_dir / "checkpoints" / "best_dev.pt", model=model, optimizer=optimizer,
-                    config=config, epoch=epoch + 1, sampler_cursor=0, effective_step=effective_step,
-                    best=best, provenance=provenance,
+                save_training_checkpoint(
+                    output_dir / "checkpoints" / "best_dev.pt",
+                    epoch=epoch + 1,
+                    cursor=0,
                 )
                 atomic_json_dump(best, output_dir / "best_dev_metrics.json")
-            save_checkpoint(
-                output_dir / "checkpoints" / "last.pt", model=model, optimizer=optimizer,
-                config=config, epoch=epoch + 1, sampler_cursor=0,
-                effective_step=effective_step, best=best, provenance=provenance,
+            checkpoint = save_training_checkpoint(
+                output_dir / "checkpoints" / "last.pt",
+                epoch=epoch + 1,
+                cursor=0,
             )
         if distributed:
             dist.barrier()
@@ -326,12 +444,11 @@ def train(
         model.eval()
         with torch.no_grad():
             last_scores = _score(model, model.encode_pmgr_batch(last_batch), config)[0]
-    checkpoint = None
     if rank == 0:
-        checkpoint = save_checkpoint(
-            output_dir / "checkpoints" / "last.pt", model=model, optimizer=optimizer,
-            config=config, epoch=next_epoch, sampler_cursor=next_cursor, effective_step=effective_step,
-            best=best, provenance=provenance,
+        checkpoint = save_training_checkpoint(
+            output_dir / "checkpoints" / "last.pt",
+            epoch=next_epoch,
+            cursor=next_cursor,
         )
     if distributed:
         dist.barrier()
@@ -353,7 +470,12 @@ def train(
         "checkpoint": checkpoint,
         "checkpoint_reload_score_max_abs": reload_max_abs,
         "best_dev": best,
-        "elapsed_seconds": time.time() - started,
+        "validation_history": validation_history,
+        "progress": {
+            **progress,
+            "wall_seconds": prior_wall_seconds + time.time() - started,
+        },
+        "elapsed_seconds": prior_wall_seconds + time.time() - started,
     }
     if rank == 0:
         atomic_json_dump(summary, output_dir / "summary.json")

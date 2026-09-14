@@ -148,7 +148,10 @@ def build_retriever(
     # The historical constructor converts many CLIP tensors to half precision. PMGR's
     # reference/replay engine is explicitly FP32; this also avoids unsupported CPU half backward.
     model = PMGRRetriever(core).to(device).float()
-    if isinstance(raw, dict) and raw.get("format") == "pmgr-training-v1":
+    if isinstance(raw, dict) and raw.get("format") in {
+        "pmgr-training-v1",
+        "pmgr-training-v2",
+    }:
         incompatible = model.load_state_dict(_state_dict(raw), strict=True)
         if incompatible.missing_keys or incompatible.unexpected_keys:
             raise CheckpointContractError(f"PMGR checkpoint mismatch: {incompatible}")

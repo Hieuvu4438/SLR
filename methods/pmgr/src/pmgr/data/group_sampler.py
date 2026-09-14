@@ -28,8 +28,13 @@ class GroupBatchSampler(Sampler[list[int]]):
         self.epoch = int(epoch)
         self.cursor = int(cursor)
 
-    def permutation(self) -> list[int]:
-        generator = np.random.default_rng(stable_seed(self.seed, self.epoch, "pmgr_group_order"))
+    def permutation(self, *, epoch: int | None = None) -> list[int]:
+        selected_epoch = self.epoch if epoch is None else int(epoch)
+        if selected_epoch < 0:
+            raise ValueError("sampler epoch must be non-negative")
+        generator = np.random.default_rng(
+            stable_seed(self.seed, selected_epoch, "pmgr_group_order")
+        )
         return [int(value) for value in generator.permutation(self.group_count)]
 
     @property

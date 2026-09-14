@@ -52,3 +52,18 @@ def test_training_never_accepts_unlocked_test_paths():
     config["paths"]["test_index"] = "some/test.json"
     with pytest.raises(ConfigError, match="test remains locked"):
         validate_config(config, mode="train")
+
+
+def test_matched_arm_constants_cannot_silently_drift():
+    config = _config()
+    config["scoring"]["dual_mix"] = 0.6
+    with pytest.raises(ConfigError, match="dual_mix=0.5"):
+        validate_config(config)
+    config = _config()
+    config["training"]["beta2"] = 0.999
+    with pytest.raises(ConfigError, match="beta2"):
+        validate_config(config)
+    config = _config()
+    config["validation"]["primary"] = "T2V_R1_only"
+    with pytest.raises(ConfigError, match="full-gallery policy"):
+        validate_config(config)

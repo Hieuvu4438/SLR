@@ -99,7 +99,11 @@ def _write_run(path: Path, mode: str, r1: float) -> None:
             {
                 "loaded_videos": 8,
                 "candidate_pairs": 32,
+                "encoded_video_items": 16,
+                "encoded_text_views": 8,
+                "accelerator_seconds": 0.4,
                 "seconds_per_update": 0.5,
+                "peak_allocated_gpu_bytes": 1024,
             }
         )
         + "\n"
@@ -128,3 +132,5 @@ def test_phase_b_report_uses_matched_controls_and_ignores_event_rows(tmp_path):
     assert report["status"] == "population_hypothesis_no_go"
     assert report["research_supported"] is False
     assert report["arms"]["C4"]["exposures"]["effective_steps"] == 1
+    assert report["arms"]["C4"]["exposures"]["encoded_video_items"] == 16
+    assert report["arms"]["C4"]["exposures"]["peak_allocated_gpu_bytes"] == 1024

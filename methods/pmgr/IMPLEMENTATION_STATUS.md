@@ -19,7 +19,7 @@ correctness from measured retrieval evidence.
 | WP1 data | complete | canonical indexes: train 6,598 groups/18,401 videos; dev 797/1,077; disjoint IDs and complete feature paths |
 | WP2 scorer/eval | complete | unscaled mixed score, explicit masks/IDs, stable full-gallery ranks and streamed group maximum tests |
 | WP3 objectives | complete | C0--C8 objective modes, FP64 oracle, population factor, permutation and autograd checks |
-| WP4 direct trainer | complete | real-data FP32 CPU smoke, finite gradients, exact resume and zero-difference checkpoint reload |
+| WP4 direct trainer | complete | real-data FP32 CPU smoke, finite gradients, exact resume, step-level recovery and zero-difference checkpoint reload |
 | WP5 replay | complete | direct/replay loss, score, parameter-gradient and next-update parity; C0 dual-channel replay |
 | WP6 distributed | complete | two-worker Gloo real/synthetic smokes, variable video counts and manual SUM equivalence |
 | WP7 pilot | queued | GPU preflight and C0/C1/C2/C3/C3-population/C4 run automatically after GPU 0 is idle |
@@ -44,4 +44,6 @@ same corrected mask policy. No tied scores were observed in this baseline evalua
 Indexes, audits, smoke checkpoints, logs, evaluation matrices and reports live under
 `artifacts/` and `runs/`, both intentionally ignored by Git. The queue log is
 `artifacts/pmgr/logs/csl_phase_b_seed0_queue.log`; the eventual measured report is
-`artifacts/pmgr/csl_phase_b_seed0_report.json`.
+`artifacts/pmgr/csl_phase_b_seed0_report.json`. Checkpoint format v2 records the sampler
+permutation/cursor, validation history, cumulative data exposure and wall time, runtime packages,
+implementation diff identity, and hashes of every configured manifest/index/baseline resource.

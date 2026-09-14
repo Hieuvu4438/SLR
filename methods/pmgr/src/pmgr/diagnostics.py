@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -32,6 +33,32 @@ def _comparison(reference: torch.Tensor, candidate: torch.Tensor) -> dict[str, f
         "norm_ratio_to_group_ce": float(right_norm / left_norm.clamp_min(1e-12)),
         "group_ce_norm": float(left_norm),
         "candidate_norm": float(right_norm),
+    }
+
+
+def _gradient_attribution(
+    reference: torch.Tensor,
+    candidate: torch.Tensor,
+    *,
+    video_ids: list[str],
+    group_ids: list[str],
+    owner: torch.Tensor,
+    limit: int = 10,
+) -> dict[str, Any]:
+    row_delta = (reference - candidate).norm(dim=1)
+    group_delta = torch.zeros(len(group_ids), dtype=row_delta.dtype, device=row_delta.device)
+    group_delta.index_add_(0, owner, row_delta)
+    video_order = torch.argsort(row_delta, descending=True, stable=True)[:limit].cpu().tolist()
+    group_order = torch.argsort(group_delta, descending=True, stable=True)[:limit].cpu().tolist()
+    return {
+        "largest_video_gradient_discrepancies": [
+            {"video_id": video_ids[position], "l2": float(row_delta[position])}
+            for position in video_order
+        ],
+        "largest_group_gradient_discrepancies": [
+            {"group_id": group_ids[position], "summed_video_l2": float(group_delta[position])}
+            for position in group_order
+        ],
     }
 
 
@@ -85,7 +112,17 @@ def population_diagnostic(
     for mode in ("all_uniform_ce", "all_set_ce"):
         candidate = q.detach().requires_grad_(True)
         output = objective_loss(mode, candidate, **common)
-        comparisons[mode] = _comparison(group_gradient, _gradient(output["loss"], candidate))
+        candidate_gradient = _gradient(output["loss"], candidate)
+        comparisons[mode] = {
+            **_comparison(group_gradient, candidate_gradient),
+            **_gradient_attribution(
+                group_gradient,
+                candidate_gradient,
+                video_ids=batch["video_ids"],
+                group_ids=batch["group_ids"],
+                owner=owner,
+            ),
+        }
     group_scores = whole_group_max(q, owner)
     draw_reports = []
     for draw in range(draws):
@@ -115,6 +152,13 @@ def population_diagnostic(
                 "selected_video_ids": [batch["video_ids"][position] for position in positions],
                 "queries_with_changed_candidate_order": int((full_order != rep_order).any(dim=1).sum()),
                 **_comparison(group_gradient, embedded),
+                **_gradient_attribution(
+                    group_gradient,
+                    embedded,
+                    video_ids=batch["video_ids"],
+                    group_ids=batch["group_ids"],
+                    owner=owner,
+                ),
             }
         )
     return {
@@ -170,6 +214,12 @@ def weak_performance_diagnostic(
             members = [position for position, value in enumerate(owner) if value == group]
             ranks = [metrics["V2T"]["ranks"][position] for position in members]
             member_scores = positive[members]
+            member_gallery_scores = scores[members, :]
+            winning_offsets = member_gallery_scores.argmax(axis=0)
+            winning_counts = np.bincount(winning_offsets, minlength=len(members))
+            maxima = member_gallery_scores.max(axis=0, keepdims=True)
+            exact_max_ties = int(((member_gallery_scores == maxima).sum(axis=0) > 1).sum())
+            positive_winner = int(member_scores.argmax())
             per_group.append(
                 {
                     "group_id": record.group_id,
@@ -182,6 +232,21 @@ def weak_performance_diagnostic(
                     "t2v_margin": float(t2v_margins[group]),
                     "v2t_margin_min": float(v2t_margins[members].min()),
                     "v2t_margin_mean": float(v2t_margins[members].mean()),
+                    "positive_group_max_winner_video_id": video_ids[members[positive_winner]],
+                    "group_max_winning_frequency": {
+                        video_ids[position]: int(winning_counts[offset])
+                        for offset, position in enumerate(members)
+                    },
+                    "candidate_queries_with_exact_group_max_tie": exact_max_ties,
+                    "video_queries": [
+                        {
+                            "video_id": video_ids[position],
+                            "v2t_rank": metrics["V2T"]["ranks"][position],
+                            "positive_score": float(positive[position]),
+                            "margin": float(v2t_margins[position]),
+                        }
+                        for position in members
+                    ],
                 }
             )
         evaluations[label] = {"checkpoint": str(checkpoint), "metrics": metrics, "groups": per_group}
@@ -191,7 +256,31 @@ def weak_performance_diagnostic(
     baseline_groups = evaluations["baseline"]["groups"]
     candidate_groups = evaluations["candidate"]["groups"]
     concentration_failures = []
+    t2v_rank_changes = []
+    v2t_rank_changes = []
     for before, after in zip(baseline_groups, candidate_groups, strict=True):
+        t2v_rank_changes.append(
+            {
+                "group_id": before["group_id"],
+                "before": before["t2v_rank"],
+                "after": after["t2v_rank"],
+                "delta_after_minus_before": after["t2v_rank"] - before["t2v_rank"],
+            }
+        )
+        for before_video, after_video in zip(
+            before["video_queries"], after["video_queries"], strict=True
+        ):
+            v2t_rank_changes.append(
+                {
+                    "video_id": before_video["video_id"],
+                    "group_id": before["group_id"],
+                    "before": before_video["v2t_rank"],
+                    "after": after_video["v2t_rank"],
+                    "delta_after_minus_before": (
+                        after_video["v2t_rank"] - before_video["v2t_rank"]
+                    ),
+                }
+            )
         if after["t2v_rank"] < before["t2v_rank"] and after["v2t_rank_max"] > before["v2t_rank_max"]:
             concentration_failures.append(
                 {
@@ -220,6 +309,15 @@ def weak_performance_diagnostic(
         "split": "validation",
         "test_accessed": False,
         "evaluations": evaluations,
+        "query_rank_changes": {"T2V": t2v_rank_changes, "V2T": v2t_rank_changes},
+        "rank_change_counts": {
+            direction: {
+                "improved": sum(item["delta_after_minus_before"] < 0 for item in items),
+                "unchanged": sum(item["delta_after_minus_before"] == 0 for item in items),
+                "degraded": sum(item["delta_after_minus_before"] > 0 for item in items),
+            }
+            for direction, items in (("T2V", t2v_rank_changes), ("V2T", v2t_rank_changes))
+        },
         "groups_with_t2v_improvement_and_worst_v2t_degradation": concentration_failures,
         "group_size_summary": size_summary,
     }

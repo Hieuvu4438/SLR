@@ -54,7 +54,6 @@ _LOSS_MODES = {
     "all_uniform_ce_population_weighted", "all_set_ce_population_weighted",
     "group_ce_batch_mean", "single_rank", "pmgr", "smooth_ap_single_positive_control",
 }
-_SINGLE_MODES = {"legacy_cico", "single_mixed_ce", "single_rank"}
 _CE_ONLY_MODES = {
     "legacy_cico", "single_mixed_ce", "all_uniform_ce", "all_set_ce", "group_ce",
     "all_uniform_ce_population_weighted", "all_set_ce_population_weighted",
@@ -97,18 +96,29 @@ def validate_config(config: Mapping[str, Any], *, mode: str = "audit") -> None:
     if config.get("initialization_mode") not in {"weights_only_continuation", "full_reproduction"}:
         raise ConfigError("unsupported initialization_mode")
     data = config["data"]
-    if data["feature_mix"] != "sum" or not 0.0 <= float(data["feature_mix_alpha"]) <= 1.0:
-        raise ConfigError("PMGR supports only a valid fixed sum feature mixture")
+    if data["feature_mix"] != "sum" or float(data["feature_mix_alpha"]) != 0.8:
+        raise ConfigError("PMGR matched arms require the reproduced sum mixture with alpha=0.8")
     if int(data["max_features"]) < 1 or int(data["max_text_tokens"]) < 2:
         raise ConfigError("feature/text lengths must be positive")
     augmentation = data["text_augmentation"]
     if augmentation["kind"] != "random_swap" or not 0 <= float(augmentation["probability"]) <= 1:
         raise ConfigError("text augmentation must use the declared random_swap policy")
+    for prefix in ("train", "validation"):
+        groups = int(data[f"expected_{prefix}_groups"])
+        videos = int(data[f"expected_{prefix}_videos"])
+        if groups < 1 or videos < groups:
+            raise ConfigError(f"invalid expected {prefix} population counts")
     scoring = config["scoring"]
     if scoring["mask_policy"] not in {"valid_tokens_only", "legacy_unmasked"}:
         raise ConfigError("unsupported mask policy")
     if not 0 <= float(scoring["dual_mix"]) <= 1 or float(scoring["inner_temperature"]) <= 0:
         raise ConfigError("invalid scorer constants")
+    if (
+        float(scoring["dual_mix"]) != 0.5
+        or float(scoring["inner_temperature"]) != 0.07
+        or float(scoring["maximum_contrast_scale"]) != 100.0
+    ):
+        raise ConfigError("matched PMGR arms require dual_mix=0.5, sigma=0.07, and scale cap=100")
     loss = config["loss"]
     if loss["mode"] not in _LOSS_MODES or not 0 <= float(loss["rank_mix"]) <= 1:
         raise ConfigError("invalid loss mode or rank mixture")
@@ -124,6 +134,23 @@ def validate_config(config: Mapping[str, Any], *, mode: str = "audit") -> None:
     training = config["training"]
     if training["optimizer"] != "inherited_BertAdam" or training["clipping_policy"] != "legacy_global_and_parameter":
         raise ConfigError("initial PMGR runs must preserve the inherited optimizer/clipping policy")
+    exact_optimizer = {
+        "learning_rate": 1e-5,
+        "coef_lr": 1.0,
+        "warmup_fraction": 0.1,
+        "beta1": 0.9,
+        "beta2": 0.98,
+        "epsilon": 1e-6,
+        "weight_decay": 0.001,
+    }
+    changed_optimizer = [
+        name for name, expected in exact_optimizer.items() if float(training[name]) != expected
+    ]
+    if changed_optimizer:
+        raise ConfigError(
+            "matched PMGR arms changed inherited optimizer fields: "
+            + ", ".join(changed_optimizer)
+        )
     for name in ("effective_groups", "epochs", "gradient_accumulation_steps", "num_workers"):
         minimum = 2 if name == "effective_groups" else 1
         if int(training[name]) < minimum:
@@ -143,10 +170,18 @@ def validate_config(config: Mapping[str, Any], *, mode: str = "audit") -> None:
     ):
         if int(engine[name]) < 1:
             raise ConfigError(f"engine.{name} must be positive")
-    if config["validation"]["metric_policy"] != "stable_candidate_order_v1":
-        raise ConfigError("validation must use the stable candidate-order protocol")
+    validation = config["validation"]
+    if (
+        validation["metric_policy"] != "stable_candidate_order_v1"
+        or validation["primary"] != "mean_t2v_v2t_r1"
+        or validation["secondary"] != "mean_bidirectional_r5_r10"
+        or validation["tie_break"] != "earliest_epoch"
+    ):
+        raise ConfigError("validation selection must use the declared stable full-gallery policy")
+    if int(validation["every_epochs"]) < 1:
+        raise ConfigError("validation.every_epochs must be positive")
     for name in ("video_encoder_batch", "text_encoder_batch", "score_video_block", "score_text_block"):
-        if int(config["validation"][name]) < 1:
+        if int(validation[name]) < 1:
             raise ConfigError(f"validation.{name} must be positive")
     paths = config["paths"]
     if paths["test_manifest"] is not None or paths["test_index"] is not None:
