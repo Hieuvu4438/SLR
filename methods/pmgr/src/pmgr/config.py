@@ -25,6 +25,7 @@ _SCHEMA: dict[str, set[str]] = {
         "feature_mix", "feature_mix_alpha", "max_features", "max_text_tokens",
         "text_augmentation", "expected_train_groups", "expected_train_videos",
         "expected_validation_groups", "expected_validation_videos",
+        "expected_test_groups", "expected_test_videos",
         "drop_incomplete_group_batch",
     },
     "data.text_augmentation": {"enabled", "kind", "probability"},
@@ -85,6 +86,8 @@ def _required(config: Mapping[str, Any], section: str, names: set[str]) -> None:
 
 
 def validate_config(config: Mapping[str, Any], *, mode: str = "audit") -> None:
+    if mode not in {"audit", "train", "validation", "final_test"}:
+        raise ConfigError(f"unsupported config validation mode: {mode}")
     _check_unknown(config)
     for section in ("paths", "data", "scoring", "loss", "training", "engine", "validation"):
         _required(config, section, _SCHEMA[section])
@@ -108,6 +111,13 @@ def validate_config(config: Mapping[str, Any], *, mode: str = "audit") -> None:
         videos = int(data[f"expected_{prefix}_videos"])
         if groups < 1 or videos < groups:
             raise ConfigError(f"invalid expected {prefix} population counts")
+    test_counts = (data["expected_test_groups"], data["expected_test_videos"])
+    if (test_counts[0] is None) != (test_counts[1] is None):
+        raise ConfigError("test group/video counts must be both null or both populated")
+    if test_counts[0] is not None:
+        test_groups, test_videos = map(int, test_counts)
+        if test_groups < 1 or test_videos < test_groups:
+            raise ConfigError("invalid expected test population counts")
     scoring = config["scoring"]
     if scoring["mask_policy"] not in {"valid_tokens_only", "legacy_unmasked"}:
         raise ConfigError("unsupported mask policy")
@@ -184,8 +194,13 @@ def validate_config(config: Mapping[str, Any], *, mode: str = "audit") -> None:
         if int(validation[name]) < 1:
             raise ConfigError(f"validation.{name} must be positive")
     paths = config["paths"]
-    if paths["test_manifest"] is not None or paths["test_index"] is not None:
-        raise ConfigError("CSL test remains locked until dev selection in this configuration")
+    test_paths = (paths["test_manifest"], paths["test_index"])
+    if (test_paths[0] is None) != (test_paths[1] is None):
+        raise ConfigError("test manifest/index must be both null or both populated")
+    if mode in {"train", "validation"} and any(path is not None for path in test_paths):
+        raise ConfigError(f"test remains locked during {mode}")
+    if mode == "final_test" and (any(path is None for path in test_paths) or test_counts[0] is None):
+        raise ConfigError("final_test requires explicit test manifest, index, and population counts")
     if mode != "audit":
         required_paths = ("train_index", "validation_index", "baseline_resolved_args", "initialization_checkpoint", "cico_root")
         unresolved = [name for name in required_paths if not paths.get(name)]
@@ -210,7 +225,9 @@ def config_hash(config: Mapping[str, Any]) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def resolved_with_overrides(config: Mapping[str, Any], **overrides: Any) -> dict[str, Any]:
+def resolved_with_overrides(
+    config: Mapping[str, Any], *, validation_mode: str = "train", **overrides: Any
+) -> dict[str, Any]:
     value = json.loads(json.dumps(config))
     for dotted, replacement in overrides.items():
         if replacement is None:
@@ -220,5 +237,5 @@ def resolved_with_overrides(config: Mapping[str, Any], **overrides: Any) -> dict
         for part in parts[:-1]:
             current = current[part]
         current[parts[-1]] = replacement
-    validate_config(value, mode="train")
+    validate_config(value, mode=validation_mode)
     return value

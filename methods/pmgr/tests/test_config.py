@@ -49,9 +49,25 @@ def test_unknown_and_contradictory_options_fail():
 
 def test_training_never_accepts_unlocked_test_paths():
     config = _config()
+    config["paths"]["test_manifest"] = "some/test.jsonl"
     config["paths"]["test_index"] = "some/test.json"
-    with pytest.raises(ConfigError, match="test remains locked"):
+    config["data"]["expected_test_groups"] = 798
+    config["data"]["expected_test_videos"] = 1176
+    with pytest.raises(ConfigError, match="test remains locked during train"):
         validate_config(config, mode="train")
+
+
+def test_final_test_requires_an_explicit_complete_locked_population():
+    config = _config()
+    with pytest.raises(ConfigError, match="final_test requires"):
+        validate_config(config, mode="final_test")
+    config["paths"]["test_manifest"] = "official_test.jsonl"
+    config["paths"]["test_index"] = "canonical_test.json"
+    config["data"]["expected_test_groups"] = 798
+    config["data"]["expected_test_videos"] = 1176
+    validate_config(config, mode="final_test")
+    with pytest.raises(ConfigError, match="locked during validation"):
+        validate_config(config, mode="validation")
 
 
 def test_matched_arm_constants_cannot_silently_drift():

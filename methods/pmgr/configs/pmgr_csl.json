@@ -32,6 +32,8 @@
     "expected_train_videos": 18401,
     "expected_validation_groups": 797,
     "expected_validation_videos": 1077,
+    "expected_test_groups": null,
+    "expected_test_videos": null,
     "drop_incomplete_group_batch": true
   },
   "scoring": {

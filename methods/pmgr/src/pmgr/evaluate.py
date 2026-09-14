@@ -97,6 +97,16 @@ def evaluate_model(
         feature_len=int(config["data"]["max_features"]),
         alpha=float(config["data"]["feature_mix_alpha"]),
     )
+    expected_groups = config["data"][f"expected_{split}_groups"]
+    expected_videos = config["data"][f"expected_{split}_videos"]
+    if expected_groups is None or expected_videos is None:
+        raise ValueError(f"{split} population counts are not configured")
+    actual_population = (dataset.index.group_count, dataset.index.video_count)
+    expected_population = (int(expected_groups), int(expected_videos))
+    if actual_population != expected_population:
+        raise ValueError(
+            f"{split} population count mismatch: {actual_population} != {expected_population}"
+        )
     tokenizer = load_tokenizer(config)
     video, video_valid, text, text_valid, video_ids, group_ids, owner = _encode_gallery(
         model, dataset, tokenizer, config, device
@@ -139,8 +149,13 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("test evaluation requires the explicit --final-test lock")
     if args.split != "test" and args.final_test:
         raise ValueError("--final-test is valid only for split=test")
-    config = load_config(args.config, mode="train")
-    config = resolved_with_overrides(config, scoring__mask_policy=args.mask_policy)
+    validation_mode = "final_test" if args.split == "test" else "validation"
+    config = load_config(args.config, mode=validation_mode)
+    config = resolved_with_overrides(
+        config,
+        validation_mode=validation_mode,
+        scoring__mask_policy=args.mask_policy,
+    )
     device = torch.device(args.device)
     model, _ = build_retriever(config, checkpoint=args.checkpoint, device=device)
     _, result = evaluate_model(model, config, split=args.split, device=device)

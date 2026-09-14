@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
 
-from pmgr.evaluate import _encode_gallery
+from pmgr.evaluate import _encode_gallery, evaluate_model, main as evaluate_main
 from pmgr.report import build_phase_b_report
 
 
@@ -77,6 +78,38 @@ def test_full_gallery_encoder_retains_last_partial_batches(monkeypatch):
     assert owner == [0, 0, 1]
     assert model.video_batch_sizes == [2, 1]
     assert model.text_batch_sizes == [1, 1]
+
+
+def test_evaluator_rejects_population_count_mismatch_before_encoding(monkeypatch):
+    index = SimpleNamespace(group_count=2, video_count=3)
+    monkeypatch.setattr(
+        "pmgr.evaluate.GroupDataset", lambda *_args, **_kwargs: SimpleNamespace(index=index)
+    )
+    config = {
+        "paths": {"validation_index": "fixture"},
+        "data": {
+            "max_features": 4,
+            "feature_mix_alpha": 0.8,
+            "expected_validation_groups": 2,
+            "expected_validation_videos": 4,
+        },
+    }
+    with pytest.raises(ValueError, match="population count mismatch"):
+        evaluate_model(object(), config, split="validation", device=torch.device("cpu"))
+
+
+def test_test_evaluation_requires_explicit_final_test_flag():
+    with pytest.raises(ValueError, match="explicit --final-test lock"):
+        evaluate_main(
+            [
+                "--config",
+                "unused.json",
+                "--checkpoint",
+                "unused.pt",
+                "--split",
+                "test",
+            ]
+        )
 
 
 def _write_run(path: Path, mode: str, r1: float) -> None:
