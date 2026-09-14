@@ -1,0 +1,84 @@
+{
+  "spec_version": "pmgr-1.0",
+  "upstream_commit": "38a4f7b00da7a858d59b7fabe5093876a84db8e0",
+  "dataset": "csl",
+  "seed": 0,
+  "paths": {
+    "train_manifest": "artifacts/manifests/csl_train.jsonl",
+    "validation_manifest": "artifacts/manifests/csl_dev.jsonl",
+    "test_manifest": null,
+    "train_index": "artifacts/pmgr/indexes/csl_train.json",
+    "validation_index": "artifacts/pmgr/indexes/csl_dev.json",
+    "test_index": null,
+    "baseline_resolved_args": "runs/csl_base_b512_s42/resolved_config.yaml",
+    "baseline_resolved_args_sha256": "155efaa57942c555d63e7be272531712f1fa54d3132228a8b76db0ce558bedcb",
+    "initialization_checkpoint": "runs/csl_base_b512_s42/checkpoints/best_dev.pt",
+    "initialization_checkpoint_sha256": "22c15cf07dcda23936fe7681dd275ba3e079b7cce4c1a127380f3a2733b78685",
+    "output_dir": "runs/pmgr_csl_seed0",
+    "cico_root": "third_party/SLRT/CiCo/CLCL"
+  },
+  "initialization_mode": "weights_only_continuation",
+  "data": {
+    "feature_mix": "sum",
+    "feature_mix_alpha": 0.8,
+    "max_features": 64,
+    "max_text_tokens": 32,
+    "text_augmentation": {
+      "enabled": true,
+      "kind": "random_swap",
+      "probability": 0.5
+    },
+    "expected_train_groups": 6598,
+    "expected_train_videos": 18401,
+    "expected_validation_groups": 797,
+    "expected_validation_videos": 1077,
+    "drop_incomplete_group_batch": true
+  },
+  "scoring": {
+    "mask_policy": "valid_tokens_only",
+    "dual_mix": 0.5,
+    "inner_temperature": 0.07,
+    "normalize_eps": 0.000001,
+    "maximum_contrast_scale": 100.0
+  },
+  "loss": {
+    "mode": "group_ce",
+    "rank_mix": 0.0,
+    "rank_eta": 0.03
+  },
+  "training": {
+    "effective_groups": 512,
+    "epochs": 20,
+    "optimizer": "inherited_BertAdam",
+    "learning_rate": 0.00001,
+    "coef_lr": 1.0,
+    "warmup_fraction": 0.1,
+    "beta1": 0.9,
+    "beta2": 0.98,
+    "epsilon": 0.000001,
+    "weight_decay": 0.001,
+    "clipping_policy": "legacy_global_and_parameter",
+    "gradient_accumulation_steps": 1,
+    "num_workers": 8
+  },
+  "engine": {
+    "mode": "two_level_replay",
+    "distributed": "none",
+    "video_encoder_microbatch": 8,
+    "text_encoder_microbatch": 32,
+    "score_video_block": 8,
+    "score_text_block": 16,
+    "precision": "fp32"
+  },
+  "validation": {
+    "every_epochs": 1,
+    "primary": "mean_t2v_v2t_r1",
+    "secondary": "mean_bidirectional_r5_r10",
+    "tie_break": "earliest_epoch",
+    "metric_policy": "stable_candidate_order_v1",
+    "video_encoder_batch": 32,
+    "text_encoder_batch": 128,
+    "score_video_block": 32,
+    "score_text_block": 64
+  }
+}

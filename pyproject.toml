@@ -29,12 +29,12 @@ translation = [
 dive = "dive.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["methods/elsc", "methods/dive/src", "methods/sssc", "shared"]
-include = ["dive*", "elsc*", "method1*", "slr_common*"]
+where = ["methods/elsc", "methods/dive/src", "methods/sssc", "methods/pmgr/src", "shared"]
+include = ["dive*", "elsc*", "method1*", "pmgr*", "slr_common*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "methods/elsc/tests", "methods/dive/tests", "methods/sssc/tests"]
-addopts = "-ra"
+testpaths = ["tests", "methods/elsc/tests", "methods/dive/tests", "methods/sssc/tests", "methods/pmgr/tests"]
+addopts = "-ra --import-mode=importlib"
 
 [tool.ruff]
 line-length = 100

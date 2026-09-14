@@ -12,3 +12,6 @@ Current methods:
 - `sssc/`: Shared-Support Sign Contrast (proposal 5 / Method 1). Its import package is
   `method1`; all method-specific configs, patches, tests, and documentation stay below
   `methods/sssc/`.
+- `pmgr/`: Protocol-Matched Gallery Risk (proposal 6). Its import package is `pmgr`;
+  canonical group indexing, protocol-aware scoring/losses, replay, training, evaluation,
+  and method-specific tests remain isolated below `methods/pmgr/`.
