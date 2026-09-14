@@ -20,8 +20,12 @@ python -m pmgr.train --config methods/pmgr/configs/pmgr_csl.json \
 ```
 
 The implementation/test/baseline boundary is recorded in
-[`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md). To queue the matched population-only
-pilot after GPU 0 becomes idle, commit the relevant code first and launch:
+[`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md). The completed CSL-Daily Phase-B pilot
+did not clear its predeclared causal threshold, so the specification stops the rank extension;
+see that status note for measured validation metrics, exposure and the no-go decision.
+
+To reproduce or resume the matched population-only pilot after GPU 0 becomes idle, commit the
+relevant code first and launch:
 
 ```bash
 chmod +x methods/pmgr/scripts/run_csl_phase_b_queue.sh

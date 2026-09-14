@@ -25,7 +25,12 @@ def _read_run(path: Path, expected_mode: str | tuple[str, ...]) -> dict[str, Any
     summary_path = path / "summary.json"
     config_path = path / "resolved_config.json"
     metrics_path = path / "best_dev_metrics.json"
-    missing = [str(item) for item in (summary_path, config_path, metrics_path) if not item.is_file()]
+    selected_checkpoint = path / "checkpoints" / "best_dev.pt"
+    missing = [
+        str(item)
+        for item in (summary_path, config_path, metrics_path, selected_checkpoint)
+        if not item.is_file()
+    ]
     if missing:
         raise ValueError("run is incomplete; missing " + ", ".join(missing))
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
@@ -71,12 +76,19 @@ def _read_run(path: Path, expected_mode: str | tuple[str, ...]) -> dict[str, Any
     return {
         "path": str(path),
         "loss_mode": actual_mode,
-        "checkpoint": summary["checkpoint"],
+        # Metrics and model identity must refer to the same validation-selected
+        # state. ``summary[\"checkpoint\"]`` is the recovery/last checkpoint.
+        "checkpoint": {
+            "path": str(selected_checkpoint),
+            "sha256": sha256_file(selected_checkpoint),
+            "bytes": selected_checkpoint.stat().st_size,
+        },
         "best_epoch": best["epoch"],
         "primary_mean_bidirectional_r1": primary,
         "T2V": {name: metrics["T2V"][name] for name in ("R1", "R5", "R10", "MedianR", "MeanR")},
         "V2T": {name: metrics["V2T"][name] for name in ("R1", "R5", "R10", "MedianR", "MeanR")},
         "exposures": exposures,
+        "run_elapsed_seconds": float(summary["elapsed_seconds"]),
         "resolved_config_sha256": sha256_file(config_path),
     }
 
@@ -106,6 +118,7 @@ def build_phase_b_report(runs: dict[str, Path]) -> dict[str, Any]:
         arms["C4"]["primary_mean_bidirectional_r1"]
         - arms[strongest]["primary_mean_bidirectional_r1"]
     )
+    passed = delta >= 0.5
     return {
         "schema_version": 1,
         "phase": "B_population_only",
@@ -119,11 +132,17 @@ def build_phase_b_report(runs: dict[str, Path]) -> dict[str, Any]:
         "planning_threshold_points": 0.5,
         "status": (
             "population_signal_requires_mechanism_audit_and_replication"
-            if delta >= 0.5
+            if passed
             else "population_hypothesis_no_go"
         ),
         "research_supported": False,
-        "reason": "Phase B contains one seed; rank extension and cross-dataset replication are not run",
+        "reason": (
+            "C4 clears the planning threshold on one validation seed; mechanism audit and "
+            "replication remain required before research support"
+            if passed
+            else "C4 does not clear the 0.5-point planning threshold over the strongest "
+            "equal-input positive control; the specification stops the rank extension"
+        ),
     }
 
 

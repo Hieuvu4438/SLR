@@ -114,11 +114,15 @@ def test_test_evaluation_requires_explicit_final_test_flag():
 
 def _write_run(path: Path, mode: str, r1: float) -> None:
     path.mkdir()
+    checkpoint = path / "checkpoints" / "best_dev.pt"
+    checkpoint.parent.mkdir()
+    checkpoint.write_bytes(f"selected-{mode}".encode())
     (path / "summary.json").write_text(
         json.dumps(
             {
                 "status": "training_complete",
-                "checkpoint": {"path": str(path / "best.pt")},
+                "checkpoint": {"path": str(path / "checkpoints" / "last.pt")},
+                "elapsed_seconds": 2.5,
             }
         )
     )
@@ -176,6 +180,11 @@ def test_phase_b_report_uses_matched_controls_and_ignores_event_rows(tmp_path):
     assert report["arms"]["C4"]["exposures"]["effective_steps"] == 1
     assert report["arms"]["C4"]["exposures"]["encoded_video_items"] == 16
     assert report["arms"]["C4"]["exposures"]["peak_allocated_gpu_bytes"] == 1024
+    assert report["arms"]["C4"]["checkpoint"]["path"].endswith(
+        "C4/checkpoints/best_dev.pt"
+    )
+    assert report["arms"]["C4"]["checkpoint"]["sha256"]
+    assert report["arms"]["C4"]["run_elapsed_seconds"] == 2.5
 
 
 def test_phase_b_report_rejects_population_variant_of_weaker_positive_control(tmp_path):
