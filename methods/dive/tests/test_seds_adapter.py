@@ -232,6 +232,25 @@ def test_native_scalar_starts_convert_to_half_open_pose_windows_with_padding():
     ]
 
 
+def test_shifted_support_views_use_only_exact_native_rgb_pose_clips():
+    adapter = SedsAdapter(FakeSeds(), upstream_root=SEDS_ROOT)
+    batch = replace(
+        _video_batch(),
+        clip_starts=torch.tensor([[0, 1], [0, 1]]),
+    )
+    rgb = adapter.rgb_local_features(batch, "canonical").streams["rgb_local"]
+    left = adapter.shifted_support_view(batch, rgb, -1)
+    right = adapter.shifted_support_view(batch, rgb, 1)
+    assert left.validity.tolist() == right.validity.tolist() == [[True, False], [True, False]]
+    assert left.grid.tolist() == [[[0, 16], [-1, -1]], [[0, 16], [-1, -1]]]
+    assert right.grid.tolist() == [[[1, 17], [-1, -1]], [[1, 17], [-1, -1]]]
+    torch.testing.assert_close(left.rgb_local[:, 0], rgb[:, 0])
+    torch.testing.assert_close(right.rgb_local[:, 0], rgb[:, 1])
+    assert all(left_id != right_id for left_id, right_id in zip(left.view_ids, right.view_ids))
+    assert len(adapter.describe_receptive_field(left.video_batch, left.video_batch.grid_id)) == 2
+    assert len(adapter.describe_receptive_field(right.video_batch, right.video_batch.grid_id)) == 2
+
+
 def test_receptive_fields_follow_native_filtered_pose_to_raw_mapping():
     adapter = SedsAdapter(FakeSeds(), upstream_root=SEDS_ROOT)
     batch = replace(

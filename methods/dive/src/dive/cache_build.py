@@ -156,6 +156,8 @@ def _fingerprints(
     evidence = config["evidence"]
     grid = {
         "view": "canonical",
+        "support_view_offsets_steps": list(temporal["support_view_offsets_steps"]),
+        "support_view_policy": "exact_existing_native_rgb_pose_clip_v1",
         "clip_steps": int(temporal["clip_steps"]),
         "stride_steps": int(temporal["dense_stride_steps"]),
         "max_clips": int(temporal["max_clips"]),
@@ -366,6 +368,18 @@ def build_frozen_train_cache(
     evidence = _mapping(config, "evidence")
     if baseline.get("family") != "seds":
         raise CacheBuildError("frozen_train cache currently requires family=seds")
+    support_offsets = tuple(config["temporal"]["support_view_offsets_steps"])
+    if (
+        len(support_offsets) != 2
+        or len(set(support_offsets)) != 2
+        or any(
+            isinstance(value, bool) or not isinstance(value, int) or value == 0
+            for value in support_offsets
+        )
+    ):
+        raise CacheBuildError(
+            "frozen_train cache requires exactly two distinct nonzero support offsets"
+        )
     resolver = ArtifactResolver(config)
     configuration_sha = config_hash(config)
     destination = resolver.output_path("shared", "cache", "frozen_train")
@@ -546,6 +560,18 @@ def build_frozen_train_cache(
                     pose, rgb.streams["rgb_local"], grid, rgb.validity
                 )
                 timestamps = _rf_timestamps(adapter, native, rgb.validity)
+                support_views = [
+                    adapter.shifted_support_view(native, rgb.streams["rgb_local"], offset)
+                    for offset in support_offsets
+                ]
+                support_features = [
+                    reference_model(pose, view.rgb_local, view.grid, view.validity)
+                    for view in support_views
+                ]
+                support_timestamps = [
+                    _rf_timestamps(adapter, view.video_batch, view.validity)
+                    for view in support_views
+                ]
                 common_metadata = {
                     "split": "train",
                     "manifest_offset": start,
@@ -573,10 +599,39 @@ def build_frozen_train_cache(
                 reference_local_shard = TensorShard(
                     shard_id=shard_id,
                     ordered_ids=sample_ids,
-                    tensors={"reference": reference_features.float(), "grid": grid},
-                    masks={"video": rgb.validity},
-                    timestamps={"raw_seconds": timestamps},
-                    metadata=common_metadata | {"contains_cls": False},
+                    tensors={
+                        "reference": reference_features.float(),
+                        "grid": grid,
+                        **{
+                            f"reference_view_{index}": value.float()
+                            for index, value in enumerate(support_features)
+                        },
+                        **{
+                            f"grid_view_{index}": view.grid
+                            for index, view in enumerate(support_views)
+                        },
+                    },
+                    masks={
+                        "video": rgb.validity,
+                        **{
+                            f"video_view_{index}": view.validity
+                            for index, view in enumerate(support_views)
+                        },
+                    },
+                    timestamps={
+                        "raw_seconds": timestamps,
+                        **{
+                            f"raw_seconds_view_{index}": value
+                            for index, value in enumerate(support_timestamps)
+                        },
+                    },
+                    metadata=common_metadata
+                    | {
+                        "contains_cls": False,
+                        "support_view_offsets_steps": list(support_offsets),
+                        "support_view_ids": [list(view.view_ids) for view in support_views],
+                        "support_view_policy": "exact_existing_native_rgb_pose_clip_v1",
+                    },
                 )
 
                 unique: dict[str, SampleRecord] = {}

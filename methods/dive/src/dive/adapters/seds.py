@@ -3,8 +3,9 @@ from __future__ import annotations
 import copy
 import hashlib
 import importlib
+import json
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
@@ -53,6 +54,16 @@ class SedsTextBatch:
     attention_mask: Tensor
 
 
+@dataclass(frozen=True)
+class SedsSupportView:
+    video_batch: SedsVideoBatch
+    rgb_local: Tensor
+    grid: Tensor
+    validity: Tensor
+    view_ids: tuple[str, ...]
+    offset_steps: int
+
+
 def _unique_nonempty(ids: Sequence[str], name: str) -> tuple[str, ...]:
     values = tuple(str(item) for item in ids)
     if not values or any(not item for item in values) or len(values) != len(set(values)):
@@ -78,7 +89,9 @@ def _checkpoint_state(path: Path) -> Mapping[str, Tensor]:
     candidate = payload.get("state_dict", payload)
     if not isinstance(candidate, Mapping) or not candidate:
         raise SedsAdapterError("SEDS checkpoint has no model state")
-    if not all(isinstance(name, str) and isinstance(value, Tensor) for name, value in candidate.items()):
+    if not all(
+        isinstance(name, str) and isinstance(value, Tensor) for name, value in candidate.items()
+    ):
         raise SedsAdapterError("SEDS checkpoint model state must map names to tensors")
     state = dict(candidate)
     if all(name.startswith("module.") for name in state):
@@ -267,16 +280,16 @@ def _masked_expected_scores(
         (similarities / temperature).masked_fill(~text_mask, float("-inf")), dim=-1
     )
     per_video_token = (video_to_text_alignment * similarities).sum(dim=-1)
-    i2t = (per_video_token * video_validity[:, None, :]).sum(dim=-1) / video_validity.sum(
-        dim=-1
-    )[:, None]
+    i2t = (per_video_token * video_validity[:, None, :]).sum(dim=-1) / video_validity.sum(dim=-1)[
+        :, None
+    ]
     text_to_video_alignment = torch.softmax(
         (similarities / temperature).masked_fill(~video_mask, float("-inf")), dim=-2
     )
     per_text_token = (text_to_video_alignment * similarities).sum(dim=-2)
-    t2i = (per_text_token * text_validity[None, :, :]).sum(dim=-1) / text_validity.sum(
-        dim=-1
-    )[None, :]
+    t2i = (per_text_token * text_validity[None, :, :]).sum(dim=-1) / text_validity.sum(dim=-1)[
+        None, :
+    ]
     return i2t, t2i
 
 
@@ -386,7 +399,9 @@ class SedsLocalPoseEncoder(nn.Module):
             for left_tensor, right_tensor in grid[batch_index]:
                 left, right = int(left_tensor), int(right_tensor)
                 if left < 0 and right < 0:
-                    windows.append(torch.zeros_like(frame_features[batch_index, : self.slide_windows]))
+                    windows.append(
+                        torch.zeros_like(frame_features[batch_index, : self.slide_windows])
+                    )
                     continue
                 if left < 0 or right > frame_length or right - left != self.slide_windows:
                     raise SedsAdapterError(
@@ -396,7 +411,9 @@ class SedsLocalPoseEncoder(nn.Module):
             samples.append(torch.stack(windows))
         window_features = torch.stack(samples)
         batch, clips, window, dimension = window_features.shape
-        convolved = self.signbert.sign_conv(window_features.reshape(batch * clips, window, dimension))
+        convolved = self.signbert.sign_conv(
+            window_features.reshape(batch * clips, window, dimension)
+        )
         if convolved.shape != (batch * clips, window, dimension):
             raise SedsAdapterError("SEDS sign_conv changed the expected local feature layout")
         return convolved.reshape(batch, clips, window, dimension).mean(dim=2)
@@ -466,12 +483,8 @@ class SedsAdapter:
         state = dict(_checkpoint_state(checkpoint))
         if not any(name.startswith("signbert.") for name in state):
             raise SedsAdapterError("locked SEDS checkpoint does not contain the SignBERT branch")
-        task_config = _official_task_config(
-            reproduction, baseline, root, init_sign_model=None
-        )
-        model = _construct_official_model(
-            root, task_config, state=state, device=target_device
-        )
+        task_config = _official_task_config(reproduction, baseline, root, init_sign_model=None)
+        model = _construct_official_model(root, task_config, state=state, device=target_device)
         adapter = cls(
             model,
             upstream_root=root,
@@ -506,9 +519,13 @@ class SedsAdapter:
         if not configured_initial:
             raise SedsAdapterError("baseline.initial_weights is not configured")
         signbert_weights = Path(str(configured_initial)).resolve()
-        expected_signbert = (root / reproduction.external_assets["signbert_initialization"]).resolve()
+        expected_signbert = (
+            root / reproduction.external_assets["signbert_initialization"]
+        ).resolve()
         if signbert_weights != expected_signbert:
-            raise SedsAdapterError("SignBERT initialization path differs from reproduction contract")
+            raise SedsAdapterError(
+                "SignBERT initialization path differs from reproduction contract"
+            )
         for name, path in (
             ("CLIP initialization", clip_weights),
             ("SignBERT initialization", signbert_weights),
@@ -587,12 +604,17 @@ class SedsAdapter:
             or baseline.get("score_scale") != "prelogit"
             or float(baseline.get("dual_mix", -1)) != self.dual_mix
         ):
-            raise SedsAdapterError("resolved baseline config does not match the pinned SEDS adapter")
+            raise SedsAdapterError(
+                "resolved baseline config does not match the pinned SEDS adapter"
+            )
         checkpoint = Path(checkpoint_path)
         if not checkpoint.is_file():
             raise SedsAdapterError(f"SEDS checkpoint is missing: {checkpoint}")
         configured_checkpoint = baseline.get("locked_checkpoint")
-        if not configured_checkpoint or Path(configured_checkpoint).resolve() != checkpoint.resolve():
+        if (
+            not configured_checkpoint
+            or Path(configured_checkpoint).resolve() != checkpoint.resolve()
+        ):
             raise SedsAdapterError("loaded SEDS checkpoint differs from baseline.locked_checkpoint")
         reproduction_path = baseline.get("reproduction_config")
         if not reproduction_path or not Path(reproduction_path).is_file():
@@ -601,8 +623,9 @@ class SedsAdapter:
         reproduction = _load_reproduction_config(reproduction_file, self.upstream_root)
         model_arguments = reproduction.model_arguments
         data = resolved_config.get("data", {})
-        if not isinstance(data, Mapping) or data.get("preparation_protocol") != (
-            reproduction.controlled_protocol["name"]
+        if (
+            not isinstance(data, Mapping)
+            or data.get("preparation_protocol") != (reproduction.controlled_protocol["name"])
         ):
             raise SedsAdapterError("DIVE data protocol differs from the SEDS reproduction contract")
         task_config = getattr(self.model, "task_config", None)
@@ -640,7 +663,9 @@ class SedsAdapter:
         return dict(self._checkpoint_metadata)
 
     @staticmethod
-    def _video_inputs(batch: SedsVideoBatch) -> tuple[dict[str, Tensor], dict[str, Tensor], dict[str, Tensor]]:
+    def _video_inputs(
+        batch: SedsVideoBatch,
+    ) -> tuple[dict[str, Tensor], dict[str, Tensor], dict[str, Tensor]]:
         right = {"pose": batch.right_pose}
         left = {"pose": batch.left_pose}
         body = {
@@ -818,7 +843,10 @@ class SedsAdapter:
             scale = self.model.clip.logit_scale.exp().detach().float()
             native_i2t_prelogit = native_i2t.float() / scale
             native_t2i_prelogit = native_t2i.float() / scale
-        if native_i2t_prelogit.shape != dive_i2t.shape or native_t2i_prelogit.shape != dive_t2i.shape:
+        if (
+            native_i2t_prelogit.shape != dive_i2t.shape
+            or native_t2i_prelogit.shape != dive_t2i.shape
+        ):
             raise SedsAdapterError("native SEDS directional score shapes differ from DIVE")
         i2t_error = float((dive_i2t.float() - native_i2t_prelogit).abs().max())
         t2i_error = float((dive_t2i.float() - native_t2i_prelogit).abs().max())
@@ -928,6 +956,75 @@ class SedsAdapter:
             raise SedsAdapterError("native SEDS local pose window exceeds padded pose frames")
         return grid
 
+    def shifted_support_view(
+        self,
+        video_batch: SedsVideoBatch,
+        rgb_local: Tensor,
+        offset_steps: int,
+    ) -> SedsSupportView:
+        """Build an exact native-local temporal view, dropping unavailable shifted clips."""
+        if isinstance(offset_steps, bool) or not isinstance(offset_steps, int) or offset_steps == 0:
+            raise SedsAdapterError("support view offset must be a nonzero integer")
+        starts = video_batch.clip_starts
+        validity = normalize_seds_video_mask(
+            video_batch.legacy_video_mask, local_length=starts.shape[1]
+        )
+        if rgb_local.ndim != 3 or rgb_local.shape[:2] != starts.shape:
+            raise SedsAdapterError("support-view RGB features do not align with native clips")
+        if not torch.equal(starts >= 0, validity):
+            raise SedsAdapterError("support-view native starts disagree with validity")
+        prefix = (
+            torch.arange(starts.shape[1], device=starts.device)[None] < validity.sum(dim=1)[:, None]
+        )
+        if not torch.equal(validity, prefix):
+            raise SedsAdapterError("support-view native validity must form a prefix")
+        shifted_starts = torch.full_like(starts, -1)
+        shifted_rgb = torch.zeros_like(rgb_local)
+        shifted_mask = torch.ones_like(video_batch.legacy_video_mask)
+        shifted_mask[:, 0] = 0
+        view_ids: list[str] = []
+        for row, sample_id in enumerate(video_batch.sample_ids):
+            row_starts = [int(value) for value in starts[row, validity[row]]]
+            if row_starts != sorted(set(row_starts)):
+                raise SedsAdapterError("native clip starts must be unique and increasing")
+            source_by_start = {value: index for index, value in enumerate(row_starts)}
+            targets = [
+                value + offset_steps
+                for value in row_starts
+                if value + offset_steps in source_by_start
+            ]
+            for output_index, target_start in enumerate(targets):
+                shifted_starts[row, output_index] = target_start
+                shifted_rgb[row, output_index] = rgb_local[row, source_by_start[target_start]]
+                shifted_mask[row, output_index + 1] = 0
+            identity = json.dumps(
+                {
+                    "schema_version": "seds_support_view.v1",
+                    "sample_id": sample_id,
+                    "offset_steps": offset_steps,
+                    "clip_starts": targets,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+            view_ids.append("view_" + hashlib.sha256(identity).hexdigest()[:24])
+        grid_id = f"support_offset_{offset_steps:+d}_v1"
+        shifted_batch = replace(
+            video_batch,
+            clip_starts=shifted_starts,
+            legacy_video_mask=shifted_mask,
+            grid_id=grid_id,
+        )
+        shifted_validity = normalize_seds_video_mask(shifted_mask, local_length=starts.shape[1])
+        return SedsSupportView(
+            video_batch=shifted_batch,
+            rgb_local=shifted_rgb,
+            grid=self.local_pose_grid(shifted_batch, grid_id),
+            validity=shifted_validity,
+            view_ids=tuple(view_ids),
+            offset_steps=offset_steps,
+        )
+
     def clone_local_pose_encoder(self) -> nn.Module:
         slide_windows = int(getattr(self.model.task_config, "slide_windows", 16))
         return SedsLocalPoseEncoder(copy.deepcopy(self.model.signbert), slide_windows=slide_windows)
@@ -995,7 +1092,9 @@ class SedsAdapter:
                     continue
                 start = int(start_tensor)
                 if start < 0 or start >= len(raw_indices):
-                    raise SedsAdapterError("valid SEDS clip start lies outside processed pose frames")
+                    raise SedsAdapterError(
+                        "valid SEDS clip start lies outside processed pose frames"
+                    )
                 pose_left_step = max(0, start - 4)
                 pose_right_step = min(len(raw_indices), start + slide_windows + 4)
                 rgb_left_step = start
