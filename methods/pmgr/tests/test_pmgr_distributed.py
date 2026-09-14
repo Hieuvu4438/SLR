@@ -12,6 +12,7 @@ from torch import nn
 from pmgr.distributed import (
     all_gather_variable_items,
     complete_group_partitions,
+    coordinated_error,
     distributed_two_level_backward,
     manual_sum_gradients,
 )
@@ -81,6 +82,38 @@ def test_two_worker_variable_gather_sum_update_and_unused_parameter():
         assert weight[0] == pytest.approx([0.7, 0.7])
         assert bias == [0.0]
         assert bias_unused
+
+
+def _error_worker(rank, world_size, port, queue):
+    os.environ["MASTER_ADDR"] = "127.0.0.1"
+    os.environ["MASTER_PORT"] = str(port)
+    dist.init_process_group("gloo", rank=rank, world_size=world_size)
+    try:
+        local_error = RuntimeError("broken local feature") if rank == 1 else None
+        try:
+            coordinated_error(local_error, torch.device("cpu"))
+        except RuntimeError as error:
+            queue.put((rank, str(error)))
+    finally:
+        dist.destroy_process_group()
+
+
+@pytest.mark.skipif(not dist.is_available(), reason="torch.distributed unavailable")
+def test_one_rank_input_failure_is_reported_by_every_worker_without_deadlock():
+    context = get_context("spawn")
+    queue = context.Queue()
+    port = _free_port()
+    processes = [
+        context.Process(target=_error_worker, args=(rank, 2, port, queue)) for rank in range(2)
+    ]
+    for process in processes:
+        process.start()
+    results = [queue.get(timeout=30) for _ in processes]
+    for process in processes:
+        process.join(timeout=30)
+        assert process.exitcode == 0
+    assert {rank for rank, _ in results} == {0, 1}
+    assert all("coordinated PMGR batch failure" in message for _, message in results)
 
 
 class _DistributedTiny(nn.Module):

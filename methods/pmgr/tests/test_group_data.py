@@ -10,6 +10,7 @@ import torch
 from pmgr.data.group_dataset import GroupCollator, GroupDataError, GroupDataset
 from pmgr.data.group_index import build_group_index, load_group_index
 from pmgr.data.group_sampler import GroupBatchSampler
+from pmgr.train import _load_group_items
 from slr_common.data.manifest import ManifestRecord, write_manifest
 
 
@@ -92,3 +93,17 @@ def test_sampler_is_deterministic_and_never_pads_tail():
     flattened = [value for batch in first for value in batch]
     assert len(flattened) == len(set(flattened)) == 6
     assert len(sampler.dropped_indices) == 1
+
+
+def test_parallel_group_loader_preserves_sampler_order_and_propagates_errors():
+    class Dataset:
+        def __getitem__(self, index):
+            if index == 7:
+                raise RuntimeError("broken feature")
+            return {"index": index}
+
+    dataset = Dataset()
+    indexes = [5, 1, 3, 2]
+    assert [item["index"] for item in _load_group_items(dataset, indexes, 3)] == indexes
+    with pytest.raises(RuntimeError, match="broken feature"):
+        _load_group_items(dataset, [5, 7, 2], 3)

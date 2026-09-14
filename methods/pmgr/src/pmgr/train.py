@@ -6,6 +6,7 @@ import math
 import os
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,7 @@ from pmgr.checkpoint import save_checkpoint, validate_resume
 from pmgr.config import config_hash, load_config, resolved_with_overrides
 from pmgr.data.group_dataset import GroupCollator, GroupDataset
 from pmgr.data.group_sampler import GroupBatchSampler
-from pmgr.distributed import distributed_two_level_backward
+from pmgr.distributed import coordinated_error, distributed_two_level_backward
 from pmgr.evaluate import evaluate_model
 from pmgr.losses import objective_loss
 from pmgr.model import build_retriever, load_tokenizer
@@ -42,6 +43,16 @@ def _device_batch(batch: dict[str, Any], device: torch.device) -> dict[str, Any]
         key: value.to(device) if torch.is_tensor(value) else value
         for key, value in batch.items()
     }
+
+
+def _load_group_items(dataset: GroupDataset, indexes: list[int], workers: int) -> list[dict[str, Any]]:
+    """Load a group batch concurrently while preserving the sampler's dense order."""
+    if workers < 1:
+        raise ValueError("data workers must be positive")
+    if workers == 1 or len(indexes) == 1:
+        return [dataset[index] for index in indexes]
+    with ThreadPoolExecutor(max_workers=min(workers, len(indexes))) as executor:
+        return list(executor.map(dataset.__getitem__, indexes))
 
 
 def _score(model, encoded, config):
@@ -150,6 +161,7 @@ def train(
         "engine": config["engine"]["mode"],
         "distributed": config["engine"]["distributed"],
         "world_size": world_size,
+        "data_workers_per_rank": int(config["training"]["num_workers"]),
     }
     log_path = output_dir / "train.jsonl"
     started = time.time()
@@ -167,7 +179,20 @@ def train(
                 local_indexes = indexes[rank * groups_per_rank : (rank + 1) * groups_per_rank]
             else:
                 local_indexes = indexes
-            batch = _device_batch(collator([dataset[index] for index in local_indexes]), device)
+            load_started = time.time()
+            load_error: BaseException | None = None
+            batch: dict[str, Any] | None = None
+            try:
+                items = _load_group_items(
+                    dataset, local_indexes, int(config["training"]["num_workers"])
+                )
+                batch = _device_batch(collator(items), device)
+            except BaseException as error:
+                load_error = error
+            # All ranks reach the same failure collective before encoder/cache collectives.
+            coordinated_error(load_error, device)
+            assert batch is not None
+            data_loading_seconds = time.time() - load_started
             model.train()
             optimizer.zero_grad(set_to_none=True)
             if config["engine"]["mode"] == "direct":
@@ -235,6 +260,7 @@ def train(
                 "encoder_forward_calls": encoder_forward_calls,
                 "score_block_replays": score_block_replays,
                 "seconds_per_update": time.time() - update_started,
+                "data_loading_seconds": data_loading_seconds,
                 "peak_allocated_gpu_bytes": torch.cuda.max_memory_allocated(device) if device.type == "cuda" else 0,
                 "group_ids": list(replay.group_ids) if distributed else batch["group_ids"],
                 "video_ids": list(replay.video_ids) if distributed else batch["video_ids"],
