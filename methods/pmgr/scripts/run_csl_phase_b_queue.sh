@@ -93,6 +93,16 @@ wait_for_gpu() {
 
 validate_run() {
   local run_dir=$1 expected_status=$2
+  if [[ ! -f "$run_dir/summary.json" || ! -f "$run_dir/resolved_config.json" ]]; then
+    printf '%s run_pending run=%s expected_status=%s\n' \
+      "$(date --iso-8601=seconds)" "$run_dir" "$expected_status" >>"$log_path"
+    return 1
+  fi
+  if [[ "$expected_status" == training_complete && ! -f "$run_dir/best_dev_metrics.json" ]]; then
+    printf '%s run_incomplete run=%s reason=missing_best_dev_metrics\n' \
+      "$(date --iso-8601=seconds)" "$run_dir" >>"$log_path"
+    return 1
+  fi
   python - "$run_dir" "$expected_status" <<'PY' >>"$log_path" 2>&1
 import json
 import sys
