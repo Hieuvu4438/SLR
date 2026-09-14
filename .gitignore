@@ -18,6 +18,8 @@
 /artifacts/
 /runs/
 /exports/
+/build/
+/dist/
 __pycache__/
 *.py[cod]
 .pytest_cache/
