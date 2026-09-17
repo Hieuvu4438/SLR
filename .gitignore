@@ -5,8 +5,6 @@
 /data/
 /sign_feature/
 /checkpoints/
-/third_party/SLRT/
-/third_party/SEDS/
 /third_party/UPRet/
 *.pth
 *.pt
@@ -18,12 +16,21 @@
 *.npy
 *.npz
 
-# Third party: ignore checkpoints, downloads, features, results
+# Third party: ignore checkpoints, datasets, downloads, features, results, local runs, and asset symlinks
 /third_party/**/ckpt/
 /third_party/**/checkpoints/
 /third_party/**/downloads/
 /third_party/**/features/
 /third_party/**/result_eval/
+/third_party/SEDS/datasets/
+/third_party/SEDS/CSL
+/third_party/SEDS/How2Sign
+/third_party/SEDS/PHOENIX-2014-T
+/third_party/SEDS/ckpts
+/third_party/**/new_experiment/
+/third_party/**/chpt/
+/third_party/**/sign_feature
+/third_party/**/*.log
 
 # Generated experiment artifacts, logs, manifests, features, and checkpoints.
 /artifacts/
