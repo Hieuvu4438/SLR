@@ -5,7 +5,6 @@
 /data/
 /sign_feature/
 /checkpoints/
-/third_party/UPRet/
 *.pth
 *.pt
 *.ckpt
