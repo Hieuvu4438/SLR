@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+
+# Conda / venv
+.env
+.venv
+
+# Logs
+wandb/
+logs/
+*.log
+
+# Checkpoints
+*.ckpt
+*.pth
+*.pt
+checkpoints/
+
+# Dataset
+datasets/

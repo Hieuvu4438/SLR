@@ -11,8 +11,19 @@
 *.pth
 *.pt
 *.ckpt
+*.bin
+*.tar.gz
 *.zip
 *.aria2
+*.npy
+*.npz
+
+# Third party: ignore checkpoints, downloads, features, results
+/third_party/**/ckpt/
+/third_party/**/checkpoints/
+/third_party/**/downloads/
+/third_party/**/features/
+/third_party/**/result_eval/
 
 # Generated experiment artifacts, logs, manifests, features, and checkpoints.
 /artifacts/
@@ -26,3 +37,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+
+# Docs: allow all markdown files into git, ignore non-md artifacts and raw logs
+/docs/**
+!/docs/**/
+!/docs/**/*.md
+!/docs/**/*.pdf

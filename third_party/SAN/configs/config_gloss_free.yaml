@@ -1,0 +1,13 @@
+name: GFSLT-VLP
+data:
+  train_label_path: "./data/labels.train.cleaned"
+  dev_label_path: "./data/labels.dev.cleaned"
+  test_label_path: "./data/labels.test.cleaned"
+  img_path: "path to sign features from Cico paper"
+  max_length: 300
+training:
+  wandb: online # online or disabled
+model:
+  visual_encoder: ./model/768-3
+
+# ../model/768-3
