@@ -32,8 +32,7 @@ def _parse_bool(value):
 
 
 def _init_distributed_from_environment():
-    world_size = int(os.environ.get("WORLD_SIZE", "1"))
-    if world_size > 1 and not torch.distributed.is_initialized():
+    if not torch.distributed.is_initialized() and ("WORLD_SIZE" in os.environ or "RANK" in os.environ):
         backend = "nccl" if torch.cuda.is_available() else "gloo"
         torch.distributed.init_process_group(backend=backend)
 
@@ -111,7 +110,7 @@ def get_args(description='CLCL on Retrieval Task'):
     parser.add_argument('--cla_weight_dir', type=str, default='cla_weight', help='Num of pair to output from data loader')
 
     #output
-    parser.add_argument("--output_dir", default='ot_csl ', type=str,
+    parser.add_argument("--output_dir", default='ot_csl', type=str,
                         help="The output directory where the model predictions and checkpoints will be written.")
     parser.add_argument("--cross_model", default="cross-base", type=str, required=False, help="Cross module")
     parser.add_argument("--do_lower_case", action='store_true', help="Set this flag if you are using an uncased model.")
@@ -188,12 +187,19 @@ def set_seed_logger(args):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-    if args.distributed==True:
+    if args.distributed == True and torch.distributed.is_initialized():
         world_size = torch.distributed.get_world_size()
+        local_rank = int(os.environ.get("LOCAL_RANK", args.local_rank))
+        args.local_rank = local_rank
         torch.cuda.set_device(args.local_rank)
         args.world_size = world_size
         rank = torch.distributed.get_rank()
         args.rank = rank
+    else:
+        args.distributed = False
+        args.world_size = 1
+        args.rank = 0
+        args.local_rank = 0
 
 
     if not os.path.exists(args.output_dir):
@@ -213,11 +219,11 @@ def init_device(args, local_rank):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu", local_rank)
 
-    n_gpu = torch.cuda.device_count()
+    n_gpu = torch.cuda.device_count() if not args.distributed else 1
     logger.info("device: {} n_gpu: {}".format(device, n_gpu))
     args.n_gpu = n_gpu
 
-    if args.batch_size % args.n_gpu != 0 or args.batch_size_val % args.n_gpu != 0:
+    if n_gpu > 0 and (args.batch_size % args.n_gpu != 0 or args.batch_size_val % args.n_gpu != 0):
         raise ValueError("Invalid batch_size/batch_size_val and n_gpu parameter: {}%{} and {}%{}, should be == 0".format(
             args.batch_size, args.n_gpu, args.batch_size_val, args.n_gpu))
 
@@ -269,11 +275,14 @@ def prep_optimizer_freeze_clip(args, model, num_train_optimization_steps, device
                          schedule='warmup_cosine', b1=0.9, b2=0.98, e=1e-6,
                          t_total=num_train_optimization_steps, weight_decay=weight_decay,
                          max_grad_norm=1.0)
-    if args.distributed==True:
+    if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank],
                                                           output_device=local_rank, find_unused_parameters=True)
     else:
-        model = torch.nn.DataParallel(model, device_ids=[0,1]).cuda()
+        if n_gpu > 1:
+            model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu))).cuda()
+        else:
+            model = model.cuda()
 
     return optimizer, scheduler, model
 
@@ -312,11 +321,14 @@ def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, loc
                              schedule='warmup_cosine', b1=0.9, b2=0.98, e=1e-6,
                              t_total=num_train_optimization_steps, weight_decay=weight_decay,
                              max_grad_norm=1.0)
-        if args.distributed==True:
+        if args.distributed:
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank],
                                                               output_device=local_rank, find_unused_parameters=True)
         else:
-            model = torch.nn.DataParallel(model, device_ids=args.gpu_ids).cuda()
+            if n_gpu > 1:
+                model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu))).cuda()
+            else:
+                model = model.cuda()
 
         return optimizer, scheduler, model
     else:
@@ -356,11 +368,14 @@ def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, loc
                              schedule='warmup_cosine', b1=0.9, b2=0.98, e=1e-6,
                              t_total=num_train_optimization_steps, weight_decay=weight_decay,
                              max_grad_norm=1.0)
-        if args.distributed == True:
+        if args.distributed:
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank],
                                                               output_device=local_rank, find_unused_parameters=True)
         else:
-            model = torch.nn.DataParallel(model, device_ids=args.gpu_ids).cuda()
+            if n_gpu > 1:
+                model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu))).cuda()
+            else:
+                model = model.cuda()
 
         return optimizer, scheduler, model
 def save_acc_plot(epochs,acc_record,args):

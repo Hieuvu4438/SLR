@@ -127,7 +127,7 @@ class Transformer(nn.Module):
         self.layers = layers
         self.resblocks = nn.Sequential(*[ResidualAttentionBlock(width, heads) for _ in range(layers)])
     def forward(self, x: torch.Tensor, attn_mask: torch.Tensor):
-        pdb.set_trace()
+        # pdb.set_trace()
 
         x = x.reshape(x.shape[0], x.shape[1], -1)
         return self.resblocks((x, attn_mask))[0]

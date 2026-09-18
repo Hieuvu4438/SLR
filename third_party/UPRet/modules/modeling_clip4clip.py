@@ -272,7 +272,7 @@ class CLIP4Clip(CLIP4ClipPreTrainedModel):
 
         if self.training:
             loss = 0.
-            pdb.set_trace()
+            # pdb.set_trace()
 
             if self.sim_header == "Filip":
                 I2T_sim, T2I_sim, *_tmp = self.get_similarity_logits(sequence_hidden, visual_output, text_mask,

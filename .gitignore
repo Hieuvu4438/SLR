@@ -9,7 +9,18 @@
 *.pt
 *.ckpt
 *.bin
+*.bin.*
+*.safetensors
+*.onnx
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+*.tar
 *.tar.gz
+*.tar.xz
+*.tgz
+*.7z
 *.zip
 *.aria2
 *.npy
@@ -21,6 +32,7 @@
 /third_party/**/downloads/
 /third_party/**/features/
 /third_party/**/result_eval/
+/third_party/**/output_*/
 /third_party/SEDS/datasets/
 /third_party/SEDS/CSL
 /third_party/SEDS/How2Sign
@@ -43,6 +55,17 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+*.log
+.venv/
+venv/
+
+# Local secrets; keep deliberately sanitized example environment files trackable.
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
 
 # Docs: allow all markdown files into git, ignore non-md artifacts and raw logs
 /docs/**
