@@ -97,6 +97,9 @@ def model_inputs(batch, device):
     right, left = {'pose':batch['right_pose']}, {'pose':batch['left_pose']}
     body = dict(pose=batch['body_pose'], clips_start=batch['body_clips_start'],
                 mask=batch['body_mask'], rgb=batch['RGB_feature'])
+    for key in ('geometry_windows','geometry_valid','signrep_target'):
+        if key in batch:
+            body[key] = batch[key]
     return (batch['pairs_text'], batch['pairs_segment'], batch['pairs_mask'],
             right, left, body, batch['pairs_text_aug'], batch['pairs_mask_aug'])
 

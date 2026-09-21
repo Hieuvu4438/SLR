@@ -39,6 +39,8 @@
 /third_party/SEDS/PHOENIX-2014-T
 /third_party/SEDS/ckpts
 /third_party/**/new_experiment/
+/third_party/Uni-Sign/
+/third_party/UniFormerV2/
 /third_party/**/chpt/
 /third_party/**/sign_feature
 /third_party/**/*.log

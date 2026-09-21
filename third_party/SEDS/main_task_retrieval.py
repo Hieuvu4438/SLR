@@ -558,6 +558,10 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu,istrain):
             right_batch = {'pose':sample['right_pose']}
             left_batch = {'pose':sample['left_pose']}
             body_batch = {'pose':sample['body_pose'], 'clips_start':sample['body_clips_start'], 'mask':sample['body_mask'], 'rgb':sample['RGB_feature']}
+            # Optional C09 geometry; native RGB/pose2D tensors and scorer unchanged.
+            for key in ('geometry_windows', 'geometry_valid'):
+                if key in sample:
+                    body_batch[key] = sample[key]
             video_mask = sample['body_mask']
             
             input_ids = sample['pairs_text']

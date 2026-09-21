@@ -1,5 +1,36 @@
 # Mechanism exclusion registry
 
+C23 campaign result2026-09-21: ten rank16 zero-output bottleneck residuals inside
+the frozen hand/body ST-GCN hierarchy completed222 updates and selected77.842004,
+-.192678pp versus exact full-GCN control78.034682. V2T gained.385356pp but T2V
+lost.770713pp. All activation/frozen-backbone gates passed. DEFER this exact
+frozen hierarchical graph-adapter recipe; do not rank/LR/horizon/seed sweep it
+without new evidence. This does not exclude a genuinely new external visual
+representation such as the prospective frozen UniFormerV2 complement.
+
+C22 campaign result2026-09-21: shared rank3 length-normalized temporal phase
+modulation after the pose/RGB encoders completed222 updates and selected
+77.863865, -.170817pp versus its exact clean-GCN control78.034682. All activity
+and identity gates passed. DEFER this exact post-encoder phase scale/shift recipe;
+do not run its rank/LR/seed/horizon refinements without new evidence. This does
+not exclude all temporal parameter-efficient adaptation; C23 instead intervenes
+inside the graph hierarchy and freezes the native GCN.
+
+C21 campaign result2026-09-21: anatomical-frame H4W++ XYZ plus adjacent-clip
+motion, added to rather than replacing native pose2D/RGB, completed128 updates
+but selected initialization77.552987; trained64/128 were76.878613/76.974952.
+DEFER this exact canonical-motion3D recipe (valid empirical failure). Do not run
+its planned representation/LR/capacity/seed refinements without new evidence.
+This is not a claim that all monocular3D or external visual representation is
+useless; rawXYZ C09 previously selected77.842004 and remains separate evidence.
+
+User closure2026-09-20: C17 fused DCL and CE/DCL blend are USER-CLOSED by explicit
+request to skip C17/change direction. No recovery evaluation or additional DCL
+refinement. PureDCL selected77.649326 vsnative78.323699; blend timed out in final
+DEV after160 savedupdates, intermediate80mean77.649326, final efficacy unresolved.
+See research/slret_goal_v2/RESULTS.md. Not a ban on native contrastive loss/batch
+composition experiments; do not rename a DCL rescue as a new method.
+
 Read on 2026-09-17: `docs/proposal7/Negative_Results_Registry.md` (all), current `AUTONOMOUS_RESEARCH_STATE.md`, `REPOSITORY_GAP_OVERVIEW.md` (all), and `Q01_Q37_feasibility_audit.md` full 37-row map. This registry adopts closures required by the current goal; historical selective reopening is not authority. Numbers below remain HISTORICAL_REPORTED unless separately replayed in this campaign.
 
 Source prefix P7 = `docs/proposal7/`; A = `docs/proposal7/evidence/autonomous_search/`.
