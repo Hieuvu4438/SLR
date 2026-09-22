@@ -1,5 +1,49 @@
 # Dataset-first SLRet track — active state
 
+## Current operational state — recovery verified (2026-09-22)
+
+The user sent `xong`. C27 recovery is terminal COMPLETED, exit0, with519 DEV
+and7096 TRAIN artifacts passing the scoped CPU integrity audit. Terminal
+records confirm that the paused worker was resumed; its current state was
+not polled. Charge6339.263507 supervisor seconds once, leaving11,537.649493
+seconds of the new grant. No new GPU job or retrieval training was launched.
+
+All13 TRAIN examples failing the CTC length condition were confirmed through
+the native loader. The unchanged all-TRAIN CTC recipe is therefore technically
+ineligible; do not skip examples or suppress losses silently. C27 remains OPEN,
+not SUPPORTED-FOR-PILOT, independently of successful recovery. The authoritative
+[verification report](../../docs/codex_slret_research/evidence/C27_RECOVERY_RESULT.md)
+contains scope, hashes, counts, limitations and tests. Human annotation remains
+excluded. This update supersedes older waiting/automatic-pilot language below.
+
+## Historical launch state — WAITING_FOR_USER (2026-09-21)
+
+C26-A is terminal and weak (selected CSL DEV mean R@1 43.700670); do not
+relaunch it. A distinct C27 gloss-sequence/CTC plus native contrastive lead is
+registered in `C27_DECISION.md`. PH TRAIN gloss coverage and three focused CPU
+CTC tests passed. No C27 retrieval training has started.
+
+Detached prerequisite job **`c27-ph-feature-recovery-001`** was launched at
+2026-09-21 22:51 local with supervisor PID 1166311. Its one startup check
+verified a live supervisor and the official RTMPose checkpoint download stage;
+the GPU extraction stage has not yet been observed by this agent. The finite
+queue is checkpoint download/checksum → adapted PH DEV519 extraction → adapted
+PH TRAIN7096 extraction. The parent records progress and terminal outcome at
+`artifacts/slret_dataset_first/jobs/c27-ph-feature-recovery-001/{run.log,status.json,summary.json,launch.json}`.
+The supervisor will verify and SIGSTOP only the exact UniFormerV2 GPU worker
+before extraction, then SIGCONT it in `finally`; an independent local watchdog
+covers supervisor loss. Hard wall cap 7,200 seconds, owned VRAM cap 20 GB,
+disk floor 20 GiB, prior 17,876.913-second new-grant balance. Do not poll this
+job or UniFormerV2 until the user says “xong” or asks status. On return, inspect
+one terminal status/log/outputs check; if successful, complete the C27 matched
+control/candidate training implementation and launch that bounded pilot.
+
+At ~22:45 local, old `artifacts/slret_goal/` contents, including C26 job logs and
+adapted SEDS feature caches, were observed absent while free disk rose by
+~49 GiB. This was not a C27 deletion. The C26 result remains recorded in
+`C26_DECISION.md`; old artifact links must not be assumed live. The C27 job
+writes to a new, explicit artifact root and does not replay old audit work.
+
 ## Decision
 
 On 2026-09-21 the user deferred C24 and requested a new research direction that
@@ -81,3 +125,16 @@ has been promoted. The previous ~430-second balance is retained separately
 from the remaining 17,876.913 seconds of the user's new grant. Do not launch
 another C26 configuration or score TEST merely to rescue this weak recipe.
 Select a distinct evidence-based lead before the next GPU job.
+
+## 2026-09-22 scientific admission update (operational handoff unchanged)
+
+The autonomous research audit has not checked or modified the outstanding C27
+recovery job. Its `xong` boundary still applies. Saved-score analysis now rejects
+the narrow exact-gloss-multiset order-confusion motivation: zero strictly
+outranking such confusers among persistent errors across three GCN seeds.
+Broader C27 is OPEN, not SUPPORTED-FOR-PILOT. This scientific update supersedes
+any earlier implication that successful recovery automatically triggers a C27
+trainer/run. After `xong`, verify recovery and account for resources; require
+method admission and the same-gloss order-free control before new training.
+See [C27 decision](C27_DECISION.md) and
+[current research state](../../docs/codex_slret_research/00_RESEARCH_STATE.md).

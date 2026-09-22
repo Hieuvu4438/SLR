@@ -30,8 +30,12 @@ def main():
     parser.add_argument('--resume', action='store_true')
     parser.add_argument('--max-new-videos', type=int, default=0,
                         help='Planned clean pause after this many new videos;0 means all')
+    parser.add_argument('--output-root', type=Path, default=ROOT / 'artifacts/slret_goal',
+                        help='Parent directory for a new or resumed adapted-feature run')
+    parser.add_argument('--pose-checkpoint', type=Path,
+                        help='Explicit RTMPose-L checkpoint; defaults to the historical location')
     args = parser.parse_args()
-    out = ROOT / 'artifacts/slret_goal' / args.run_id
+    out = args.output_root.resolve() / args.run_id
     if args.resume and not (out / 'run.json').is_file():
         raise ValueError('Resume requires an existing run report')
     out.mkdir(parents=True, exist_ok=args.resume)
@@ -77,7 +81,8 @@ def main():
         torch.manual_seed(0)
         cv2.setNumThreads(0)
         config_name, weight_name = MODELS['384']
-        pose_ckpt = ROOT / 'artifacts/slret_goal/public_models' / weight_name
+        pose_ckpt = (args.pose_checkpoint.resolve() if args.pose_checkpoint else
+                     ROOT / 'artifacts/slret_goal/public_models' / weight_name)
         cfg_path = Path('/home/haipd/mmpose/configs/wholebody_2d_keypoint/rtmpose/coco-wholebody') / config_name
         cfg = Config.fromfile(str(cfg_path))
         cfg.model.backbone.init_cfg = None
