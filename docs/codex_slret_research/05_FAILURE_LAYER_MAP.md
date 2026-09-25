@@ -30,3 +30,11 @@ failure unresolved. Current priority shifts to Q01/Q22 diagnostic adequacy,
 with Q23 as a competing explanation, while finishing the mandatory audit.
 No row licenses an
 architecture assembled from the layer names. No new test-set evaluation occurs.
+
+Cycle20 B/C/J update: [fixed temporal-padding intervention](evidence/GCN_TEMPORAL_PADDING_RESULT.md)
+changes valid body-GCN boundary outputs on four TRAIN inputs, with eval BN and
+fixed weights. This is a measured computational dependency, distinct from
+semantic order loss or BN batch statistics. Downstream native pose/sign_conv
+and final retrieval effects remain unmeasured; investigate propagation before
+any correction or method claim. Four neighboring recording IDs do not estimate
+corpus prevalence. Current control validity, not novelty, is the immediate issue.

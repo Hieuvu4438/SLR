@@ -1,7 +1,8 @@
-# Research-question map — 38 explicit records
+# Research-question map — 39 explicit records
 
-2026-09-22. This reconstructs the historical 37 questions and adds the inherited
-C27 question. It is not 38 new candidate architectures. The source for each
+2026-09-22; updated2026-09-23. This reconstructs the historical37 questions,
+adds inherited C27 and Cycle20's computational-padding question. These are
+not39 new candidate architectures. The source for each
 Q01–Q37 record is the corresponding row and linked result in the fully read
 [historical feasibility audit](../proposal7/evidence/autonomous_search/Q01_Q37_feasibility_audit.md).
 Historical results retain their original resource/protocol scope; they are not
@@ -411,6 +412,17 @@ subordinate to the stated decision consequence.
 - Tested locally: partial; annotation and saved-score diagnostics only. Cheap falsification: same-gloss order-free control plus measured bottleneck required before a pilot; exact-order dominance screen now fails.
 - Feasibility / scientific value: after `xong`, [recovery verification](evidence/C27_RECOVERY_RESULT.md) finds13/7096 TRAIN examples CTC-ineligible, confirmed by native loading; no retrieval efficacy. Useful resource/control question, weak current novelty justification. Unchanged all-TRAIN training is not feasible.
 - Novelty uncertainty / status: high; OPEN broadly; exact-order bottleneck justification REJECTED. Priority: 5/10/14/3/7/4/1 =44.
+
+## Q39 — Pose encoding depends on padded sequence extent
+
+- Question / layer: Does batch-dependent temporal extent alter final retrieval scores for an unchanged video? B,C,J.
+- Supporting evidence: [Cycle20](evidence/GCN_TEMPORAL_PADDING_RESULT.md), four fixed TRAIN body-GCN inputs show last-four-frame changes, relative L2 6.57–18.26%, under zero extension with fixed eval model; exact replay.
+- Contradicting evidence: only the body pre-window path at CPUfloat64 was measured; no final embeddings/ranks or general prevalence. Downstream computation may suppress the change.
+- Closest prior / local collision: ordinary padding/boundary handling; Q05 score masking and AS-C38 CiCo numerical batching are different interfaces, not permission for a padding/precision sweep. No novelty claim.
+- Tested locally: partial. Cheap falsification: fixed intervention through native three-part concatenation/sign_conv, then final scoring only if it survives; stop if downstream differences vanish.
+- Cycle21: [native propagation](evidence/POSE_PADDING_PROPAGATION_RESULT.md) survives three-part/sign_conv processing on13 selected boundary windows, with exact final replay and unchanged controls. Next falsification is fixed-input final-score sensitivity; no rank/harm claim yet. Relative L2 over selected valid pooled outputs is2.46–5.02%, a different denominator from Cycle20.
+- Feasibility / scientific value: existing weights/poses suffice for bounded attribution. Matters for a fair fixed-control contract; not yet evidence for a primary research method.
+- Novelty uncertainty / status: generic correction is not novelty; OPEN for downstream attribution, not SUPPORTED-FOR-PILOT. Priority: 16/16/14/0/10/7/3 =66.
 
 ## Priority decision after Cycle2
 

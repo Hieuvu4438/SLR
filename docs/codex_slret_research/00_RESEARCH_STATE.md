@@ -1,6 +1,7 @@
 # Current research state
 
-Updated 2026-09-23; base HEAD `53b5f986d74cfeb5f4cc83649eeb44241cab6ea7`.
+Updated 2026-09-23; current HEAD `de2f07ecac9ce65563316fde0860f22e4d585acf`.
+Earlier cycles retain their recorded base commit; no commits were made by this cycle.
 Current user constraint: **continue without human annotation** (2026-09-22).
 The proposed DGS review branch is declined and stopped. Do not request a reviewer
 again, construct a review packet, or substitute AI-generated semantic labels.
@@ -95,8 +96,26 @@ method claim follows. No new annotation, training or TEST access.
 Cycle19 [GCN BatchNorm screen](evidence/GCN_BATCHNORM_SCREEN.md) rejects current
 training-batch-statistics contamination as a method lead: the selected control
 keeps GCN BN in eval while learning its weights. Native-block CPU fixtures and
-existing policy tests pass6/6. Historical trainer/masked-policy hashes differ,
-so this is not exact historical execution verification. No BN repair pilot.
+existing policy tests pass6/6. Historical trainer/masked-policy hashes differ
+from current files; Cycle20 locates and verifies their saved source snapshots.
+This is still not fresh historical execution verification. No BN repair pilot.
+
+Cycle20 [temporal padding diagnostic](evidence/GCN_TEMPORAL_PADDING_RESULT.md)
+finds an active computational dependency: all four fixed TRAIN body-GCN outputs
+change at their last four valid frames when zero-pose padding is appended.
+Relative L2 changes6.57–18.26%; interior differences≤1.34e-15; extension4/8
+outputs agree exactly. Two CPUfloat64 executions are byte-identical. This
+admits downstream attribution only, not a method/pilot or retrieval-harm claim.
+Next separating test is propagation through native three-part pose/sign_conv,
+not a normalization sweep. No labels, TEST, GPU or training.
+
+Cycle21 [native pose propagation](evidence/POSE_PADDING_PROPAGATION_RESULT.md)
+finds the padding difference survives all three pose parts and actual sign_conv
+pooling:13/13 selected boundary windows change, with unchanged interior/invalid
+controls on the fixed four TRAIN videos. Final v3 replay is byte-identical;
+an auxiliary cross-version exact check fails at≤5.56e-17 and is disclosed.
+Proceed only to final-score sensitivity, not a method pilot or repair sweep.
+No retrieval metric, training, GPU, TEST or new annotation.
 
 Cycle4 is **PROGRESS**: a bounded
 six-route screen and four-perspective review are complete. Five routes are

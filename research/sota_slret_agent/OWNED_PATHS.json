@@ -1,0 +1,10 @@
+{
+ "created_by": "sota_slret_agent run started 2026-09-23",
+ "paths": [
+  "research/sota_slret_agent/",
+  "methods/sota_slret/",
+  "runs/sota_slret/",
+  "artifacts/sota_slret_agent/"
+ ],
+ "not_owned_note": "everything else in the repo is legacy/excluded or trusted upstream (third_party/SLRT, third_party/SEDS read-only)"
+}

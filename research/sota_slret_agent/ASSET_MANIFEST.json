@@ -1,0 +1,154 @@
+{
+ "schema": 1,
+ "generated": "2026-09-23",
+ "note": "Labels: all annotation pickles contain captions (labels). Feature files contain no labels. No gloss used anywhere.",
+ "checkpoints": {
+  "ph_best_model.bin": {
+   "path": "/home/haipd/SLR/third_party/SEDS/ckpt/ph_best_model.bin",
+   "bytes": 804176411,
+   "sha256": "6f07e5abfb8a3e260647810713276dc5b5d9811f61e3df9281fae60ca95f6af5",
+   "source": "SEDS official BaiduDrive https://pan.baidu.com/s/1zdI1uS9h-bg39ZdsQuRzEg (via third_party/SEDS/download_and_setup.py)",
+   "paper": "SEDS ACM MM 2024",
+   "trained_on": "PHOENIX-2014T train (full)",
+   "use": "release parity only; never evaluated on our held-out val (val is a subset of its training data)"
+  },
+  "csl_best_model.bin": {
+   "path": "/home/haipd/SLR/third_party/SEDS/ckpt/csl_best_model.bin",
+   "bytes": 804176411,
+   "sha256": "c4379c7ba99a293bf51cef5e9f6b545e2425e2993d7bade2067360afb06870a2",
+   "source": "SEDS official BaiduDrive https://pan.baidu.com/s/1zdI1uS9h-bg39ZdsQuRzEg (via third_party/SEDS/download_and_setup.py)",
+   "paper": "SEDS ACM MM 2024",
+   "trained_on": "CSL-Daily train (full)",
+   "use": "release parity only; never evaluated on our held-out val (val is a subset of its training data)"
+  },
+  "h2s_best_model.bin": {
+   "path": "/home/haipd/SLR/third_party/SEDS/ckpt/h2s_best_model.bin",
+   "bytes": 804176411,
+   "sha256": "9c94d8f110fbda18ba5c8fab04454bf48f774e4f181093c01966a3ec8ad28372",
+   "source": "SEDS official BaiduDrive https://pan.baidu.com/s/1zdI1uS9h-bg39ZdsQuRzEg (via third_party/SEDS/download_and_setup.py)",
+   "paper": "SEDS ACM MM 2024",
+   "trained_on": "How2Sign train (full)",
+   "use": "release parity only; never evaluated on our held-out val (val is a subset of its training data)"
+  },
+  "pretrain_signbert.pth": {
+   "path": "/home/haipd/SLR/third_party/SEDS/ckpt/pretrain_signbert.pth",
+   "bytes": 1673690329,
+   "sha256": "43272e98fc3e174029efb57c8c7b1ec9f27476afcf319f4b56a9cc8610b5b3ca",
+   "source": "SEDS official BaiduDrive https://pan.baidu.com/s/1zdI1uS9h-bg39ZdsQuRzEg (via third_party/SEDS/download_and_setup.py)",
+   "paper": "SEDS ACM MM 2024",
+   "trained_on": "SignBERT pose pretraining (per SEDS README)",
+   "use": "initialisation of pose encoder (same as upstream training)"
+  }
+ },
+ "clip": {
+  "path": "/home/haipd/SLR/third_party/SEDS/modules/ViT-B-32.pt",
+  "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+  "source": "OpenAI CLIP ViT-B/32",
+  "use": "text encoder + transformer init (upstream)"
+ },
+ "datasets": {
+  "ph": {
+   "annotations": {
+    "train": {
+     "path": "/home/haipd/SLR/third_party/SEDS/data_ph/train.pkl",
+     "sha256": "b35ae6f90136b3c936182355c439374ae209bb42046f9f1eb8f9746a8b2c29e2"
+    },
+    "dev": {
+     "path": "/home/haipd/SLR/third_party/SEDS/data_ph/dev.pkl",
+     "sha256": "38bcc1248b7bea5f78b4512a2929df3056d563c3df016b440ed625dab32b1326"
+    },
+    "test": {
+     "path": "/home/haipd/SLR/third_party/SEDS/data_ph/test.pkl",
+     "sha256": "2e5172db53d85eb6762e3da37f4b10f9c233d3f0e32dc901d3968e4370af4b5e"
+    }
+   },
+   "dev_pkl_note": "data_ph/dev.pkl = train(7096) + official dev(519) captions; NO dev features exist in the release",
+   "rgb_i3d": {
+    "train": {
+     "path": "/home/haipd/SLR/third_party/SEDS/datasets/PHOENIX-2014-T/features/I3D_features/train",
+     "n_files": 7096
+    },
+    "test": {
+     "path": "/home/haipd/SLR/third_party/SEDS/datasets/PHOENIX-2014-T/features/I3D_features/test",
+     "n_files": 642
+    }
+   },
+   "rtm_pose": {
+    "path": "/home/haipd/SLR/third_party/SEDS/datasets/PHOENIX-2014-T/features/RTM_Keypoints",
+    "n_files": 7738
+   },
+   "source": "SEDS processed I3D + RTMPose, BaiduDrive https://pan.baidu.com/s/1bkDbIwgpA4OQiBEjDoPWfA",
+   "modality": "RGB(I3D offline, CiCo-style) + 2D pose (RTMPose 133 kpts)"
+  },
+  "csl": {
+   "annotations": {
+    "train": {
+     "path": "/home/haipd/SLR/third_party/SEDS/data_csl/train.pkl",
+     "sha256": "15732a3449f624f21e539d7e5b4bba4c6586bfb25bd53ce1f8d145592d5e4651"
+    },
+    "test": {
+     "path": "/home/haipd/SLR/third_party/SEDS/data_csl/test.pkl",
+     "sha256": "f043a9897e13289dd8c42de5da0f88d26d86c0b84b1c946c7c88dcb8c9e91997"
+    }
+   },
+   "rgb_i3d": {
+    "train": {
+     "path": "/home/haipd/SLR/third_party/SEDS/datasets/CSL/I3D_features/train",
+     "n_files": 18401
+    },
+    "test": {
+     "path": "/home/haipd/SLR/third_party/SEDS/datasets/CSL/I3D_features/test",
+     "n_files": 1176
+    }
+   },
+   "rtm_pose": {
+    "path": "/home/haipd/SLR/third_party/SEDS/datasets/CSL/RTM_Keypoints",
+    "n_files": 19577
+   },
+   "source": "SEDS release (as above)"
+  },
+  "h2s": {
+   "annotations": {
+    "train": {
+     "path": "/home/haipd/SLR/third_party/SEDS/data_h2/train.pkl",
+     "sha256": "1574c85d96bf2791b7d4bab5e3e0cc3aca9a155e1d274278498a53526aebb97f"
+    },
+    "test": {
+     "path": "/home/haipd/SLR/third_party/SEDS/data_h2/test.pkl",
+     "sha256": "3de6d8926967ef3db31ede5ee8181f4fb0d644ef167ad34cee347ceef632fa1e"
+    }
+   },
+   "rgb_i3d": {
+    "train": {
+     "path": "/home/haipd/SLR/third_party/SEDS/datasets/How2Sign/processed_videos_256/I3D_features/train",
+     "n_files": 31019
+    },
+    "test": {
+     "path": "/home/haipd/SLR/third_party/SEDS/datasets/How2Sign/processed_videos_256/I3D_features/test",
+     "n_files": 2342
+    }
+   },
+   "rtm_pose": {
+    "path": "/home/haipd/SLR/third_party/SEDS/datasets/How2Sign/processed_videos_256/RTMpose/Pose_all_24rates",
+    "n_files": 33382
+   },
+   "source": "SEDS release (as above)"
+  }
+ },
+ "derived": {
+  "ph_val_s0": {
+   "dataset": "ph",
+   "seed": 0,
+   "source_train": "/home/haipd/SLR/third_party/SEDS/data_ph/train.pkl",
+   "source_train_sha256": "b35ae6f90136b3c936182355c439374ae209bb42046f9f1eb8f9746a8b2c29e2",
+   "n_train_keys": 6577,
+   "n_val_keys": 519,
+   "n_val_videos": 519,
+   "train_pkl_sha256": "eb330251ab3bafdf59c8dd19e05c54893725bb8794ac4d70ee67073ec304455b",
+   "val_pkl_sha256": "190fb47bb45346e7e7fddc15433ff8cbbaa1c67e6e72c5e99adf6619e7eda868",
+   "val_keys": "(see split.json)",
+   "note": "val is carved from official TRAIN only; official test is never read here"
+  }
+ },
+ "raw_videos": "NOT AVAILABLE on this machine for any dataset (no PHOENIX fullFrame dirs found); features cannot be re-extracted"
+}

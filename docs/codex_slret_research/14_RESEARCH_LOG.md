@@ -724,3 +724,56 @@ padding effects and contrastive gradient dependence are distinct and unmeasured.
 No semantic labels, TEST, GPU, deferred-job polling or external contact. ARS
 counterevidence discipline prevents treating a trainable parameter as a train-mode
 module. No primary method is admitted; the goal remains active and incomplete.
+
+## Cycle20 — active temporal boundary dependency in body GCN
+
+Date / commit:2026-09-23 / unchanged base HEAD.
+Previous turn: bounded source/diagnostic PROGRESS. This cycle tests a different
+active mechanism: batch-max zero-pose extension before temporal convolution,
+not BN statistics, score masking or floating-point batch-row variation.
+
+[Protocol](evidence/GCN_TEMPORAL_PADDING_PROTOCOL.md) precedes four fixed TRAIN
+model-output comparisons; [result](evidence/GCN_TEMPORAL_PADDING_RESULT.md).
+Three fixtures pass. Selected checkpoint and pose hashes verify; full body state
+strict-loads; two CPUfloat64 runs exit0 and produce byte-identical JSONs.
+All four samples change at exactly their final four valid frames, relative L2
+6.57–18.26%; interior differences≤1.34e-15; extension4/8 results identical.
+
+Empirical **PROGRESS**: observed computational dependency warrants downstream
+attribution, not a retrieval method pilot. Three-part pose/sign_conv and final
+scores/ranks remain unmeasured. Next action is that fixed propagation check,
+not a padding-policy search or another generic normalization hypothesis.
+
+Also found all three historical run source snapshots: nine relevant snapshot
+hashes match run reports. Two unique trainer versions preserve selective eval;
+Cycle19 receives a source-provenance addendum, not a fresh runtime claim.
+
+No human/AI semantic labels, new training, GPU, TEST, external contact or
+deferred-job check. ARS provided pre-execution scope, exact replay and11/11
+fallacy scan. No primary method/SOTA claim; main objective remains active.
+
+## Cycle21 — padding effect survives native pose window processing
+
+Date / commit:2026-09-23 / de2f07ecac9ce65563316fde0860f22e4d585acf.
+Previous turn: Cycle20 empirical PROGRESS. Current HEAD changed externally;
+this cycle makes no commit and preserves existing working edits.
+
+[Protocol](evidence/POSE_PADDING_PROPAGATION_PROTOCOL.md) fixes the same four
+TRAIN inputs/checkpoint. Native loader, complete Sign_Bert and get_sign_output
+execute on CPUfloat64. All13 selected boundary windows change after sign_conv
+and pooling; interior/invalid controls and extension4/8 comparisons stay exact.
+This rejects erasure at that stage, not downstream score/rank stability.
+
+[Result](evidence/POSE_PADDING_PROPAGATION_RESULT.md): three fixtures pass;
+initial capture omitted concatenation summaries, so v1 and its source are
+preserved and instrumentation amended. v2/v3 preserve all primary outcomes;
+exact cross-version equality fails for auxiliary norms at≤5.56e-17 despite
+contiguous materialization. No further numeric rescue. Two final v3 runs are
+byte-identical; all23 current hashes verify. Original body cross-check tolerance
+passes. These different verification scopes are not conflated.
+
+Empirical **PROGRESS** toward attribution. Next step is fixed-input final-score
+sensitivity before any gallery/ranking claim. No method/pilot, ordinary repair
+sweep, semantic labels, training, GPU, TEST, external contact or deferred-job
+check. ARS supplied frozen scope, replay and11/11 fallacy scan. Goal active;
+no primary method or SOTA demonstrated.

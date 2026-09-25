@@ -209,3 +209,32 @@ but cannot be used to keep asking for reviewers or to block automated research.
 Decision: proceed to the bounded admission/collision screen, not another generic
 probe. The missing definitions/resources are explicit scientific gaps, not a
 claim of global impossibility or permission to invent a primary method.
+
+## Cycle20 — Q39 temporal-boundary computational hypothesis
+
+- Observation: fixed four TRAIN inputs and one checkpoint show body-GCN output
+  dependence on appended zero-pose frames; last4 valid frames change, earlier
+  frames agree, and extensions4/8 saturate identically. Exact CPUfloat64 replay.
+- Hypothesis: batch-max padding changes valid boundary representations through
+  temporal convolution and this dependence survives downstream retrieval encoding.
+- Prediction: holding native inputs and weights fixed, different padded extents
+  change valid native sign_conv outputs and potentially final scores.
+- Alternative: downstream layers suppress the perturbation; effects could be
+  too small or rank-neutral. Current input recovery differs from historical
+  deleted features, so it cannot directly attribute historical errors.
+- Falsification: unchanged downstream outputs reject propagation; unchanged
+  rankings reject rank sensitivity for the tested comparison. Neither outcome
+  says anything about signed meaning or all possible padding policies.
+- Minimal experiment: propagate the fixed intervention through all pose parts
+  and native sign_conv before launching a gallery-level comparison. No training,
+  repair sweep, new positives or primary-method designation.
+
+Source: [registered diagnostic and result](evidence/GCN_TEMPORAL_PADDING_RESULT.md).
+This updates the next computational-attribution action, not the novelty gate.
+
+Cycle21 update: [native pose-output test](evidence/POSE_PADDING_PROPAGATION_RESULT.md)
+rejects downstream erasure through Sign_Bert/sign_conv on the four fixed inputs.
+The final visual encoder, fusion and scoring remain untested. Continue the
+fixed-input propagation hypothesis there, without treating intermediate changes
+as wrong ranking or a novel intervention. Final replay is exact; cross-version
+auxiliary norm differences and instrumentation amendment are reported explicitly.

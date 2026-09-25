@@ -80,6 +80,18 @@ Trying `git show` for `masked_pose.py` at the seed42 report's recorded commit
 at that revision. Do not claim an exact historical source reconstruction.
 No historical file or user's working changes were overwritten to repair this.
 
+**Cycle20 provenance addendum:** the Git revision is not the only source copy.
+The three runs each retain `source/` snapshots. All nine snapshot files for
+masked_pose, train_policies and train_seds_extended match their run report hashes.
+The two unique trainer snapshots were inspected: both select the clean-control
+policy and restore training_modes after wrapped.train. Masked-policy snapshots
+share hash45c311641b2818d487616dcb19497f1ebccbefda4e8239a82bf7d72c79f2164a
+and preserve eval GCN with trainable weights. Seed42 trainer hash is20593e8e1327e3b6e113a85d7c17a23e2dbca57fbfe642cf0bed1ed2e969870a;
+the other two sharea94b5459f35c6c5f5ca2610f3175e960b24dcd11c719b05e61f52679f0f18849.
+This resolves the missing historical source qualification for the relevant
+route, not a fresh historical-runtime reproduction. The original failed Git
+lookup remains accurately documented above.
+
 Current material hashes (source selections read, no human-read attestation):
 
 | File | SHA256 |
